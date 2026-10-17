@@ -1,11 +1,13 @@
-MVP for Social Fossils
+# MVP for Social Fossils
 
-Python + Pydantic + SQLAlchemy
-PostgreSQL
-Apache Airflow
-dbt Core + PostgreSQL adapter
-Docker + Docker Compose
-FastAPI
-React + TypeScript + Vite
-pytest
-Alembic for application database migrations
+### For development
+cd frontend
+nvm install
+
+### Run Project
+docker compose up
+
+## PLAN
+1. Development Docker
+2. Prod Local Docker
+3. Encrypted Web App
