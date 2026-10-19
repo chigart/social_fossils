@@ -14,6 +14,9 @@ services:
   backend:
     build:
       context: ./backend
+    user: "${UID}:${GID}"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     command:
       - uvicorn
       - app.main:app
