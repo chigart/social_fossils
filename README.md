@@ -25,4 +25,3 @@
 ## TODO
 1. Mobile adaptive
 2. Design
-3. Frontend testing framework
