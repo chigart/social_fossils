@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import {
   getChats,
+  getCommunicationBalance,
   getContacts,
   getOverview,
   type ChatStatistics,
+  type CommunicationBalanceClassification,
+  type CommunicationBalanceStatistics,
   type ContactStatistics,
   type OverviewStatistics,
 } from "./api";
 import { ChatsView } from "./components/ChatsView";
+import {
+  CommunicationBalanceView,
+  sortCommunicationBalanceContacts,
+  type BalanceSortKey,
+} from "./components/CommunicationBalanceView";
 import { ContactsView } from "./components/ContactsView";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardIntro } from "./components/DashboardIntro";
@@ -24,8 +32,18 @@ export default function App() {
   const [chats, setChats] = useState<Resource<ChatStatistics[]>>(emptyResource);
   const [contacts, setContacts] =
     useState<Resource<ContactStatistics[]>>(emptyResource);
+  const [balance, setBalance] =
+    useState<Resource<CommunicationBalanceStatistics>>(emptyResource);
   const [chatSearch, setChatSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
+  const [balanceSearch, setBalanceSearch] = useState("");
+  const [balanceClassification, setBalanceClassification] = useState<
+    CommunicationBalanceClassification | "all"
+  >("all");
+  const [balanceSortKey, setBalanceSortKey] =
+    useState<BalanceSortKey>("text_volume");
+  const [balanceSortDirection, setBalanceSortDirection] =
+    useState<SortDirection>("desc");
   const [chatSort, setChatSort] = useState<{
     key: "title" | "total_messages";
     direction: SortDirection;
@@ -81,10 +99,31 @@ export default function App() {
     }
   };
 
+  const loadBalance = async () => {
+    setBalance((current) => ({ ...current, error: null, loading: true }));
+    try {
+      setBalance({
+        data: await getCommunicationBalance(),
+        error: null,
+        loading: false,
+      });
+    } catch (error) {
+      setBalance((current) => ({
+        ...current,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load communication balance statistics.",
+        loading: false,
+      }));
+    }
+  };
+
   useEffect(() => {
     void loadOverview();
     void loadChats();
     void loadContacts();
+    void loadBalance();
   }, []);
 
   const changeChatSort = (key: "title" | "total_messages") => {
@@ -120,6 +159,22 @@ export default function App() {
         (contactSortDirection === "asc" ? 1 : -1) *
         (left.total_messages_sent - right.total_messages_sent),
     );
+
+  const visibleBalanceContacts = sortCommunicationBalanceContacts(
+    (balance.data?.contacts ?? [])
+      .filter((contact) =>
+        (contact.display_name ?? "")
+          .toLocaleLowerCase()
+          .includes(balanceSearch.trim().toLocaleLowerCase()),
+      )
+      .filter(
+        (contact) =>
+          balanceClassification === "all" ||
+          contact.classification === balanceClassification,
+      ),
+    balanceSortKey,
+    balanceSortDirection,
+  );
 
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
@@ -160,6 +215,19 @@ export default function App() {
           }
           hasMessages={(overview.data?.total_messages ?? 0) > 0}
           onRetry={() => void loadContacts()}
+        />
+        <CommunicationBalanceView
+          balance={balance}
+          visibleContacts={visibleBalanceContacts}
+          search={balanceSearch}
+          onSearchChange={setBalanceSearch}
+          classification={balanceClassification}
+          onClassificationChange={setBalanceClassification}
+          sortKey={balanceSortKey}
+          sortDirection={balanceSortDirection}
+          onSortKeyChange={setBalanceSortKey}
+          onSortDirectionChange={setBalanceSortDirection}
+          onRetry={() => void loadBalance()}
         />
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">
           Statistics are aggregated from imported data. Message contents are not shown.

@@ -31,6 +31,59 @@ export type ContactStatistics = {
   service_events_attributed: number;
 };
 
+export type CommunicationBalanceClassification =
+  | "balanced"
+  | "mostly_owner"
+  | "mostly_contact"
+  | "strongly_owner"
+  | "strongly_contact"
+  | "insufficient_data";
+
+export type CommunicationBalanceContact = {
+  account_id: number;
+  contact_id: number;
+  telegram_user_id: string;
+  display_name: string | null;
+  owner_message_count: number;
+  contact_message_count: number;
+  total_message_count: number;
+  excluded_unknown_direction_message_count: number;
+  owner_text_length: number;
+  contact_text_length: number;
+  total_text_length: number;
+  owner_text_share: number | null;
+  contact_text_share: number | null;
+  absolute_share_difference: number | null;
+  owner_share_percentage: number | null;
+  contact_share_percentage: number | null;
+  classification: CommunicationBalanceClassification;
+  first_message_at: string | null;
+  last_message_at: string | null;
+  distinct_active_days: number;
+};
+
+export type CommunicationBalanceSummary = {
+  eligible_contacts: number;
+  balanced_contacts: number;
+  mostly_owner_contacts: number;
+  mostly_contact_contacts: number;
+  strongly_owner_contacts: number;
+  strongly_contact_contacts: number;
+  insufficient_data_contacts: number;
+  owner_text_length: number;
+  contact_text_length: number;
+  total_text_length: number;
+  owner_message_count: number;
+  contact_message_count: number;
+  total_message_count: number;
+  excluded_unknown_direction_message_count: number;
+};
+
+export type CommunicationBalanceStatistics = {
+  summary: CommunicationBalanceSummary;
+  contacts: CommunicationBalanceContact[];
+};
+
 async function getJson<T>(path: string): Promise<T> {
   let response: Response;
 
@@ -58,3 +111,8 @@ export const getChats = () => getJson<ChatStatistics[]>("/api/analytics/chats");
 
 export const getContacts = () =>
   getJson<ContactStatistics[]>("/api/analytics/contacts");
+
+export const getCommunicationBalance = () =>
+  getJson<CommunicationBalanceStatistics>(
+    "/api/analytics/communication-balance",
+  );

@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { getChats, getContacts, getOverview } from "./api";
+import {
+  getChats,
+  getCommunicationBalance,
+  getContacts,
+  getOverview,
+} from "./api";
 
 describe("analytics API helpers", () => {
   it("requests each analytics endpoint and returns its JSON data", async () => {
     const overview = { total_messages: 17 };
     const chats = [{ chat_id: 1 }];
     const contacts = [{ account_id: 2 }];
+    const balance = { summary: { eligible_contacts: 1 }, contacts: [] };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -19,17 +25,23 @@ describe("analytics API helpers", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => contacts,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => balance,
       });
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getOverview()).resolves.toEqual(overview);
     await expect(getChats()).resolves.toEqual(chats);
     await expect(getContacts()).resolves.toEqual(contacts);
+    await expect(getCommunicationBalance()).resolves.toEqual(balance);
 
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
       ["/api/analytics/chats"],
       ["/api/analytics/contacts"],
+      ["/api/analytics/communication-balance"],
     ]);
   });
 

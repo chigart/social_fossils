@@ -5,6 +5,7 @@
 - nvm install
 - npm install
 
+- cd ..
 - python3 -m venv .venv
 - source .venv/bin/activate
 - pip install -r requirements.txt
@@ -17,10 +18,15 @@
 - docker compose up
 - docker compose exec backend python -m app.importer /app/data/FILENAME.json
 
+### Full Reset
+- docker compose down -v
+
 ## PLAN
 1. Development Docker
 2. Prod Local Docker
-3. Encrypted Web App (Mock JSON testing)
+3. Multiple accounts
+4. Multiple social media
+5. Encrypted Web App (Mock JSON testing)
 
 ## TODO
 1. Mobile adaptive

@@ -17,12 +17,15 @@ export function DashboardHeader() {
         <span>Social Fossils</span>
       </a>
       <nav
-        className="flex items-center gap-[30px] text-ui font-semibold text-ink-subtle max-sm:gap-[15px] max-sm:text-caption"
+        className="flex items-center gap-[30px] text-ui font-semibold text-ink-subtle max-sm:gap-2 max-sm:text-caption max-[360px]:gap-[5px] max-[360px]:text-[10px]"
         aria-label="Dashboard sections"
       >
         <a className={navigationLinkClassName} href="#overview">Overview</a>
         <a className={navigationLinkClassName} href="#chats">Chats</a>
         <a className={navigationLinkClassName} href="#contacts">Contacts</a>
+        <a className={navigationLinkClassName} href="#communication-balance">
+          Balance
+        </a>
       </nav>
     </header>
   );
