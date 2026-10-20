@@ -148,6 +148,27 @@ def extract_account_name(personal_information: dict[str, Any] | None) -> str:
     return "Telegram account"
 
 
+def extract_chat_title(chat: dict[str, Any], owner_telegram_id: str | None) -> str | None:
+    if chat.get("type") == "personal_chat":
+        for message in chat.get("messages") or []:
+            if not isinstance(message, dict):
+                continue
+            sender_id = normalize_user_id(message.get("from_id"))
+            if sender_id is None or owner_telegram_id is None or sender_id == owner_telegram_id:
+                continue
+
+            sender_name = message.get("from")
+            if isinstance(sender_name, str) and sender_name.strip():
+                return sender_name.strip()
+            break
+
+        title = chat.get("name")
+        return title if isinstance(title, str) else None
+
+    title = chat.get("name") or chat.get("title")
+    return title if isinstance(title, str) else None
+
+
 def extract_sender_id(message: dict[str, Any]) -> str | None:
     if not isinstance(message, dict):
         return None
@@ -259,7 +280,7 @@ def parse_telegram_export(data: dict[str, Any]) -> ParsedTelegramExport:
         parsed_chats.append(
             ParsedChat(
                 telegram_chat_id=normalized_chat_id,
-                title=chat.get("name") or chat.get("title"),
+                title=extract_chat_title(chat, owner_telegram_id),
                 chat_type=chat.get("type") or "unknown",
                 messages=messages,
             )

@@ -122,6 +122,36 @@ def test_parse_telegram_export_extracts_account_and_chat_messages():
                         {"id": None, "type": "skip"},
                     ],
                 },
+                {
+                    "name": "Феодор",
+                    "type": "personal_chat",
+                    "id": 827793749,
+                    "messages": [
+                        {
+                            "id": 251,
+                            "from": "Alice Smith",
+                            "from_id": "user8518403760",
+                        },
+                        {
+                            "id": 252,
+                            "from": "Феодор",
+                            "from_id": "user827793749",
+                        },
+                        {
+                            "id": 253,
+                            "from": "Феодор Иванов",
+                            "from_id": "user827793749",
+                        },
+                    ],
+                },
+                {
+                    "name": "Alice",
+                    "first_name": "Alice",
+                    "last_name": "Jones",
+                    "type": "personal_chat",
+                    "id": 827793750,
+                    "messages": [],
+                },
                 {"id": "bad", "messages": ["not-a-dict"]},
             ]
         },
@@ -131,13 +161,16 @@ def test_parse_telegram_export_extracts_account_and_chat_messages():
 
     assert parsed.owner_telegram_id == "user8518403760"
     assert parsed.account_name == "Alice Smith"
-    assert len(parsed.chats) == 2
+    assert len(parsed.chats) == 4
     assert parsed.chats[0].telegram_chat_id == "5183596517"
+    assert parsed.chats[0].title == "Example chat"
     assert parsed.chats[0].messages[0]["is_outgoing"] is True
     assert parsed.chats[0].messages[0]["message_date"] == datetime.fromtimestamp(1776779645, tz=timezone.utc)
     assert parsed.chats[0].messages[1]["message_type"] == "service"
     assert parsed.chats[0].messages[1]["text_content"] == "joined the group!"
     assert len(parsed.chats[0].messages) == 2
+    assert parsed.chats[1].title == "Феодор"
+    assert parsed.chats[2].title == "Alice"
     assert parsed.contacts == [{"first_name": "Bob", "id": "user999"}, {"first_name": "skip"}]
     assert parsed.raw == export
 
