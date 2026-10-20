@@ -1,0 +1,52 @@
+@theme {
+  --color-canvas: #f5f7f6;
+  --color-surface: #ffffff;
+  --color-clear: transparent;
+  --color-surface-subtle: #fbfcfb;
+  --color-surface-muted: #f7f9f8;
+  --color-surface-green: #f4faf6;
+  --color-surface-green-soft: #f1f8f4;
+  --color-surface-brand: #e4f3ec;
+  --color-surface-tag: #edf6f1;
+  --color-surface-warning: #fff8f7;
+  --color-surface-warning-hover: #fff1ef;
+  --color-surface-neutral: #f0f2f2;
+
+  --color-ink: #1e2933;
+  --color-ink-muted: #68757c;
+  --color-ink-subtle: #53616a;
+  --color-ink-table: #58666d;
+  --color-ink-code: #59666e;
+  --color-ink-green: #335a4c;
+  --color-ink-green-muted: #66766f;
+  --color-ink-tag: #315f50;
+  --color-ink-neutral: #647178;
+  --color-ink-placeholder: #89949a;
+  --color-ink-footer: #758087;
+  --color-ink-warning: #8a3329;
+  --color-ink-warning-button: #772e26;
+
+  --color-brand: #267a62;
+  --color-brand-strong: #1b5f4c;
+  --color-border: #e2e8e5;
+  --color-border-subtle: #e7ece9;
+  --color-border-muted: #edf0ee;
+  --color-border-input: #dce3df;
+  --color-border-brand: #dcebe4;
+  --color-border-warning: #f0d6d2;
+  --color-border-warning-button: #d5a9a3;
+  --color-focus: #267a6273;
+  --color-focus-ring: #267a6224;
+  --color-shadow: rgb(30 41 51 / 3%);
+
+  --text-label: 0.625rem;
+  --text-caption: 0.6875rem;
+  --text-small: 0.75rem;
+  --text-ui: 0.8125rem;
+  --text-subheading: 0.875rem;
+  --text-body: 0.9375rem;
+  --text-logo: 1rem;
+  --text-section-heading: 1.3125rem;
+  --text-metric: clamp(20px, 2vw, 25px);
+  --text-page-title: clamp(28px, 3.4vw, 38px);
+}

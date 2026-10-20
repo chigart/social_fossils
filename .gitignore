@@ -20,7 +20,6 @@ dist/
 Thumbs.db
 
 # Telegram exports and personal data
-*.json
 *.zip
 exports/
 data/

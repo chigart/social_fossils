@@ -3,6 +3,7 @@
 ### For development
 - cd frontend
 - nvm install
+- npm install
 
 - python3 -m venv .venv
 - source .venv/bin/activate
@@ -20,3 +21,8 @@
 1. Development Docker
 2. Prod Local Docker
 3. Encrypted Web App
+
+## TODO
+1. Mobile adaptive
+2. Design
+3. Frontend testing framework
