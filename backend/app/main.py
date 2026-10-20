@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers.analytics import router as analytics_router
+
 app = FastAPI(
     title="Social Fossils API",
     description="Analyze personal messaging history.",
@@ -14,6 +16,8 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+app.include_router(analytics_router)
 
 
 @app.get("/api/health")
