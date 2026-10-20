@@ -20,7 +20,7 @@
 ## PLAN
 1. Development Docker
 2. Prod Local Docker
-3. Encrypted Web App
+3. Encrypted Web App (Mock JSON testing)
 
 ## TODO
 1. Mobile adaptive
