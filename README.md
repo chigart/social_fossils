@@ -36,8 +36,7 @@
 1. Mobile adaptive
 2. Design
 3. Chats analytics
-4. Test JSONs for injection
-5. AI code review for speed/vulnerabilities
+4. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume

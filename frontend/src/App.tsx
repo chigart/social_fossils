@@ -9,7 +9,6 @@ import {
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
   type ContactStatistics,
-  type ForgottenContact,
   type ForgottenContactsStatistics,
   type OverviewStatistics,
 } from "./api";
