@@ -164,6 +164,41 @@ export type ForgottenContactsStatistics = {
   contacts: ForgottenContact[];
 };
 
+export type CommunicationTimelineMonth = {
+  month: string;
+  ordinary_message_count: number;
+  owner_message_count: number;
+  contact_message_count: number;
+  unknown_direction_message_count: number;
+  active_days: number;
+  owner_active_days: number;
+  contact_active_days: number;
+  unknown_direction_active_days: number;
+};
+
+export type CommunicationTimelineSummary = {
+  scope: "owner" | "contact";
+  canonical_identity_id: number | null;
+  source_account_count: number;
+  source_account_ids: number[];
+  source_account_labels: string[];
+  source_contact_ids: number[];
+  ordinary_message_count: number;
+  dated_ordinary_message_count: number;
+  undated_ordinary_message_count: number;
+  owner_message_count: number;
+  contact_message_count: number;
+  unknown_direction_message_count: number;
+  undated_owner_message_count: number;
+  undated_contact_message_count: number;
+  undated_unknown_direction_message_count: number;
+};
+
+export type CommunicationTimelineStatistics = {
+  summary: CommunicationTimelineSummary;
+  months: CommunicationTimelineMonth[];
+};
+
 async function getJson<T>(path: string): Promise<T> {
   let response: Response;
 
@@ -199,3 +234,10 @@ export const getCommunicationBalance = () =>
 
 export const getForgottenContacts = () =>
   getJson<ForgottenContactsStatistics>("/api/analytics/forgotten-contacts");
+
+export const getCommunicationTimeline = (canonicalIdentityId?: number) =>
+  getJson<CommunicationTimelineStatistics>(
+    canonicalIdentityId === undefined
+      ? "/api/analytics/communication-timeline"
+      : `/api/analytics/communication-timeline?canonical_identity_id=${canonicalIdentityId}`,
+  );

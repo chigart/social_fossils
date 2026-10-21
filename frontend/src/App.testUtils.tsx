@@ -1,9 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import App from "./App";
 
 export async function renderLoadedDashboard() {
   render(<App />);
-  await screen.findByRole("row", { name: /Aurora group/ });
+  await screen.findByText("All messages");
+}
+
+export async function selectDashboardTab(label: string) {
+  fireEvent.click(screen.getByRole("tab", { name: label }));
+  await screen.findByRole("tabpanel", { name: label });
 }
 
 export function rowTitles(table: HTMLElement) {

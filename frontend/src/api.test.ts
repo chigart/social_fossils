@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   getChats,
   getCommunicationBalance,
+  getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
   getOverview,
@@ -35,6 +36,10 @@ describe("analytics API helpers", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => forgotten,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ summary: {}, months: [] }),
       });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -43,6 +48,10 @@ describe("analytics API helpers", () => {
     await expect(getContacts()).resolves.toEqual(contacts);
     await expect(getCommunicationBalance()).resolves.toEqual(balance);
     await expect(getForgottenContacts()).resolves.toEqual(forgotten);
+    await expect(getCommunicationTimeline()).resolves.toEqual({
+      summary: {},
+      months: [],
+    });
 
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
@@ -50,7 +59,22 @@ describe("analytics API helpers", () => {
       ["/api/analytics/contacts"],
       ["/api/analytics/communication-balance"],
       ["/api/analytics/forgotten-contacts"],
+      ["/api/analytics/communication-timeline"],
     ]);
+  });
+
+  it("requests a canonical contact timeline when selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ summary: {}, months: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCommunicationTimeline(42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/analytics/communication-timeline?canonical_identity_id=42",
+    );
   });
 
   it("reports a useful error when the backend cannot be reached", async () => {

@@ -6,9 +6,15 @@ import {
   chats,
   contacts,
   emptyBalanceSummary,
+  forgotten,
   overview,
+  timeline,
 } from "./App.testFixtures";
-import { renderLoadedDashboard, rowTitles } from "./App.testUtils";
+import {
+  renderLoadedDashboard,
+  rowTitles,
+  selectDashboardTab,
+} from "./App.testUtils";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -16,16 +22,27 @@ const api = vi.hoisted(() => ({
   getChats: vi.fn(),
   getContacts: vi.fn(),
   getCommunicationBalance: vi.fn(),
+  getForgottenContacts: vi.fn(),
+  getCommunicationTimeline: vi.fn(),
 }));
 
 vi.mock("./api", () => api);
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+  Object.values(api).forEach((mock) => mock.mockReset());
   api.getOverview.mockResolvedValue(overview);
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
   api.getCommunicationBalance.mockResolvedValue(balance);
+  api.getForgottenContacts.mockResolvedValue(forgotten);
+  api.getCommunicationTimeline.mockResolvedValue(timeline);
 });
+
+async function renderBalanceDashboard() {
+  await renderLoadedDashboard();
+  await selectDashboardTab("Balance");
+}
 
 describe("communication balance dashboard", () => {
   it("retries a failed communication balance request without crashing other sections", async () => {
@@ -34,6 +51,7 @@ describe("communication balance dashboard", () => {
       new Error("Balance analytics unavailable."),
     );
     render(<App />);
+    await selectDashboardTab("Balance");
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -41,9 +59,7 @@ describe("communication balance dashboard", () => {
     expect(await within(balanceRegion).findByRole("alert")).toHaveTextContent(
       "Balance analytics unavailable.",
     );
-    expect(
-      screen.getByRole("region", { name: "Overview" }),
-    ).toBeInTheDocument();
+    expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
     await user.click(within(balanceRegion).getByRole("button", { name: "Retry" }));
 
     expect(
@@ -58,6 +74,7 @@ describe("communication balance dashboard", () => {
       contacts: [],
     });
     render(<App />);
+    await selectDashboardTab("Balance");
 
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
@@ -73,7 +90,7 @@ describe("communication balance dashboard", () => {
   });
 
   it("renders summary values directly from the communication balance API", async () => {
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -95,7 +112,7 @@ describe("communication balance dashboard", () => {
   });
 
   it("shows text volume, API shares, date values, and supplementary message counts", async () => {
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -129,7 +146,7 @@ describe("communication balance dashboard", () => {
 
   it("filters contacts by API classification and searches display names", async () => {
     const user = userEvent.setup();
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -152,7 +169,7 @@ describe("communication balance dashboard", () => {
   });
 
   it("sorts by total text volume, not message counts", async () => {
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -180,7 +197,7 @@ describe("communication balance dashboard", () => {
 
   it("sorts owner text share in the selected direction and keeps missing shares last", async () => {
     const user = userEvent.setup();
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -204,7 +221,7 @@ describe("communication balance dashboard", () => {
 
   it("sorts most recent activity with undated contacts last", async () => {
     const user = userEvent.setup();
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -223,7 +240,7 @@ describe("communication balance dashboard", () => {
   });
 
   it("marks insufficient-data contacts distinctly and avoids invalid zero-volume shares", async () => {
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });
@@ -238,7 +255,7 @@ describe("communication balance dashboard", () => {
   });
 
   it("keeps the balance table scrollable and controls usable on narrow screens", async () => {
-    await renderLoadedDashboard();
+    await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
       name: "Communication balance",
     });

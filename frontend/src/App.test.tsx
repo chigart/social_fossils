@@ -7,8 +7,13 @@ import {
   contacts,
   forgotten,
   overview,
+  timeline,
 } from "./App.testFixtures";
-import { renderLoadedDashboard, rowTitles } from "./App.testUtils";
+import {
+  renderLoadedDashboard,
+  rowTitles,
+  selectDashboardTab,
+} from "./App.testUtils";
 import App from "./App";
 
 const api = vi.hoisted(() => ({
@@ -17,16 +22,20 @@ const api = vi.hoisted(() => ({
   getContacts: vi.fn(),
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
+  getCommunicationTimeline: vi.fn(),
 }));
 
 vi.mock("./api", () => api);
 
 beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+  Object.values(api).forEach((mock) => mock.mockReset());
   api.getOverview.mockResolvedValue(overview);
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
   api.getCommunicationBalance.mockResolvedValue(balance);
   api.getForgottenContacts.mockResolvedValue(forgotten);
+  api.getCommunicationTimeline.mockResolvedValue(timeline);
 });
 
 describe("dashboard", () => {
@@ -71,6 +80,7 @@ describe("dashboard", () => {
     ]);
 
     render(<App />);
+    await selectDashboardTab("Chats");
     await screen.findByRole("row", { name: /First account chat/ });
 
     const chatRegion = screen.getByRole("region", { name: "Chats" });
@@ -85,6 +95,7 @@ describe("dashboard", () => {
       }),
     ).toBeInTheDocument();
 
+    await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", {
       name: "Contacts & senders",
     });
@@ -94,8 +105,9 @@ describe("dashboard", () => {
     expect(combinedContactRows).toHaveLength(1);
     expect(combinedContactRows[0]).toHaveTextContent("@anton, Anton Malkov");
     expect(combinedContactRows[0]).toHaveTextContent("24");
+    await selectDashboardTab("Overview");
     const sourceAccountsCard = within(
-      screen.getByRole("region", { name: "Overview" }),
+      screen.getByRole("tabpanel", { name: "Overview" }),
     )
       .getByRole("heading", { name: "Source accounts" })
       .closest("article");
@@ -110,39 +122,29 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute(
-      "href",
-      "#overview",
+    expect(screen.getAllByRole("tab")).toHaveLength(6);
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
-    expect(screen.getByRole("link", { name: "Chats" })).toHaveAttribute(
-      "href",
-      "#chats",
+    expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute(
+      "aria-controls",
+      "communication-timeline-panel",
     );
-    expect(screen.getByRole("link", { name: "Contacts" })).toHaveAttribute(
-      "href",
-      "#contacts",
-    );
-    expect(screen.getByRole("link", { name: "Balance" })).toHaveAttribute(
-      "href",
-      "#communication-balance",
-    );
-    expect(screen.getByRole("link", { name: "Forgotten" })).toHaveAttribute(
-      "href",
-      "#forgotten-contacts",
-    );
-    expect(screen.getByRole("heading", { name: "Forgotten contacts" })).toBeInTheDocument();
     expect(screen.getByText("All messages")).toBeInTheDocument();
-    expect(screen.getByText("Ordinary messages")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Overview" })).getByText(
+        "Ordinary messages",
+      ),
+    ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Overview" })).getByText(
         "Service events",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Known contact")).toBeInTheDocument();
-    expect(
-      within(screen.getByRole("region", { name: "Contacts & senders" }))
-        .getByRole("columnheader", { name: "Accounts" }),
-    ).toBeInTheDocument();
+
+    await selectDashboardTab("Chats");
+    expect(screen.getByRole("heading", { name: "Chats" })).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Chats" })).getByRole(
         "columnheader",
@@ -154,6 +156,13 @@ describe("dashboard", () => {
         "@anton",
       ),
     ).toHaveLength(chats.length);
+
+    await selectDashboardTab("Contacts");
+    expect(screen.getByText("Known contact")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Contacts & senders" }))
+        .getByRole("columnheader", { name: "Accounts" }),
+    ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Contacts & senders" })).getByRole(
         "row",
@@ -167,6 +176,14 @@ describe("dashboard", () => {
         { name: /Unknown sender/ },
       ),
     ).toBeInTheDocument();
+    await selectDashboardTab("Balance");
+    expect(
+      screen.getByRole("heading", { name: "Communication balance" }),
+    ).toBeInTheDocument();
+    await selectDashboardTab("Forgotten");
+    expect(
+      screen.getByRole("heading", { name: "Forgotten contacts" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "Statistics are aggregated from imported data. Message contents are not shown.",
@@ -178,11 +195,31 @@ describe("dashboard", () => {
     api.getOverview.mockReturnValue(new Promise(() => {}));
     api.getChats.mockReturnValue(new Promise(() => {}));
     api.getContacts.mockReturnValue(new Promise(() => {}));
+    api.getCommunicationTimeline.mockReturnValue(new Promise(() => {}));
 
     render(<App />);
 
-    expect(screen.getAllByRole("status")).toHaveLength(5);
-    expect(screen.getAllByText("Loading analytics…")).toHaveLength(5);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading analytics…");
+  });
+
+  it("supports keyboard tab navigation and keeps inactive sections hidden", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+
+    const overviewTab = screen.getByRole("tab", { name: "Overview" });
+    await user.click(overviewTab);
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("tab", { name: "Chats" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.hash).toBe("#chats");
+    expect(screen.getByRole("tabpanel", { name: "Chats" })).not.toHaveAttribute(
+      "hidden",
+    );
+    expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
   });
 
   it("shows the no-import guidance when analytics contain no imported data", async () => {
@@ -202,9 +239,11 @@ describe("dashboard", () => {
     expect(
       await screen.findByText("Import a Telegram export to see chat statistics."),
     ).toBeInTheDocument();
+    await selectDashboardTab("Contacts");
     expect(
       screen.getByText("Import messages to see incoming communication by sender."),
     ).toBeInTheDocument();
+    await selectDashboardTab("Forgotten");
     expect(
       screen.getByRole("heading", { name: "No imported data yet" }),
     ).toBeInTheDocument();
@@ -220,10 +259,12 @@ describe("dashboard", () => {
     api.getContacts.mockResolvedValue([]);
     render(<App />);
 
+    await selectDashboardTab("Chats");
     expect(await screen.findByRole("heading", { name: "No chats available" })).toBeInTheDocument();
     expect(
       screen.getByText("No chats were included in the imported account data."),
     ).toBeInTheDocument();
+    await selectDashboardTab("Contacts");
     expect(
       screen.getByText("There are no incoming sender groups in the available analytics."),
     ).toBeInTheDocument();
@@ -233,6 +274,7 @@ describe("dashboard", () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
 
+    await selectDashboardTab("Chats");
     await user.type(
       screen.getByRole("searchbox", { name: "Search chats by title" }),
       "  AURORA ",
@@ -241,6 +283,7 @@ describe("dashboard", () => {
     expect(within(chatsRegion).getByRole("row", { name: /Aurora group/ })).toBeInTheDocument();
     expect(within(chatsRegion).queryByRole("row", { name: /Zebra group/ })).not.toBeInTheDocument();
 
+    await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
     await user.type(
       within(contactsRegion).getByRole("searchbox", {
@@ -266,6 +309,7 @@ describe("dashboard", () => {
   it("shows a no-match message when a chat search returns no results", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
+    await selectDashboardTab("Chats");
 
     await user.type(
       screen.getByRole("searchbox", { name: "Search chats by title" }),
@@ -280,6 +324,7 @@ describe("dashboard", () => {
   it("sorts chats by message count by default and toggles title sort direction", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
+    await selectDashboardTab("Chats");
     const chatsRegion = screen.getByRole("region", { name: "Chats" });
     const chatsTable = within(chatsRegion).getByRole("table");
 
@@ -312,6 +357,7 @@ describe("dashboard", () => {
   it("toggles contact message sorting between ascending and descending", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
+    await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
     const contactsTable = within(contactsRegion).getByRole("table");
     const sortButton = within(contactsRegion).getByRole("button", {
@@ -331,6 +377,7 @@ describe("dashboard", () => {
     const user = userEvent.setup();
     api.getChats.mockRejectedValueOnce(new Error("Chat analytics unavailable."));
     render(<App />);
+    await selectDashboardTab("Chats");
     const chatsRegion = screen.getByRole("region", { name: "Chats" });
 
     expect(await within(chatsRegion).findByRole("alert")).toHaveTextContent(
@@ -374,6 +421,7 @@ describe("dashboard", () => {
     const user = userEvent.setup();
     api.getContacts.mockRejectedValueOnce(new Error("Contact analytics unavailable."));
     render(<App />);
+    await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
 
     expect(await within(contactsRegion).findByRole("alert")).toHaveTextContent(
@@ -390,6 +438,7 @@ describe("dashboard", () => {
   it("shows ranked Forgotten Contacts with monthly activity, evidence, and filtering", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
+    await selectDashboardTab("Forgotten");
 
     const region = screen.getByRole("region", { name: "Forgotten contacts" });
     expect(within(region).getByText(/Scope: Combined owner data/)).toBeInTheDocument();
@@ -435,6 +484,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
+    await selectDashboardTab("Forgotten");
 
     const region = screen.getByRole("region", { name: "Forgotten contacts" });
     expect(
@@ -464,6 +514,7 @@ describe("dashboard", () => {
       contacts: [],
     });
     await renderLoadedDashboard();
+    await selectDashboardTab("Forgotten");
 
     const region = screen.getByRole("region", { name: "Forgotten contacts" });
     expect(
@@ -484,6 +535,7 @@ describe("dashboard", () => {
       new Error("Forgotten contacts unavailable."),
     );
     render(<App />);
+    await selectDashboardTab("Forgotten");
 
     const region = screen.getByRole("region", { name: "Forgotten contacts" });
     expect(await within(region).findByRole("alert")).toHaveTextContent(
@@ -492,5 +544,82 @@ describe("dashboard", () => {
     await user.click(within(region).getByRole("button", { name: "Retry" }));
     expect(await within(region).findByText("Mika")).toBeInTheDocument();
     expect(api.getForgottenContacts).toHaveBeenCalledTimes(2);
+  });
+
+  it("plots monthly totals and loads a canonical contact timeline on selection", async () => {
+    const user = userEvent.setup();
+    api.getCommunicationTimeline
+      .mockResolvedValueOnce(timeline)
+      .mockResolvedValueOnce({
+        ...timeline,
+        summary: {
+          ...timeline.summary,
+          scope: "contact",
+          canonical_identity_id: 1,
+          source_contact_ids: [11],
+        },
+      });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Timeline");
+
+    const region = screen.getByRole("region", {
+      name: "Communication timeline",
+    });
+    const chart = within(region).getByRole("img", {
+      name: "Monthly ordinary message activity",
+    });
+    expect(chart.querySelector('[data-month="2023-02"][data-count="0"]')).toBeTruthy();
+    expect(chart.querySelector('[data-month="2023-03"][data-count="2"]')).toBeTruthy();
+    expect(
+      within(region).getByRole("list", {
+        name: "Monthly communication activity details",
+      }),
+    ).toHaveTextContent("unknown direction");
+    expect(
+      within(region).getByText("Combined owner history", { selector: "strong" }),
+    ).toBeInTheDocument();
+    expect(within(region).getByText(/@anton/)).toBeInTheDocument();
+
+    await user.selectOptions(
+      within(region).getByRole("combobox", { name: "Timeline scope" }),
+      "1",
+    );
+
+    expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, 1);
+    expect(await within(region).findByText("Avery")).toBeInTheDocument();
+  });
+
+  it("shows timeline retry errors and undated-only empty states", async () => {
+    const user = userEvent.setup();
+    api.getCommunicationTimeline
+      .mockRejectedValueOnce(new Error("Timeline unavailable."))
+      .mockResolvedValueOnce({
+        ...timeline,
+        summary: {
+          ...timeline.summary,
+          ordinary_message_count: 2,
+          dated_ordinary_message_count: 0,
+          undated_ordinary_message_count: 2,
+        },
+        months: [],
+      });
+    render(<App />);
+    await selectDashboardTab("Timeline");
+
+    const region = screen.getByRole("region", {
+      name: "Communication timeline",
+    });
+    expect(await within(region).findByRole("alert")).toHaveTextContent(
+      "Timeline unavailable.",
+    );
+    await user.click(within(region).getByRole("button", { name: "Retry" }));
+    expect(
+      await within(region).findByRole("heading", {
+        name: "No dated ordinary messages",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(region).getByText(/2 ordinary messages have no reliable timestamp/),
+    ).toBeInTheDocument();
   });
 });

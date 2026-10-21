@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getChats,
   getCommunicationBalance,
+  getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
   getOverview,
   type ChatStatistics,
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
+  type CommunicationTimelineStatistics,
   type ContactStatistics,
   type ForgottenContactsStatistics,
   type OverviewStatistics,
@@ -21,8 +23,13 @@ import {
 import { ContactsView } from "./components/ContactsView";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardIntro } from "./components/DashboardIntro";
+import { CommunicationTimelineView } from "./components/CommunicationTimelineView";
 import { ForgottenContactsView } from "./components/ForgottenContactsView";
 import { OverviewView } from "./components/OverviewView";
+import {
+  dashboardTabFromHash,
+  type DashboardTab,
+} from "./components/dashboardTabs";
 import type { Resource, SortDirection } from "./types";
 
 function emptyResource<T>(): Resource<T> {
@@ -39,6 +46,14 @@ export default function App() {
     useState<Resource<CommunicationBalanceStatistics>>(emptyResource);
   const [forgottenContacts, setForgottenContacts] =
     useState<Resource<ForgottenContactsStatistics>>(emptyResource);
+  const [communicationTimeline, setCommunicationTimeline] =
+    useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
+  const [selectedTimelineContactId, setSelectedTimelineContactId] =
+    useState<number | null>(null);
+  const timelineRequestId = useRef(0);
+  const [selectedTab, setSelectedTab] = useState<DashboardTab>(() =>
+    dashboardTabFromHash(window.location.hash),
+  );
   const [chatSearch, setChatSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [balanceSearch, setBalanceSearch] = useState("");
@@ -150,12 +165,57 @@ export default function App() {
     }
   };
 
+  const loadCommunicationTimeline = async (
+    canonicalIdentityId = selectedTimelineContactId,
+  ) => {
+    const requestId = ++timelineRequestId.current;
+    setCommunicationTimeline((current) => ({
+      ...current,
+      error: null,
+      loading: true,
+    }));
+    try {
+      const data = await getCommunicationTimeline(
+        canonicalIdentityId ?? undefined,
+      );
+      if (requestId === timelineRequestId.current) {
+        setCommunicationTimeline({ data, error: null, loading: false });
+      }
+    } catch (error) {
+      if (requestId === timelineRequestId.current) {
+        setCommunicationTimeline((current) => ({
+          ...current,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to load communication timeline.",
+          loading: false,
+        }));
+      }
+    }
+  };
+
   useEffect(() => {
     void loadOverview();
     void loadChats();
     void loadContacts();
     void loadBalance();
     void loadForgottenContacts();
+  }, []);
+
+  useEffect(() => {
+    void loadCommunicationTimeline(selectedTimelineContactId);
+  }, [selectedTimelineContactId]);
+
+  useEffect(() => {
+    const syncSelectedTab = () =>
+      setSelectedTab(dashboardTabFromHash(window.location.hash));
+    window.addEventListener("hashchange", syncSelectedTab);
+    window.addEventListener("popstate", syncSelectedTab);
+    return () => {
+      window.removeEventListener("hashchange", syncSelectedTab);
+      window.removeEventListener("popstate", syncSelectedTab);
+    };
   }, []);
 
   const changeChatSort = (key: "title" | "total_messages") => {
@@ -237,71 +297,159 @@ export default function App() {
       return direction * (leftValue - rightValue);
     });
 
+  const timelineContactOptions = [
+    ...new Map(
+      (contacts.data ?? [])
+        .filter(
+          (contact): contact is ContactStatistics & {
+            canonical_identity_id: number;
+          } => contact.canonical_identity_id !== null,
+        )
+        .map((contact) => [
+          contact.canonical_identity_id,
+          {
+            canonicalIdentityId: contact.canonical_identity_id,
+            displayName:
+              contact.display_name ||
+              contact.telegram_user_id ||
+              "Unnamed contact",
+            telegramUserId: contact.telegram_user_id,
+          },
+        ]),
+    ).values(),
+  ].sort((left, right) => left.displayName.localeCompare(right.displayName));
+
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
     overview.data.total_chats === 0;
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
-      <DashboardHeader />
+      <DashboardHeader
+        selectedTab={selectedTab}
+        onTabSelect={setSelectedTab}
+      />
       <div className="mx-auto w-full max-w-[1200px] px-7 pt-[46px] pb-[30px] max-[820px]:pt-[34px] max-sm:px-[14px] max-sm:py-[25px]">
         <DashboardIntro />
-        <OverviewView
-          overview={overview}
-          noImportedData={noImportedData}
-          onRetry={() => void loadOverview()}
-        />
-        <ChatsView
-          chats={chats}
-          visibleChats={visibleChats}
-          search={chatSearch}
-          onSearchChange={setChatSearch}
-          sort={chatSort}
-          onSort={changeChatSort}
-          hasImportedAccounts={
-            (overview.data?.total_imported_accounts ?? 0) > 0
-          }
-          onRetry={() => void loadChats()}
-        />
-        <ContactsView
-          contacts={contacts}
-          visibleContacts={visibleContacts}
-          search={contactSearch}
-          onSearchChange={setContactSearch}
-          sortDirection={contactSortDirection}
-          onSort={() =>
-            setContactSortDirection((direction) =>
-              direction === "asc" ? "desc" : "asc",
-            )
-          }
-          hasMessages={(overview.data?.total_messages ?? 0) > 0}
-          onRetry={() => void loadContacts()}
-        />
-        <CommunicationBalanceView
-          balance={balance}
-          visibleContacts={visibleBalanceContacts}
-          search={balanceSearch}
-          onSearchChange={setBalanceSearch}
-          classification={balanceClassification}
-          onClassificationChange={setBalanceClassification}
-          sortKey={balanceSortKey}
-          sortDirection={balanceSortDirection}
-          onSortKeyChange={setBalanceSortKey}
-          onSortDirectionChange={setBalanceSortDirection}
-          onRetry={() => void loadBalance()}
-        />
-        <ForgottenContactsView
-          forgotten={forgottenContacts}
-          noImportedData={noImportedData}
-          visibleContacts={visibleForgottenContacts}
-          search={forgottenSearch}
-          onSearchChange={setForgottenSearch}
-          sortKey={forgottenSortKey}
-          sortDirection={forgottenSortDirection}
-          onSortKeyChange={setForgottenSortKey}
-          onSortDirectionChange={setForgottenSortDirection}
-          onRetry={() => void loadForgottenContacts()}
-        />
+        <div
+          id="overview-panel"
+          role="tabpanel"
+          aria-labelledby="overview-tab"
+          aria-label="Overview"
+          tabIndex={0}
+          hidden={selectedTab !== "overview"}
+        >
+          <OverviewView
+            overview={overview}
+            noImportedData={noImportedData}
+            onRetry={() => void loadOverview()}
+          />
+        </div>
+        <div
+          id="chats-panel"
+          role="tabpanel"
+          aria-labelledby="chats-tab"
+          aria-label="Chats"
+          tabIndex={0}
+          hidden={selectedTab !== "chats"}
+        >
+          <ChatsView
+            chats={chats}
+            visibleChats={visibleChats}
+            search={chatSearch}
+            onSearchChange={setChatSearch}
+            sort={chatSort}
+            onSort={changeChatSort}
+            hasImportedAccounts={
+              (overview.data?.total_imported_accounts ?? 0) > 0
+            }
+            onRetry={() => void loadChats()}
+          />
+        </div>
+        <div
+          id="contacts-panel"
+          role="tabpanel"
+          aria-labelledby="contacts-tab"
+          aria-label="Contacts"
+          tabIndex={0}
+          hidden={selectedTab !== "contacts"}
+        >
+          <ContactsView
+            contacts={contacts}
+            visibleContacts={visibleContacts}
+            search={contactSearch}
+            onSearchChange={setContactSearch}
+            sortDirection={contactSortDirection}
+            onSort={() =>
+              setContactSortDirection((direction) =>
+                direction === "asc" ? "desc" : "asc",
+              )
+            }
+            hasMessages={(overview.data?.total_messages ?? 0) > 0}
+            onRetry={() => void loadContacts()}
+          />
+        </div>
+        <div
+          id="communication-balance-panel"
+          role="tabpanel"
+          aria-labelledby="communication-balance-tab"
+          aria-label="Balance"
+          tabIndex={0}
+          hidden={selectedTab !== "communication-balance"}
+        >
+          <CommunicationBalanceView
+            balance={balance}
+            visibleContacts={visibleBalanceContacts}
+            search={balanceSearch}
+            onSearchChange={setBalanceSearch}
+            classification={balanceClassification}
+            onClassificationChange={setBalanceClassification}
+            sortKey={balanceSortKey}
+            sortDirection={balanceSortDirection}
+            onSortKeyChange={setBalanceSortKey}
+            onSortDirectionChange={setBalanceSortDirection}
+            onRetry={() => void loadBalance()}
+          />
+        </div>
+        <div
+          id="forgotten-contacts-panel"
+          role="tabpanel"
+          aria-labelledby="forgotten-contacts-tab"
+          aria-label="Forgotten"
+          tabIndex={0}
+          hidden={selectedTab !== "forgotten-contacts"}
+        >
+          <ForgottenContactsView
+            forgotten={forgottenContacts}
+            noImportedData={noImportedData}
+            visibleContacts={visibleForgottenContacts}
+            search={forgottenSearch}
+            onSearchChange={setForgottenSearch}
+            sortKey={forgottenSortKey}
+            sortDirection={forgottenSortDirection}
+            onSortKeyChange={setForgottenSortKey}
+            onSortDirectionChange={setForgottenSortDirection}
+            onRetry={() => void loadForgottenContacts()}
+          />
+        </div>
+        <div
+          id="communication-timeline-panel"
+          role="tabpanel"
+          aria-labelledby="communication-timeline-tab"
+          aria-label="Timeline"
+          tabIndex={0}
+          hidden={selectedTab !== "communication-timeline"}
+        >
+          <CommunicationTimelineView
+            timeline={communicationTimeline}
+            contactOptions={timelineContactOptions}
+            selectedContactId={selectedTimelineContactId}
+            onContactChange={setSelectedTimelineContactId}
+            onRetry={() =>
+              void loadCommunicationTimeline(selectedTimelineContactId)
+            }
+          />
+        </div>
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">
           Statistics are aggregated from imported data. Message contents are not shown.
         </footer>
