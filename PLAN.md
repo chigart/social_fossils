@@ -2,10 +2,10 @@
 
 ## Goal and planning assumptions
 
-Complete the current Telegram analytics product, then introduce orchestration,
-broader platform support, and deployment infrastructure in that order. Keep
-import and analytics business logic independently runnable and testable; Airflow
-and Kubernetes are later operational layers, not prerequisites for local use.
+Phases 1–3 are complete. Next, add upload-triggered orchestration, then expand
+platform support and deployment infrastructure. Keep import and analytics
+business logic independently runnable and testable; Airflow orchestrates the
+local end-to-end workflow but is not a dependency of the core services or CLI.
 
 Decisions confirmed for this plan:
 
@@ -35,12 +35,11 @@ The repository already contains:
   sections and frontend/backend tests.
 - A local Docker Compose setup for frontend, backend, PostgreSQL, and Adminer.
 
-The remaining Phase 3 gap is the Communication Timeline endpoint and UI.
-Existing analytics other than Forgotten Contacts currently aggregate across
-accounts without a common canonical contact identity. There is no Airflow DAG,
-additional platform importer, or Kubernetes deployment configuration. The
-README's roadmap/TODO is behind the implemented features and should be updated
-as roadmap work lands.
+Phases 1–3, including combined-owner analytics, Forgotten Contacts, and the
+Communication Timeline, are considered complete. There is no upload endpoint,
+Airflow DAG, additional platform importer, or Kubernetes deployment
+configuration yet. The README's roadmap/TODO is behind the implemented
+features and should be updated as roadmap work lands.
 
 Relevant existing code includes `backend/app/models.py`,
 `backend/app/importer.py`, `backend/app/routers/analytics.py`,
@@ -50,20 +49,10 @@ Relevant existing code includes `backend/app/models.py`,
 
 ## Recommended order and rationale
 
-Move the account-scope foundation ahead of the two new dashboard surfaces.
-Both Forgotten Contacts and Timeline need reliable aggregation across accounts;
-implementing those screens first would either duplicate account logic or expose
-misleading account-local results. The revised Phase 3 order is:
-
-1. Establish combined-owner and cross-account contact identity semantics.
-2. Build the Forgotten Contacts dashboard on the existing API, updating the API
-   to use the combined-owner scope.
-3. Add the Communication Timeline API.
-4. Build the Communication Timeline dashboard.
-
-The following phases remain in their requested order. Production container
-standardization in Kubernetes Phase 6 should harden and separate the existing
-Compose setup rather than recreate local Docker support that already exists.
+Proceed with upload-triggered processing in Phase 4, then add a platform only
+after its export quality and identity semantics are understood in Phase 5.
+Phase 6 hardens the existing Compose-based development setup and deploys the
+stabilized application and pipeline to Kubernetes.
 
 ## Phase 3: Complete the analytics product
 
@@ -158,181 +147,194 @@ supported by the existing test setup.
 and renewal patterns, direction uncertainty, contact selection, accessibility
 labels, and loading/error/empty states.
 
-## Phase 4: Introduce Airflow
+## Phase 4: Upload-triggered processing with Airflow
 
-Keep all parsers, import operations, normalization, and analytics in reusable
-application modules. Airflow DAGs should orchestrate those functions rather
-than contain business logic. Keep the present Compose/local workflow functional
-without an Airflow scheduler.
+The final web workflow accepts multiple data files from a user and starts
+processing when each upload is accepted. Create an independent job and Airflow
+DAG run per file so a failed file can be retried without rerunning the other
+uploads. The confirmed account scope is one person's combined analytics across
+their Telegram accounts; preserve account/source provenance for every import.
 
-### 16. Design a repeatable data-processing pipeline
+Airflow owns task scheduling, dependencies, retries, concurrency, orchestration
+history, and pipeline-level failure reporting. FastAPI owns authentication and
+authorization, upload validation and durable acceptance, and user-facing
+upload/job status. Reusable application services own parsing, normalization,
+imports, and domain logic. DAGs orchestrate those services and must not
+duplicate business logic.
 
-- Identify idempotent stages and explicit task dependencies: discover/validate
-  export, import raw records, normalize identities, compute analytics, and
-  report outcome.
-- Define DAG parameters, ownership of temporary files, concurrency limits, and
-  how a run identifies its input and target owner.
-- Document local execution of each processing service without Airflow.
+Airflow is part of the default Docker Compose stack to exercise the local
+end-to-end workflow. Document how to start only named application services
+when orchestration is not needed. Keep the importer and services usable without
+Airflow.
 
-### 17. Extract and validate new data
+### 16. Define upload and job lifecycle
 
-- Wrap the existing Telegram parser/importer in callable services and add a
-  validated pipeline entry point.
-- Record task/run linkage and statuses using current import-session records or
-  a justified additive model/migration; do not duplicate status storage without
-  a clear need.
-- Keep private export contents and message text out of logs.
+- Add an authenticated upload boundary and durable per-file job record linked
+  to the importing user/owner and the source account identified from the
+  export. Do not trust a client-supplied account identity in place of validating
+  the export.
+- Define allowed file types and size limits, staging ownership and retention,
+  duplicate-upload behavior, and job status/error contracts.
+- Determine whether existing `import_sessions` can represent import progress
+  and link to orchestration history. Add schema only for a demonstrated gap;
+  avoid duplicating status records.
+- If the application supports multiple users, enforce ownership boundaries
+  across upload, staging file access, jobs, imports, and status APIs.
 
-### 18. Normalize imported data
+### 17. Make application pipeline services reusable
 
-- Make normalization callable and deterministic outside a DAG.
-- Preserve raw imported payloads and source provenance; make retries safe.
-- Validate normalization behavior with synthetic multi-account and
-  identity-conflict fixtures.
+- Wrap or extract export validation, Telegram parsing/import, identity
+  reconciliation, and any necessary post-import operation as callable
+  application services.
+- Keep the existing CLI using the same services so core processing remains
+  independently testable and runnable without a scheduler.
+- Preserve explicit transaction boundaries, existing idempotency and source
+  provenance. Do not add materialized analytics or recomputation unless
+  measured query cost justifies it.
 
-### 19. Recompute derived analytics
+### 18. Dispatch reliably and orchestrate each file
 
-- Define which analytics are computed on demand versus materialized/recomputed.
-- Add a reusable recomputation service only for metrics that need it; avoid
-  redundant derived tables before measured performance justifies them.
-- Make a rerun idempotent and scoped to the intended owner/data range.
+- Persist the uploaded file and job before triggering Airflow. Use stable
+  job/run identifiers and define recovery for scheduler/API outages, duplicate
+  trigger requests, ambiguous trigger timeouts, and accepted uploads that
+  never start.
+- Build a per-file DAG for validation, import, any required post-import work,
+  and final status reporting. Scope every task to its job and source account.
+- Define task dependencies, concurrency limits, timeouts, and retry policies:
+  retry transient failures, but fail invalid input without futile retries.
+- Pass only safe identifiers and storage references between tasks. Never put
+  raw exports or message contents into XCom, task logs, or error summaries.
 
-### 20. Add retry and failure handling
+### 19. Add Airflow to the default local Compose stack
 
-- Configure task-level retry policies for transient failures and no retry for
-  invalid input/data errors.
-- Preserve transaction boundaries and report final failure accurately.
-- Test retries, partial failures, rollback, and safe reruns.
+- Add the minimum Airflow API/scheduler/task-processing services, initialization,
+  health checks, persistent Airflow metadata storage, and private shared upload
+  staging needed for local execution.
+- Keep Airflow metadata separate from application data/schema. Use a simple
+  single-host executor for local development; defer distributed workers until
+  workload evidence requires them.
+- Package the same application services and pinned dependencies into the task
+  environment. Do not assume the host virtual environment provides container
+  dependencies.
+- Preserve app-only startup as an option using explicitly named services.
+  Document default startup, app-only startup, test upload/trigger, migration,
+  and local Airflow UI access.
 
-### 21. Add pipeline monitoring and history
+### 20. Expose job history and verify failure recovery
 
-- Surface run status, start/end time, duration, task failure, and safe error
-  summaries.
-- Link orchestration runs to import-session records without exposing personal
-  message data.
-- Add operational tests for success, failure, and missing/invalid input.
+- Expose safe per-file status, timestamps, duration, and error summaries, with
+  links between upload jobs, import sessions, and Airflow runs.
+- Test multiple uploads, success, malformed/missing files, duplicate inputs,
+  transient retries, trigger recovery, partial failure and rollback, concurrent
+  imports from separate accounts, and correct counts after reruns.
+- Verify that logs, API errors, and orchestration metadata contain no private
+  export or message data.
 
-### 22. Schedule periodic processing
+### 21. Add scheduled processing only for a defined need
 
-- Add schedules only after an input-discovery mechanism and retention policy
-  exist; do not schedule repeatedly against a mutable personal export path
-  without defined semantics.
-- Keep scheduling configurable and disabled or inert in the basic local
-  workflow unless explicitly enabled.
+- Uploaded files trigger processing immediately; scheduling is not needed for
+  this flow.
+- Add a schedule only after defining automatic input discovery, immutability
+  or change detection, retention, and incremental processing semantics. Do
+  not repeatedly process a mutable personal-export path without these rules.
 
-**Phase 4 exit criteria:** DAGs run against the production application services,
-retries do not duplicate imported data, task history is inspectable, and the
-importer/analytics services remain independently testable and runnable.
+**Phase 4 exit criteria:** each uploaded file has an independent inspectable
+job and DAG run; accepted uploads have a recovery path if dispatch fails;
+retries and repeated imports do not duplicate messages; task history and safe
+errors are available; the default Compose stack runs the pipeline; and the
+CLI/services remain usable without Airflow.
 
 ## Phase 5: Expand the data platform
 
-### 23. Add more messaging platforms
+### 22. Select and add another messaging platform
 
-- Select one platform based on export availability and data quality before
-  building its importer.
-- Implement platform-specific parsing behind the existing import-service
-  boundary; retain platform source IDs and raw payloads.
-- Add synthetic fixtures, parser validation, idempotency, and importer tests.
+- Compare candidates by export availability, format stability, identifier
+  quality, and ability to build representative synthetic tests. Select one
+  platform before implementing an importer.
+- Implement its parser and import service behind the existing reusable
+  processing boundary. Preserve platform source IDs, raw payload, and source
+  account provenance.
+- Add synthetic fixtures, malformed-input validation, idempotency, and
+  importer/pipeline tests. Run it through the same per-file upload workflow.
 
-### 24. Normalize identities across platforms
+### 23. Add explicit cross-platform identity links
 
-- Extend canonical identity mapping to include platform-specific identifiers
-  and explicit, auditable links between identities where the same person uses
-  different IDs across platforms.
-- Do not infer cross-platform identity from names or contact-book position.
-- Include conflict and unlink behavior before cross-platform aggregates are
-  enabled.
+- Extend canonical identity handling with explicit, auditable links between
+  platform identities. Include conflict, unlink, and provenance behavior
+  before enabling cross-platform aggregates.
+- Never infer cross-platform identity from display names or contact-book
+  position.
 
-### 25. Build cross-platform communication analysis
+### 24. Build cross-platform communication analysis
 
-- Add analytics only after identity mapping has reliable, testable semantics.
-- Preserve source platform and owner/contact direction as dimensions; define
-  which totals can safely be compared across platforms.
-- Verify no duplicate counting when one conversation or identity is linked
-  across sources.
+- Add analyses only after identity links and direction semantics are reliable
+  and testable.
+- Preserve platform, source account, owner/contact direction, and other
+  necessary provenance; define which totals are meaningfully comparable.
+- Verify that linked identities or conversations do not cause duplicate
+  counting.
 
-### 26. Add more expensive or precomputed analytics
+### 25. Scale imports and derived analytics based on measurements
 
-- Profile the owner-wide analytics before adding materialized or cached
+- Profile representative synthetic large imports and analytics before adding
+  streaming/chunked parsing, bulk operations, checkpoints, or precomputed
   results.
-- Define refresh/invalidation behavior for imports and identity changes.
-- Use PostgreSQL and Airflow only where measured query cost or refresh needs
-  justify them.
+- Define refresh/invalidation behavior for imports and identity changes before
+  materializing results.
+- Preserve transaction safety, import-session counts, uniqueness, safe retries,
+  and full re-import semantics for any incremental ingestion.
 
-### 27. Handle larger exports and incremental ingestion
+**Phase 5 exit criteria:** at least one additional importer runs through the
+same reusable upload pipeline; cross-platform links are explicit and auditable;
+combined analytics preserve provenance; and any incremental processing is
+safe to retry and validated against a full re-import.
 
-- Measure import/query bottlenecks with representative synthetic large data.
-- Add streaming/chunked parsing or bulk upsert paths where evidence supports
-  them; preserve transaction safety, import-session counts, and uniqueness.
-- Define checkpoints and retry semantics for incremental imports, and verify
-  full re-import remains safe.
+## Phase 6: Production deployment with Kubernetes
 
-**Phase 5 exit criteria:** at least one additional importer works through the
-same reusable pipeline, identity links are explicit, combined analytics retain
-provenance, and incremental processing is safe to retry.
+Begin only after application and pipeline boundaries stabilize. Docker Compose
+remains the local development workflow and includes Airflow by default.
 
-## Phase 6: Introduce Kubernetes
+### 26. Harden production images and configuration
 
-Do this only after the application and pipeline boundaries stabilize. Existing
-Docker Compose remains the local development path.
+- Standardize backend, frontend, and required Airflow images for deterministic
+  builds, minimal runtime contents, non-root execution where practical, and
+  explicit health/readiness behavior.
+- Separate development defaults from production configuration. Validate
+  required settings and inject secrets at deployment; never commit credentials
+  or bake them into images.
+- Preserve straightforward Compose startup and document app-only startup.
 
-### 28. Containerize and standardize application services
+### 27. Deploy application and Airflow services
 
-- Harden/standardize the existing backend and frontend images for production
-  use: deterministic builds, non-root execution where practical, minimal
-  runtime contents, and explicit health/readiness behavior.
-- Preserve Compose service names, local mounts, and local startup behavior.
-
-### 29. Separate development and production configuration
-
-- Separate development defaults from production secrets/configuration.
-- Validate required variables at startup and document secret injection; never
-  commit credentials or bake them into images.
-
-### 30. Deploy the FastAPI backend
-
-- Add Kubernetes Deployment/Service configuration with externalized config,
-  resource requests/limits, non-root security settings, and readiness/liveness
-  probes.
-- Keep database connectivity configured through the environment and a
-  Kubernetes Secret.
-
-### 31. Deploy the frontend
-
-- Choose Kubernetes hosting or static hosting based on operational needs.
-- Configure the API base URL per environment and verify browser access,
+- Add Kubernetes configuration for the backend, frontend hosting choice, and
+  the Airflow API/scheduler/task-processing components and executor selected
+  from Phase 4 workload evidence.
+- Add resource requests/limits, non-root security settings, readiness/liveness
+  probes, restricted Airflow access, and externalized database credentials.
+- Configure the frontend API URL per environment and verify browser access,
   CORS, and release compatibility.
 
-### 32. Deploy and configure Airflow
+### 28. Define durable data, logs, and recovery
 
-- Deploy only the DAGs and scheduler/executor components needed by the
-  established pipeline.
-- Configure persistent logs/metadata, secrets, workers/resources, and
-  restricted access; keep local Airflow optional.
+- Define durable private upload storage and retention, Airflow logs and
+  metadata persistence, PostgreSQL ownership, backups, restore procedures,
+  and recovery verification before storing production exports.
+- Prefer managed PostgreSQL/object storage where they meet requirements;
+  do not treat local Compose volumes as production backups.
+- Verify cleanup and access controls for staged uploads and retained source
+  files.
 
-### 33. Configure persistent database storage and backups
+### 29. Add monitoring and repeatable releases
 
-- Define PostgreSQL ownership, persistent storage, backup cadence, retention,
-  restore procedures, and recovery verification before production data is
-  stored.
-- Prefer a managed PostgreSQL service if it meets deployment requirements;
-  avoid assuming a local Compose volume is a production backup.
+- Monitor API and database health/capacity, upload-job state, DAG failures,
+  and request latency without logging private content.
+- Add CI/CD after images and deployment configuration are reproducible. Build
+  and test images, use approved dependency/image scanning, promote through
+  environment-specific stages, and verify rollback.
 
-### 34. Add health checks, resource limits, and monitoring
-
-- Add probes and resource bounds for backend, frontend (if hosted in cluster),
-  and Airflow.
-- Monitor service health, database connections/storage, DAG failures, and
-  request latency without logging private content.
-
-### 35. Automate deployments
-
-- Add CI/CD after images and deployment configuration are reproducible.
-- Build/test images, scan dependencies/images with approved tooling, deploy
-  through an environment-specific promotion path, and document rollback.
-
-**Phase 6 exit criteria:** production services have externalized secrets,
-working probes, persistence and tested backups, observable processing runs,
+**Phase 6 exit criteria:** production app and pipeline services have
+externalized secrets, working probes, resource bounds, durable storage and
+tested backups, observable processing runs, restricted orchestration access,
 and a repeatable release/rollback path; local Compose remains straightforward.
 
 ## Cross-cutting implementation and test rules
@@ -353,10 +355,13 @@ and a repeatable release/rollback path; local Compose remains straightforward.
 
 ## Suggested delivery slices
 
-1. Combined-owner model, migration, analytics scope, and cross-account tests.
-2. Forgotten Contacts API scope update and dashboard.
-3. Timeline contract, query/service, and API tests.
-4. Timeline visualization and frontend tests/build.
-5. Airflow design and reusable service adapters, then DAG/retry/history/schedule.
-6. Additional importer and identity/cross-platform analytics.
-7. Production container/configuration work, then Kubernetes deployment and CI/CD.
+1. Per-file authenticated upload contract, durable staging, and job lifecycle.
+2. Reusable retry-safe pipeline services and reliable Airflow dispatch/recovery.
+3. Per-file Airflow DAG, default Compose integration, job status/history, and
+   operational/privacy tests.
+4. Select one additional messaging platform and implement its importer through
+   the upload pipeline.
+5. Explicit cross-platform identity links and provenance-preserving analytics;
+   profile before scaling imports or materializing analytics.
+6. Production image/configuration hardening, then Kubernetes deployment,
+   persistence/backups, monitoring, CI/CD, and rollback.
