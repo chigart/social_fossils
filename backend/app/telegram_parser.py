@@ -18,6 +18,7 @@ class ParsedChat:
 class ParsedTelegramExport:
     account_name: str
     owner_telegram_id: str | None
+    account_username: str | None = None
     chats: list[ParsedChat] = field(default_factory=list)
     contacts: list[dict[str, Any]] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
@@ -148,6 +149,16 @@ def extract_account_name(personal_information: dict[str, Any] | None) -> str:
     return "Telegram account"
 
 
+def extract_account_username(personal_information: dict[str, Any] | None) -> str | None:
+    if not isinstance(personal_information, dict):
+        return None
+    username = personal_information.get("username")
+    if not isinstance(username, str):
+        return None
+    normalized = username.strip().lstrip("@")
+    return normalized or None
+
+
 def extract_chat_title(chat: dict[str, Any], owner_telegram_id: str | None) -> str | None:
     if chat.get("type") == "personal_chat":
         for message in chat.get("messages") or []:
@@ -254,6 +265,7 @@ def parse_telegram_export(data: dict[str, Any]) -> ParsedTelegramExport:
 
     account_name = extract_account_name(personal_info)
     owner_telegram_id = normalize_user_id(personal_info.get("user_id"))
+    account_username = extract_account_username(personal_info)
 
     parsed_chats: list[ParsedChat] = []
     for chat in chats.get("list") or []:
@@ -296,6 +308,7 @@ def parse_telegram_export(data: dict[str, Any]) -> ParsedTelegramExport:
     return ParsedTelegramExport(
         account_name=account_name,
         owner_telegram_id=owner_telegram_id,
+        account_username=account_username,
         chats=parsed_chats,
         contacts=contact_records,
         raw=data,

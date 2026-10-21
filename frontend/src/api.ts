@@ -10,6 +10,8 @@ export type OverviewStatistics = {
 
 export type ChatStatistics = {
   chat_id: number;
+  account_id: number;
+  source_account_label: string;
   telegram_chat_id: string;
   title: string | null;
   chat_type: string;
@@ -22,8 +24,12 @@ export type ChatStatistics = {
 };
 
 export type ContactStatistics = {
-  account_id: number;
+  account_id: number | null;
   contact_id: number | null;
+  canonical_identity_id: number | null;
+  source_account_ids: number[];
+  source_account_labels: string[];
+  source_contact_ids: number[];
   telegram_user_id: string | null;
   display_name: string | null;
   total_messages_sent: number;
@@ -40,8 +46,12 @@ export type CommunicationBalanceClassification =
   | "insufficient_data";
 
 export type CommunicationBalanceContact = {
-  account_id: number;
+  account_id: number | null;
   contact_id: number;
+  canonical_identity_id: number | null;
+  source_account_ids: number[];
+  source_account_labels: string[];
+  source_contact_ids: number[];
   telegram_user_id: string;
   display_name: string | null;
   owner_message_count: number;

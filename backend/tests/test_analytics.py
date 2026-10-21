@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from datetime import timedelta
 
 import pytest
-from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
@@ -28,12 +27,19 @@ def db_session():
     with engine.begin() as connection:
         connection.execute(text(
             "CREATE TABLE telegram_accounts ("
-            "id INTEGER PRIMARY KEY, telegram_user_id VARCHAR(100))"
+            "id INTEGER PRIMARY KEY, name VARCHAR(200), "
+            "username VARCHAR(100), telegram_user_id VARCHAR(100))"
+        ))
+        connection.execute(text(
+            "CREATE TABLE canonical_identities ("
+            "id INTEGER PRIMARY KEY, platform VARCHAR(50), "
+            "platform_user_id VARCHAR(100))"
         ))
         connection.execute(text(
             "CREATE TABLE contacts ("
             "id INTEGER PRIMARY KEY, account_id INTEGER, "
-            "telegram_user_id VARCHAR(100), display_name VARCHAR(300))"
+            "telegram_user_id VARCHAR(100), canonical_identity_id INTEGER, "
+            "display_name VARCHAR(300))"
         ))
         connection.execute(text(
             "CREATE TABLE chats ("
@@ -55,10 +61,26 @@ def db_session():
     engine.dispose()
 
 
-def add_account(db_session, account_id: int, telegram_user_id: str | None):
+def add_account(
+    db_session,
+    account_id: int,
+    telegram_user_id: str | None,
+    *,
+    name: str | None = None,
+    username: str | None = None,
+):
     db_session.execute(
-        text("INSERT INTO telegram_accounts (id, telegram_user_id) VALUES (:id, :user_id)"),
-        {"id": account_id, "user_id": telegram_user_id},
+        text(
+            "INSERT INTO telegram_accounts "
+            "(id, name, username, telegram_user_id) "
+            "VALUES (:id, :name, :username, :user_id)"
+        ),
+        {
+            "id": account_id,
+            "name": name or f"Account {account_id}",
+            "username": username,
+            "user_id": telegram_user_id,
+        },
     )
 
 
@@ -92,15 +114,39 @@ def add_contact(
     telegram_user_id: str,
     display_name: str,
 ):
+    identity_id = db_session.scalar(
+        text(
+            "SELECT id FROM canonical_identities "
+            "WHERE platform = 'telegram' AND platform_user_id = :telegram_user_id"
+        ),
+        {"telegram_user_id": telegram_user_id},
+    )
+    if identity_id is None:
+        db_session.execute(
+            text(
+                "INSERT INTO canonical_identities (platform, platform_user_id) "
+                "VALUES ('telegram', :telegram_user_id)"
+            ),
+            {"telegram_user_id": telegram_user_id},
+        )
+        identity_id = db_session.scalar(
+            text(
+                "SELECT id FROM canonical_identities "
+                "WHERE platform = 'telegram' AND platform_user_id = :telegram_user_id"
+            ),
+            {"telegram_user_id": telegram_user_id},
+        )
     db_session.execute(
         text(
-            "INSERT INTO contacts (id, account_id, telegram_user_id, display_name) "
-            "VALUES (:id, :account_id, :telegram_user_id, :display_name)"
+            "INSERT INTO contacts "
+            "(id, account_id, telegram_user_id, canonical_identity_id, display_name) "
+            "VALUES (:id, :account_id, :telegram_user_id, :identity_id, :display_name)"
         ),
         {
             "id": contact_id,
             "account_id": account_id,
             "telegram_user_id": telegram_user_id,
+            "identity_id": identity_id,
             "display_name": display_name,
         },
     )
@@ -245,10 +291,20 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
         "/api/analytics/communication-balance",
         "/api/analytics/forgotten-contacts",
     }
+    forgotten_parameters = app.openapi()["paths"][
+        "/api/analytics/forgotten-contacts"
+    ]["get"]["parameters"]
+    assert all(parameter["name"] != "account_id" for parameter in forgotten_parameters)
 
 
 def test_account_without_messages_and_empty_chat_are_included(db_session):
-    add_account(db_session, 1, "user-owner")
+    add_account(
+        db_session,
+        1,
+        "user-owner",
+        name="Ant Malkov",
+        username="anton",
+    )
     add_chat(db_session, 10, 1, "telegram-chat-10", "No messages")
 
     overview = get_overview(db_session)
@@ -261,6 +317,8 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
     assert len(chats) == 1
     assert ChatStatistics.model_validate(chats[0]).model_dump() == {
         "chat_id": 10,
+        "account_id": 1,
+        "source_account_label": "@anton",
         "telegram_chat_id": "telegram-chat-10",
         "title": "No messages",
         "chat_type": "private",
@@ -345,6 +403,57 @@ def test_nonstandard_message_type_only_contributes_to_total(db_session):
     assert contact.total_messages_sent == 1
     assert contact.ordinary_messages_sent == 0
     assert contact.service_events_attributed == 0
+
+
+def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_session):
+    add_account(
+        db_session,
+        1,
+        "user-owner-one",
+        name="Anton Malkov",
+        username="anton",
+    )
+    add_account(db_session, 2, "user-owner-two", name="Anton Malkov")
+    add_chat(db_session, 10, 1, "chat-one")
+    add_chat(db_session, 20, 2, "chat-two")
+    add_contact(db_session, 20, 1, "user-shared-peer", "Shared peer")
+    add_contact(db_session, 30, 2, "user-shared-peer", "Peer name from export two")
+    add_contact(db_session, 21, 1, "user-twin-one", "Twin")
+    add_contact(db_session, 31, 2, "user-twin-two", "Twin")
+
+    add_message(db_session, 1, 10, "message", "user-shared-peer")
+    add_message(db_session, 2, 20, "message", "user-shared-peer")
+    add_message(db_session, 3, 10, "message", "user-twin-one")
+    add_message(db_session, 4, 20, "message", "user-twin-two")
+    add_message(db_session, 5, 10, "message", "user-unlinked")
+    add_message(db_session, 6, 20, "message", "user-unlinked")
+    add_message(
+        db_session,
+        7,
+        10,
+        "message",
+        "user-owner-two",
+        is_outgoing=False,
+    )
+
+    contacts = get_contact_statistics(db_session)
+    shared = next(contact for contact in contacts if contact.telegram_user_id == "user-shared-peer")
+    twins = [contact for contact in contacts if contact.display_name == "Twin"]
+    unlinked = [contact for contact in contacts if contact.telegram_user_id == "user-unlinked"]
+
+    assert shared.total_messages_sent == 2
+    assert shared.source_account_ids == [1, 2]
+    assert shared.source_account_labels == ["@anton", "Anton Malkov"]
+    assert shared.source_contact_ids == [20, 30]
+    assert shared.account_id is None
+    assert len(twins) == 2
+    assert {contact.telegram_user_id for contact in twins} == {
+        "user-twin-one",
+        "user-twin-two",
+    }
+    assert len(unlinked) == 2
+    assert {contact.account_id for contact in unlinked} == {1, 2}
+    assert all(contact.telegram_user_id != "user-owner-two" for contact in contacts)
 
 
 def test_communication_balance_uses_text_volume_and_excludes_ineligible_data(
@@ -546,6 +655,49 @@ def test_communication_balance_uses_text_volume_and_excludes_ineligible_data(
     assert result.summary.excluded_unknown_direction_message_count == 2
 
 
+def test_communication_balance_combines_owner_aliases_and_canonical_contacts(
+    db_session,
+):
+    add_account(db_session, 1, "user-owner-one", username="anton")
+    add_account(db_session, 2, "user-owner-two", username="anton_old")
+    for account_id, chat_id, contact_id in ((1, 10, 20), (2, 20, 30)):
+        add_chat(
+            db_session,
+            chat_id,
+            account_id,
+            f"personal-chat-{chat_id}",
+            chat_type="personal_chat",
+        )
+        add_contact(
+            db_session,
+            contact_id,
+            account_id,
+            "user-shared-peer",
+            "Shared peer",
+        )
+
+    add_message(db_session, 1, 10, "message", "user-owner-one", is_outgoing=True, text_content="owner")
+    add_message(db_session, 2, 10, "message", "user-shared-peer", is_outgoing=False, text_content="peer")
+    add_message(db_session, 3, 20, "message", "user-owner-two", is_outgoing=True, text_content="owner")
+    add_message(db_session, 4, 20, "message", "user-owner-one", is_outgoing=False, text_content="owner")
+    add_message(db_session, 5, 20, "message", "user-shared-peer", is_outgoing=False, text_content="peer")
+
+    result = get_communication_balance(db_session)
+
+    assert len(result.contacts) == 1
+    contact = result.contacts[0]
+    assert contact.canonical_identity_id is not None
+    assert contact.source_account_ids == [1, 2]
+    assert contact.source_account_labels == ["@anton", "@anton_old"]
+    assert contact.source_contact_ids == [20, 30]
+    assert contact.owner_message_count == 3
+    assert contact.contact_message_count == 2
+    assert contact.total_message_count == 5
+    assert contact.owner_text_length == len("ownerownerowner")
+    assert contact.contact_text_length == len("peerpeer")
+    assert result.summary.total_message_count == 5
+
+
 def test_communication_balance_applies_exact_share_boundaries(db_session):
     add_account(db_session, 1, "user-owner")
     for contact_id, telegram_user_id, name, owner_chars, contact_chars in (
@@ -720,7 +872,6 @@ def test_forgotten_contacts_classifies_and_ranks_by_history_and_decline(db_sessi
 
     result = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     )
     by_id = {contact.contact_id: contact for contact in result.contacts}
@@ -744,7 +895,7 @@ def test_forgotten_contacts_classifies_and_ranks_by_history_and_decline(db_sessi
     assert by_id[23].classification == "insufficient_data"
     assert by_id[23].ranking_score is None
 
-    assert result.summary.account_id == 1
+    assert result.summary.source_account_count == 1
     assert result.summary.eligible_contacts == 4
     assert result.summary.meaningful_historical_contacts == 3
     assert result.summary.currently_inactive_contacts == 2
@@ -796,7 +947,6 @@ def test_forgotten_contacts_excludes_service_and_counts_normalized_text(db_sessi
 
     result = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     )
     contact = result.contacts[0]
@@ -840,7 +990,6 @@ def test_forgotten_contacts_marks_ambiguous_direction_unscored(db_session):
 
     contact = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     ).contacts[0]
 
@@ -865,7 +1014,6 @@ def test_forgotten_contacts_requires_long_enough_baseline(db_session):
 
     contact = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     ).contacts[0]
 
@@ -902,13 +1050,11 @@ def test_forgotten_contacts_splits_partial_cutoff_month_and_orders_ties(db_sessi
 
     full_result = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
         sort_by="historical_message_count",
     )
     limited_result = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
         limit=1,
     )
@@ -937,7 +1083,6 @@ def test_forgotten_contacts_does_not_use_missing_timestamps_as_baseline(db_sessi
 
     contact = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     ).contacts[0]
 
@@ -989,7 +1134,6 @@ def test_forgotten_contacts_excludes_groups_and_multiple_peer_chats(db_session):
 
     result = build_forgotten_contacts_statistics(
         db_session,
-        account_id=1,
         as_of=FORGOTTEN_AS_OF,
     )
 
@@ -997,9 +1141,9 @@ def test_forgotten_contacts_excludes_groups_and_multiple_peer_chats(db_session):
     assert result.contacts == []
 
 
-def test_forgotten_contacts_scopes_accounts_and_requires_selection(db_session):
-    add_account(db_session, 1, "user-owner-one")
-    add_account(db_session, 2, "user-owner-two")
+def test_forgotten_contacts_combines_owner_aliases_and_canonical_contacts(db_session):
+    add_account(db_session, 1, "user-owner-one", username="anton")
+    add_account(db_session, 2, "user-owner-two", username="anton_old")
     for account_id, contact_id in ((1, 20), (2, 30)):
         chat_id, peer_id = add_forgotten_candidate(
             db_session,
@@ -1016,37 +1160,29 @@ def test_forgotten_contacts_scopes_accounts_and_requires_selection(db_session):
             owner_id=f"user-owner-{'one' if account_id == 1 else 'two'}",
         )
 
-    with pytest.raises(HTTPException) as selection_error:
-        build_forgotten_contacts_statistics(
-            db_session,
-            as_of=FORGOTTEN_AS_OF,
-        )
-    assert selection_error.value.status_code == 400
-
-    first_account = build_forgotten_contacts_statistics(
+    add_message(
         db_session,
-        account_id=1,
+        200051,
+        10020,
+        "message",
+        "user-owner-two",
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=False,
+    )
+    result = build_forgotten_contacts_statistics(
+        db_session,
         as_of=FORGOTTEN_AS_OF,
     )
-    second_account = build_forgotten_contacts_statistics(
-        db_session,
-        account_id=2,
-        as_of=FORGOTTEN_AS_OF,
-    )
-    assert [contact.contact_id for contact in first_account.contacts] == [20]
-    assert [contact.account_id for contact in first_account.contacts] == [1]
-    assert first_account.contacts[0].total_message_count == 50
-    assert [contact.contact_id for contact in second_account.contacts] == [30]
-    assert [contact.account_id for contact in second_account.contacts] == [2]
-    assert second_account.contacts[0].total_message_count == 50
-
-    with pytest.raises(HTTPException) as missing_account_error:
-        build_forgotten_contacts_statistics(
-            db_session,
-            account_id=99,
-            as_of=FORGOTTEN_AS_OF,
-        )
-    assert missing_account_error.value.status_code == 404
+    assert len(result.contacts) == 1
+    assert result.contacts[0].total_message_count == 101
+    assert result.contacts[0].owner_message_count == 51
+    assert result.contacts[0].contact_message_count == 50
+    assert result.contacts[0].source_account_ids == [1, 2]
+    assert result.contacts[0].source_account_labels == ["@anton", "@anton_old"]
+    assert result.contacts[0].source_contact_ids == [20, 30]
+    assert result.contacts[0].account_id is None
+    assert result.summary.source_account_count == 2
+    assert result.summary.scope == "combined_owner"
 
 
 def test_forgotten_contacts_empty_database_and_account_without_private_chats(
@@ -1056,7 +1192,7 @@ def test_forgotten_contacts_empty_database_and_account_without_private_chats(
         db_session,
         as_of=FORGOTTEN_AS_OF,
     )
-    assert empty_result.summary.account_id is None
+    assert empty_result.summary.source_account_count == 0
     assert empty_result.summary.eligible_contacts == 0
     assert empty_result.contacts == []
 
@@ -1077,6 +1213,6 @@ def test_forgotten_contacts_empty_database_and_account_without_private_chats(
         db_session,
         as_of=FORGOTTEN_AS_OF,
     )
-    assert no_private_results.summary.account_id == 1
+    assert no_private_results.summary.source_account_count == 1
     assert no_private_results.summary.eligible_contacts == 0
     assert no_private_results.contacts == []

@@ -5,6 +5,7 @@ import pytest
 from app.telegram_parser import (
     determine_is_outgoing,
     extract_account_name,
+    extract_account_username,
     extract_sender_id,
     extract_sender_name,
     flatten_message_text,
@@ -50,9 +51,15 @@ def test_parse_message_timestamp_prefers_unix_before_iso():
 
 
 def test_extract_account_name_and_sender_helpers():
-    personal = {"first_name": "Alice", "last_name": "Smith"}
+    personal = {
+        "first_name": "Alice",
+        "last_name": "Smith",
+        "username": "@alice_smith",
+    }
     assert extract_account_name(personal) == "Alice Smith"
+    assert extract_account_username(personal) == "alice_smith"
     assert extract_account_name({}) == "Telegram account"
+    assert extract_account_username({"username": "  "}) is None
 
     message = {"from_id": "8518403760", "from": "Alice", "actor_id": "user123", "actor": "Bot"}
     assert extract_sender_id(message) == "user8518403760"
@@ -91,7 +98,12 @@ def test_parse_message_record_handles_missing_ids_and_reply_reference():
 
 def test_parse_telegram_export_extracts_account_and_chat_messages():
     export = {
-        "personal_information": {"user_id": 8518403760, "first_name": "Alice", "last_name": "Smith"},
+        "personal_information": {
+            "user_id": 8518403760,
+            "first_name": "Alice",
+            "last_name": "Smith",
+            "username": "alice_smith",
+        },
         "contacts": {"list": [{"first_name": "Bob", "id": "user999"}, {"first_name": "skip"}]},
         "chats": {
             "list": [
@@ -161,6 +173,7 @@ def test_parse_telegram_export_extracts_account_and_chat_messages():
 
     assert parsed.owner_telegram_id == "user8518403760"
     assert parsed.account_name == "Alice Smith"
+    assert parsed.account_username == "alice_smith"
     assert len(parsed.chats) == 4
     assert parsed.chats[0].telegram_chat_id == "5183596517"
     assert parsed.chats[0].title == "Example chat"

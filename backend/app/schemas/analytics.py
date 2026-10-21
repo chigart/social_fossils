@@ -28,6 +28,12 @@ class OverviewStatistics(BaseModel):
 
 class ChatStatistics(BaseModel):
     chat_id: int = Field(description="Internal database chat ID.")
+    account_id: int = Field(
+        description="Source Telegram account ID for this chat."
+    )
+    source_account_label: str = Field(
+        description="Telegram username, or the imported account name when no username exists."
+    )
     telegram_chat_id: str = Field(description="Chat ID from the Telegram export.")
     title: str | None
     chat_type: str
@@ -48,9 +54,29 @@ class ChatStatistics(BaseModel):
 
 
 class ContactStatistics(BaseModel):
-    account_id: int = Field(description="Internal account ID for this sender group.")
+    account_id: int | None = Field(
+        default=None,
+        description="Single source account ID, or null when combined across accounts.",
+    )
     contact_id: int | None = Field(
-        description="Matching account-local contact ID, or null when unlinked."
+        default=None,
+        description="Representative account-local contact ID, or null when unlinked."
+    )
+    canonical_identity_id: int | None = Field(
+        default=None,
+        description="Canonical platform identity ID when the sender is reliably identified."
+    )
+    source_account_ids: list[int] = Field(
+        default_factory=list,
+        description="Source accounts contributing messages to this group."
+    )
+    source_account_labels: list[str] = Field(
+        default_factory=list,
+        description="Telegram usernames or account names for contributing sources."
+    )
+    source_contact_ids: list[int] = Field(
+        default_factory=list,
+        description="Account-local contact rows contributing to this group."
     )
     telegram_user_id: str | None = Field(
         description="Stored sender Telegram ID, or null for unidentified senders."
@@ -102,8 +128,22 @@ class ForgottenContactMonthlyActivity(BaseModel):
 
 
 class ForgottenContact(BaseModel):
-    account_id: int = Field(description="Internal Telegram account ID.")
+    account_id: int | None = Field(
+        description="Single source account ID, or null when combined across accounts."
+    )
     contact_id: int = Field(description="Stable account-local contact ID.")
+    canonical_identity_id: int | None = Field(
+        description="Canonical identity shared by matching Telegram contacts."
+    )
+    source_account_ids: list[int] = Field(
+        description="Source accounts contributing messages to this contact."
+    )
+    source_account_labels: list[str] = Field(
+        description="Telegram usernames or account names for contributing sources."
+    )
+    source_contact_ids: list[int] = Field(
+        description="Account-local contact rows contributing to this contact."
+    )
     telegram_user_id: str = Field(description="Matched Telegram user ID.")
     display_name: str | None
     first_message_at: datetime | None
@@ -150,8 +190,9 @@ class ForgottenContact(BaseModel):
 
 
 class ForgottenContactsSummary(BaseModel):
-    account_id: int | None = Field(
-        description="Selected account ID, or null when the database has no accounts."
+    scope: Literal["combined_owner"] = "combined_owner"
+    source_account_count: int = Field(
+        description="Number of imported source accounts included in the combined scope."
     )
     eligible_contacts: int = Field(
         description="Identifiable contacts in private chats with exactly one non-owner sender."
@@ -168,8 +209,22 @@ class ForgottenContactsStatistics(BaseModel):
 
 
 class CommunicationBalanceContact(BaseModel):
-    account_id: int = Field(description="Internal Telegram account ID.")
+    account_id: int | None = Field(
+        description="Single source account ID, or null when combined across accounts."
+    )
     contact_id: int = Field(description="Stable account-local contact ID.")
+    canonical_identity_id: int | None = Field(
+        description="Canonical identity shared by matching Telegram contacts."
+    )
+    source_account_ids: list[int] = Field(
+        description="Source accounts contributing messages to this contact."
+    )
+    source_account_labels: list[str] = Field(
+        description="Telegram usernames or account names for contributing sources."
+    )
+    source_contact_ids: list[int] = Field(
+        description="Account-local contact rows contributing to this contact."
+    )
     telegram_user_id: str = Field(description="Matched Telegram user ID.")
     display_name: str | None = Field(description="Contact display name, when available.")
     owner_message_count: int = Field(

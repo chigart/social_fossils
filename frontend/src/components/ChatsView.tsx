@@ -104,6 +104,7 @@ export function ChatsView({
                   />
                 </th>
                 <th className={tableHeaderClassName} scope="col">Type</th>
+                <th className={tableHeaderClassName} scope="col">Account</th>
                 <th className={tableHeaderClassName} scope="col">
                   <SortButton
                     label="Messages"
@@ -129,6 +130,9 @@ export function ChatsView({
                     <span className="inline-block whitespace-nowrap rounded bg-surface-tag px-[7px] py-1 text-label font-semibold text-ink-tag">
                       {chat.chat_type}
                     </span>
+                  </td>
+                  <td className={tableCellClassName}>
+                    {chat.source_account_label}
                   </td>
                   <td className={numericTableCellClassName}>
                     {formatNumber(chat.total_messages)}

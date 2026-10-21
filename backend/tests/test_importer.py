@@ -2,7 +2,11 @@ import json
 import logging
 from types import SimpleNamespace
 
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
+
 from app import importer
+from app.models import CanonicalIdentity, Contact
 
 
 class FakeSession:
@@ -33,6 +37,7 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
     parsed_export = SimpleNamespace(
         owner_telegram_id="user123",
         account_name="Example",
+        account_username="example_user",
         chats=[parsed_chat],
     )
     account = SimpleNamespace(id=1, name="Example", telegram_user_id="user123")
@@ -56,3 +61,61 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
     assert all(parsed_chat.title not in message for message in messages)
     assert session.committed
     assert not session.rolled_back
+
+
+def test_get_or_create_contact_reuses_canonical_identity_across_accounts():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    CanonicalIdentity.__table__.create(engine)
+    Contact.__table__.create(engine)
+
+    with Session(engine) as session:
+        first = importer.get_or_create_contact(
+            session,
+            1,
+            "user123",
+            "First source name",
+        )
+        second = importer.get_or_create_contact(
+            session,
+            2,
+            "user123",
+            "Second source name",
+        )
+
+        assert first is not None
+        assert second is not None
+        assert first.id != second.id
+        assert first.canonical_identity_id == second.canonical_identity_id
+        assert session.scalar(
+            select(CanonicalIdentity).where(
+                CanonicalIdentity.platform == "telegram",
+                CanonicalIdentity.platform_user_id == "user123",
+            )
+        ) is not None
+
+    engine.dispose()
+
+
+def test_get_or_create_account_persists_username_and_updates_existing_value():
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    importer.TelegramAccount.__table__.create(engine)
+
+    with Session(engine) as session:
+        first = importer.get_or_create_account(
+            session,
+            "user123",
+            "Example",
+            "example_user",
+        )
+        assert first.username == "example_user"
+
+        updated = importer.get_or_create_account(
+            session,
+            "user123",
+            "Example",
+            "example_renamed",
+        )
+        assert updated.id == first.id
+        assert updated.username == "example_renamed"
+
+    engine.dispose()

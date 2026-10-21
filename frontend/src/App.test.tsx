@@ -31,6 +31,8 @@ const overview: OverviewStatistics = {
 const chats: ChatStatistics[] = [
   {
     chat_id: 1,
+    account_id: 1,
+    source_account_label: "@anton",
     telegram_chat_id: "1001",
     title: "Zebra group",
     chat_type: "group",
@@ -43,6 +45,8 @@ const chats: ChatStatistics[] = [
   },
   {
     chat_id: 2,
+    account_id: 1,
+    source_account_label: "@anton",
     telegram_chat_id: "1002",
     title: "Aurora group",
     chat_type: "group",
@@ -55,6 +59,8 @@ const chats: ChatStatistics[] = [
   },
   {
     chat_id: 3,
+    account_id: 1,
+    source_account_label: "@anton",
     telegram_chat_id: "1003",
     title: null,
     chat_type: "private",
@@ -71,6 +77,10 @@ const contacts: ContactStatistics[] = [
   {
     account_id: 1,
     contact_id: 11,
+    canonical_identity_id: 1,
+    source_account_ids: [1],
+    source_account_labels: ["@anton"],
+    source_contact_ids: [11],
     telegram_user_id: "12345",
     display_name: "Avery",
     total_messages_sent: 12,
@@ -80,6 +90,10 @@ const contacts: ContactStatistics[] = [
   {
     account_id: 1,
     contact_id: null,
+    canonical_identity_id: null,
+    source_account_ids: [1],
+    source_account_labels: ["@anton"],
+    source_contact_ids: [],
     telegram_user_id: "67890",
     display_name: "Morgan",
     total_messages_sent: 5,
@@ -89,6 +103,10 @@ const contacts: ContactStatistics[] = [
   {
     account_id: 1,
     contact_id: null,
+    canonical_identity_id: null,
+    source_account_ids: [1],
+    source_account_labels: ["@anton"],
+    source_contact_ids: [],
     telegram_user_id: null,
     display_name: null,
     total_messages_sent: 2,
@@ -134,6 +152,10 @@ const balance: CommunicationBalanceStatistics = {
     {
       account_id: 1,
       contact_id: 21,
+      canonical_identity_id: 21,
+      source_account_ids: [1],
+      source_account_labels: ["@anton"],
+      source_contact_ids: [21],
       telegram_user_id: "user-alex",
       display_name: "Alex",
       owner_message_count: 1,
@@ -156,6 +178,10 @@ const balance: CommunicationBalanceStatistics = {
     {
       account_id: 1,
       contact_id: 22,
+      canonical_identity_id: 22,
+      source_account_ids: [1],
+      source_account_labels: ["@anton"],
+      source_contact_ids: [22],
       telegram_user_id: "user-bea",
       display_name: "Bea",
       owner_message_count: 8,
@@ -178,6 +204,10 @@ const balance: CommunicationBalanceStatistics = {
     {
       account_id: 1,
       contact_id: 23,
+      canonical_identity_id: 23,
+      source_account_ids: [1],
+      source_account_labels: ["@anton"],
+      source_contact_ids: [23],
       telegram_user_id: "user-cora",
       display_name: "Cora",
       owner_message_count: 3,
@@ -200,6 +230,10 @@ const balance: CommunicationBalanceStatistics = {
     {
       account_id: 1,
       contact_id: 24,
+      canonical_identity_id: 24,
+      source_account_ids: [1],
+      source_account_labels: ["@anton"],
+      source_contact_ids: [24],
       telegram_user_id: "user-zero",
       display_name: "Zero text",
       owner_message_count: 2,
@@ -222,6 +256,10 @@ const balance: CommunicationBalanceStatistics = {
     {
       account_id: 1,
       contact_id: 25,
+      canonical_identity_id: 25,
+      source_account_ids: [1],
+      source_account_labels: ["@anton"],
+      source_contact_ids: [25],
       telegram_user_id: "user-drew",
       display_name: "Drew",
       owner_message_count: 1,
@@ -266,12 +304,85 @@ function rowTitles(table: HTMLElement) {
 }
 
 describe("dashboard", () => {
+  it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
+    api.getOverview.mockResolvedValue({
+      ...overview,
+      total_imported_accounts: 2,
+      total_chats: 2,
+      total_messages: 70,
+    });
+    api.getChats.mockResolvedValue([
+      {
+        ...chats[0],
+        chat_id: 101,
+        account_id: 1,
+        source_account_label: "@anton",
+        title: "First account chat",
+        total_messages: 30,
+      },
+      {
+        ...chats[1],
+        chat_id: 202,
+        account_id: 2,
+        source_account_label: "Anton Malkov",
+        title: "Second account chat",
+        total_messages: 40,
+      },
+    ]);
+    api.getContacts.mockResolvedValue([
+      {
+        ...contacts[0],
+        account_id: null,
+        canonical_identity_id: 501,
+        contact_id: 11,
+        source_account_ids: [1, 2],
+        source_account_labels: ["@anton", "Anton Malkov"],
+        source_contact_ids: [11, 22],
+        total_messages_sent: 24,
+        ordinary_messages_sent: 22,
+        service_events_attributed: 2,
+      },
+    ]);
+
+    render(<App />);
+    await screen.findByRole("row", { name: /First account chat/ });
+
+    const chatRegion = screen.getByRole("region", { name: "Chats" });
+    expect(
+      within(chatRegion).getByRole("row", {
+        name: /First account chat.*@anton/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(chatRegion).getByRole("row", {
+        name: /Second account chat.*Anton Malkov/,
+      }),
+    ).toBeInTheDocument();
+
+    const contactsRegion = screen.getByRole("region", {
+      name: "Contacts & senders",
+    });
+    const combinedContactRows = within(contactsRegion).getAllByRole("row", {
+      name: /Avery/,
+    });
+    expect(combinedContactRows).toHaveLength(1);
+    expect(combinedContactRows[0]).toHaveTextContent("@anton, Anton Malkov");
+    expect(combinedContactRows[0]).toHaveTextContent("24");
+    const sourceAccountsCard = within(
+      screen.getByRole("region", { name: "Overview" }),
+    )
+      .getByRole("heading", { name: "Source accounts" })
+      .closest("article");
+    expect(sourceAccountsCard).toHaveTextContent("2");
+  });
+
   it("shows the dashboard content, aggregate metrics, and sender link states", async () => {
     await renderLoadedDashboard();
 
     expect(
       screen.getByRole("heading", { name: "Your communication, in context." }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute(
       "href",
@@ -297,6 +408,27 @@ describe("dashboard", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Known contact")).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Contacts & senders" }))
+        .getByRole("columnheader", { name: "Accounts" }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Chats" })).getByRole(
+        "columnheader",
+        { name: "Account" },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Chats" })).getAllByText(
+        "@anton",
+      ),
+    ).toHaveLength(chats.length);
+    expect(
+      within(screen.getByRole("region", { name: "Contacts & senders" })).getByRole(
+        "row",
+        { name: /Avery.*@anton/ },
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Unlinked sender")).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Contacts & senders" })).getByRole(

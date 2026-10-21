@@ -17,6 +17,9 @@ export function DashboardIntro() {
         <p className="m-0 max-w-[620px] text-body leading-[1.6] text-ink-muted">
           A clear view of the conversations and connections in your Telegram export.
         </p>
+        <p className="mt-3 mb-0 inline-flex rounded-[20px] border border-border-brand bg-surface-green-soft px-[11px] py-2 text-caption font-semibold text-brand-strong">
+          Combined account data · All imported Telegram exports are included
+        </p>
       </div>
       <span className="mb-[5px] flex-none rounded-[20px] border border-border-brand bg-surface-green-soft px-[11px] py-2 text-caption font-semibold text-brand-strong max-sm:mt-[14px] max-sm:inline-block">
         Private by design

@@ -26,7 +26,28 @@ class TelegramAccount(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
+    username: Mapped[str | None] = mapped_column(String(100), nullable=True)
     telegram_user_id: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class CanonicalIdentity(Base):
+    __tablename__ = "canonical_identities"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "platform",
+            "platform_user_id",
+            name="uq_canonical_identities_platform_user",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    platform: Mapped[str] = mapped_column(String(50))
+    platform_user_id: Mapped[str] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -50,6 +71,11 @@ class Contact(Base):
         index=True,
     )
     telegram_user_id: Mapped[str] = mapped_column(String(100))
+    canonical_identity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("canonical_identities.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     display_name: Mapped[str | None] = mapped_column(String(300))
     username: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(

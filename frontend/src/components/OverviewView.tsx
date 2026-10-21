@@ -32,7 +32,7 @@ export function OverviewView({
           </h2>
         </div>
         <span className="pb-0.5 text-small text-ink-muted max-sm:text-caption">
-          Across all imported accounts
+          Combined owner scope
         </span>
       </div>
 
@@ -52,7 +52,7 @@ export function OverviewView({
           )}
           <div className="grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
             <MetricCard
-              label="Accounts"
+              label="Source accounts"
               value={formatNumber(overview.data.total_imported_accounts)}
             />
             <MetricCard

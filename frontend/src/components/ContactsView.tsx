@@ -104,6 +104,7 @@ export function ContactsView({
               <tr>
                 <th className={tableHeaderClassName} scope="col">Contact / sender</th>
                 <th className={tableHeaderClassName} scope="col">Telegram user ID</th>
+                <th className={tableHeaderClassName} scope="col">Accounts</th>
                 <th className={tableHeaderClassName} scope="col">Link status</th>
                 <th className={tableHeaderClassName} scope="col">
                   <SortButton
@@ -129,7 +130,7 @@ export function ContactsView({
                 return (
                   <tr
                     className={tableRowClassName}
-                    key={`${contact.account_id}-${contact.telegram_user_id ?? "unknown"}-${index}`}
+                    key={`${contact.canonical_identity_id ?? contact.account_id ?? "sources"}-${contact.telegram_user_id ?? "unknown"}-${index}`}
                   >
                     <th className={tableRowTitleClassName} scope="row">
                       {contact.display_name ||
@@ -139,6 +140,9 @@ export function ContactsView({
                     </th>
                     <td className="max-w-[200px] break-words border-b border-border-muted px-[13px] py-3 align-middle font-mono text-caption text-ink-code last:border-b-0">
                       {contact.telegram_user_id ?? "—"}
+                    </td>
+                    <td className={tableCellClassName}>
+                      {contact.source_account_labels.join(", ") || "—"}
                     </td>
                     <td className={tableCellClassName}>
                       <span

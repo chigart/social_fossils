@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Chat, Contact, Message, TelegramAccount
+from app.models import CanonicalIdentity, Chat, Contact, Message, TelegramAccount
 from app.schemas.analytics import (
     ChatStatistics,
     CommunicationBalanceClassification,
@@ -109,6 +109,9 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
     statement = (
         select(
             Chat.id.label("chat_id"),
+            Chat.account_id,
+            TelegramAccount.username.label("account_username"),
+            TelegramAccount.name.label("account_name"),
             Chat.telegram_chat_id,
             Chat.title,
             Chat.chat_type,
@@ -126,11 +129,35 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
             ),
         )
         .select_from(Chat)
+        .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
         .outerjoin(Message, Message.chat_id == Chat.id)
-        .group_by(Chat.id, Chat.telegram_chat_id, Chat.title, Chat.chat_type)
+        .group_by(
+            Chat.id,
+            Chat.account_id,
+            TelegramAccount.username,
+            TelegramAccount.name,
+            Chat.telegram_chat_id,
+            Chat.title,
+            Chat.chat_type,
+        )
         .order_by(Chat.id)
     )
-    return [ChatStatistics(**row._mapping) for row in db.execute(statement)]
+    chats = []
+    for row in db.execute(statement):
+        source_account_label = (
+            f"@{row.account_username}" if row.account_username else row.account_name
+        )
+        chats.append(
+            ChatStatistics(
+                **{
+                    key: value
+                    for key, value in row._mapping.items()
+                    if key not in {"account_username", "account_name"}
+                },
+                source_account_label=source_account_label,
+            )
+        )
+    return chats
 
 
 @router.get(
@@ -138,20 +165,26 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
     response_model=list[ContactStatistics],
     summary="Get communication statistics by sender/contact",
     description=(
-        "Groups incoming messages by account-local Telegram user ID and links "
-        "a contact only by that ID, never by display name. Sender IDs without "
-        "a matching contact remain in separate unlinked groups; null sender "
-        "IDs form an unknown-sender group per account. Messages marked "
-        "outgoing, and messages whose sender ID matches the account owner, "
-        "are excluded. Counts include all message types, with ordinary and "
-        "service counts reported separately."
+        "Groups incoming messages by canonical platform and normalized user "
+        "ID, never by display name. Matching contacts and their counts are "
+        "combined across source accounts. Sender IDs without a matching "
+        "canonical identity and null sender IDs remain account-local. All "
+        "imported owner IDs are aliases and outgoing messages are excluded. "
+        "Counts include all message types, with ordinary and service counts "
+        "reported separately."
     ),
 )
 def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatistics]:
+    owner_ids = select(TelegramAccount.telegram_user_id).where(
+        TelegramAccount.telegram_user_id.is_not(None)
+    )
     statement = (
         select(
             Chat.account_id.label("account_id"),
+            TelegramAccount.username.label("account_username"),
+            TelegramAccount.name.label("account_name"),
             Contact.id.label("contact_id"),
+            CanonicalIdentity.id.label("canonical_identity_id"),
             Message.sender_telegram_id.label("telegram_user_id"),
             Contact.display_name.label("display_name"),
             func.count(Message.id).label("total_messages_sent"),
@@ -172,23 +205,90 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
                 Contact.telegram_user_id == Message.sender_telegram_id,
             ),
         )
+        .outerjoin(
+            CanonicalIdentity,
+            CanonicalIdentity.id == Contact.canonical_identity_id,
+        )
         .where(
             Message.is_outgoing.is_not(True),
             or_(
                 Message.sender_telegram_id.is_(None),
-                TelegramAccount.telegram_user_id.is_(None),
-                Message.sender_telegram_id != TelegramAccount.telegram_user_id,
+                Message.sender_telegram_id.not_in(owner_ids),
             ),
         )
         .group_by(
             Chat.account_id,
             Contact.id,
+            CanonicalIdentity.id,
+            TelegramAccount.username,
+            TelegramAccount.name,
             Message.sender_telegram_id,
             Contact.display_name,
         )
         .order_by(Chat.account_id, Contact.display_name, Message.sender_telegram_id)
     )
-    return [ContactStatistics(**row._mapping) for row in db.execute(statement)]
+    groups: dict[tuple[object, ...], dict[str, object]] = {}
+    for row in db.execute(statement):
+        if row.canonical_identity_id is not None:
+            key = ("canonical", row.canonical_identity_id)
+        else:
+            key = ("source", row.account_id, row.telegram_user_id)
+        group = groups.setdefault(
+            key,
+            {
+                "canonical_identity_id": row.canonical_identity_id,
+                "telegram_user_id": row.telegram_user_id,
+                "display_names": set(),
+                "source_account_ids": set(),
+                "source_account_labels": set(),
+                "source_contact_ids": set(),
+                "total_messages_sent": 0,
+                "ordinary_messages_sent": 0,
+                "service_events_attributed": 0,
+            },
+        )
+        group["source_account_ids"].add(row.account_id)
+        group["source_account_labels"].add(
+            f"@{row.account_username}" if row.account_username else row.account_name
+        )
+        if row.contact_id is not None:
+            group["source_contact_ids"].add(row.contact_id)
+        if row.display_name:
+            group["display_names"].add(row.display_name)
+        group["total_messages_sent"] += int(row.total_messages_sent)
+        group["ordinary_messages_sent"] += int(row.ordinary_messages_sent)
+        group["service_events_attributed"] += int(row.service_events_attributed)
+
+    contacts = []
+    for group in groups.values():
+        source_account_ids = sorted(group["source_account_ids"])
+        source_contact_ids = sorted(group["source_contact_ids"])
+        display_names = sorted(group["display_names"], key=str.casefold)
+        contacts.append(
+            ContactStatistics(
+                account_id=(
+                    source_account_ids[0] if len(source_account_ids) == 1 else None
+                ),
+                contact_id=source_contact_ids[0] if source_contact_ids else None,
+                canonical_identity_id=group["canonical_identity_id"],
+                source_account_ids=source_account_ids,
+                source_account_labels=sorted(group["source_account_labels"]),
+                source_contact_ids=source_contact_ids,
+                telegram_user_id=group["telegram_user_id"],
+                display_name=display_names[0] if display_names else None,
+                total_messages_sent=group["total_messages_sent"],
+                ordinary_messages_sent=group["ordinary_messages_sent"],
+                service_events_attributed=group["service_events_attributed"],
+            )
+        )
+    contacts.sort(
+        key=lambda contact: (
+            (contact.display_name or "").casefold(),
+            contact.telegram_user_id or "",
+            contact.source_account_ids,
+        )
+    )
+    return contacts
 
 
 @router.get(
@@ -208,12 +308,13 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         "mostly_contact; owner shares at or above 80% are strongly_owner "
         "and at or below 20% are strongly_contact. "
         "These descriptive thresholds are not scientifically validated. Chats are included "
-        "only when chat_type is 'personal_chat', the account owner ID is "
+        "only when chat_type is 'personal_chat', at least one owner alias is "
         "known, and exactly one non-owner sender ID in ordinary messages "
-        "resolves to a contact; "
-        "group chats and ambiguous records are excluded. Only ordinary "
-        "messages with consistent sender ID and is_outgoing values affect "
-        "text volume and included message counts."
+        "resolves to a canonical contact identity; matching identities are "
+        "combined across source accounts. "
+        "group chats and ambiguous records are excluded. Any known owner alias "
+        "counts as owner-sent regardless of source-local is_outgoing flags; "
+        "contact messages require a matching sender ID and is_outgoing=false."
     ),
 )
 def get_communication_balance(
@@ -223,6 +324,9 @@ def get_communication_balance(
         description="Sort by display name, owner text share ascending, or known-direction message count descending.",
     ),
 ) -> CommunicationBalanceStatistics:
+    owner_ids = select(TelegramAccount.telegram_user_id).where(
+        TelegramAccount.telegram_user_id.is_not(None)
+    )
     peers = (
         select(
             Chat.id.label("chat_id"),
@@ -236,7 +340,7 @@ def get_communication_balance(
             TelegramAccount.telegram_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
             Message.sender_telegram_id.is_not(None),
-            Message.sender_telegram_id != TelegramAccount.telegram_user_id,
+            Message.sender_telegram_id.not_in(owner_ids),
         )
         .distinct()
         .cte("private_chat_peers")
@@ -251,9 +355,16 @@ def get_communication_balance(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
+            func.coalesce(CanonicalIdentity.id, -Contact.id).label(
+                "identity_group_id"
+            ),
+            case(
+                (CanonicalIdentity.id.is_(None), Chat.account_id),
+                else_=None,
+            ).label("identity_source_account_id"),
+            CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
             Contact.telegram_user_id.label("contact_telegram_user_id"),
-            TelegramAccount.telegram_user_id.label("owner_telegram_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
@@ -266,14 +377,15 @@ def get_communication_balance(
                 Contact.telegram_user_id == peers.c.peer_telegram_user_id,
             ),
         )
+        .outerjoin(
+            CanonicalIdentity,
+            CanonicalIdentity.id == Contact.canonical_identity_id,
+        )
         .cte("eligible_private_chat_pairs")
     )
 
     is_ordinary = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = and_(
-        Message.sender_telegram_id == eligible_pairs.c.owner_telegram_user_id,
-        Message.is_outgoing.is_(True),
-    )
+    owner_direction = Message.sender_telegram_id.in_(owner_ids)
     contact_direction = and_(
         Message.sender_telegram_id == eligible_pairs.c.contact_telegram_user_id,
         Message.is_outgoing.is_(False),
@@ -287,10 +399,14 @@ def get_communication_balance(
 
     statement = (
         select(
-            eligible_pairs.c.account_id,
-            eligible_pairs.c.contact_id,
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            func.min(eligible_pairs.c.contact_id).label("contact_id"),
+            func.min(eligible_pairs.c.canonical_identity_id).label(
+                "canonical_identity_id"
+            ),
             eligible_pairs.c.contact_telegram_user_id.label("telegram_user_id"),
-            eligible_pairs.c.display_name,
+            func.min(eligible_pairs.c.display_name).label("display_name"),
             func.coalesce(
                 func.sum(
                     case(
@@ -369,13 +485,42 @@ def get_communication_balance(
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
         .group_by(
-            eligible_pairs.c.account_id,
-            eligible_pairs.c.contact_id,
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
             eligible_pairs.c.contact_telegram_user_id,
-            eligible_pairs.c.display_name,
         )
         .having(func.count(case((is_ordinary, Message.id))) > 0)
     )
+
+    source_rows = db.execute(
+        select(
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            eligible_pairs.c.account_id,
+            eligible_pairs.c.contact_id,
+            TelegramAccount.username.label("account_username"),
+            TelegramAccount.name.label("account_name"),
+        ).distinct()
+        .join(TelegramAccount, TelegramAccount.id == eligible_pairs.c.account_id)
+    )
+    source_ids: dict[
+        tuple[int, int | None], tuple[set[int], set[int], set[str]]
+    ] = {}
+    for source_row in source_rows:
+        key = (
+            source_row.identity_group_id,
+            source_row.identity_source_account_id,
+        )
+        accounts, contact_ids, account_labels = source_ids.setdefault(
+            key, (set(), set(), set())
+        )
+        accounts.add(source_row.account_id)
+        contact_ids.add(source_row.contact_id)
+        account_labels.add(
+            f"@{source_row.account_username}"
+            if source_row.account_username
+            else source_row.account_name
+        )
 
     contacts: list[CommunicationBalanceContact] = []
     for row in db.execute(statement):
@@ -390,10 +535,21 @@ def get_communication_balance(
         )
         owner_message_count = int(row.owner_message_count)
         contact_message_count = int(row.contact_message_count)
+        source_account_ids, source_contact_ids, source_account_labels = source_ids[
+            (row.identity_group_id, row.identity_source_account_id)
+        ]
         contacts.append(
             CommunicationBalanceContact(
-                account_id=row.account_id,
+                account_id=(
+                    min(source_account_ids)
+                    if len(source_account_ids) == 1
+                    else None
+                ),
                 contact_id=row.contact_id,
+                canonical_identity_id=row.canonical_identity_id,
+                source_account_ids=sorted(source_account_ids),
+                source_account_labels=sorted(source_account_labels),
+                source_contact_ids=sorted(source_contact_ids),
                 telegram_user_id=row.telegram_user_id,
                 display_name=row.display_name,
                 owner_message_count=owner_message_count,
@@ -496,7 +652,6 @@ def _utc_month_expression(db: Session):
 def build_forgotten_contacts_statistics(
     db: Session,
     *,
-    account_id: int | None = None,
     sort_by: Literal[
         "ranking_score",
         "display_name",
@@ -509,25 +664,11 @@ def build_forgotten_contacts_statistics(
     if not 1 <= limit <= FORGOTTEN_MAX_LIMIT:
         raise ValueError(f"limit must be between 1 and {FORGOTTEN_MAX_LIMIT}.")
 
-    account_count_statement = select(func.count(TelegramAccount.id))
-    if account_id is not None:
-        account_count_statement = account_count_statement.where(
-            TelegramAccount.id == account_id
-        )
-    matching_account_count = int(db.scalar(account_count_statement) or 0)
-    if account_id is not None and matching_account_count == 0:
-        raise HTTPException(status_code=404, detail="Telegram account not found.")
-    if account_id is None and matching_account_count > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Specify account_id when more than one Telegram account exists.",
-        )
-    if account_id is None and matching_account_count == 1:
-        account_id = db.scalar(select(TelegramAccount.id))
-    if matching_account_count == 0:
+    source_account_count = int(db.scalar(select(func.count(TelegramAccount.id))) or 0)
+    if source_account_count == 0:
         return ForgottenContactsStatistics(
             summary=ForgottenContactsSummary(
-                account_id=None,
+                source_account_count=0,
                 eligible_contacts=0,
                 meaningful_historical_contacts=0,
                 currently_inactive_contacts=0,
@@ -539,6 +680,9 @@ def build_forgotten_contacts_statistics(
 
     current_time = _as_utc(as_of or datetime.now(timezone.utc))
     recent_start = current_time - timedelta(days=FORGOTTEN_RECENT_WINDOW_DAYS)
+    owner_ids = select(TelegramAccount.telegram_user_id).where(
+        TelegramAccount.telegram_user_id.is_not(None)
+    )
 
     peers_statement = (
         select(
@@ -553,12 +697,10 @@ def build_forgotten_contacts_statistics(
             TelegramAccount.telegram_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
             Message.sender_telegram_id.is_not(None),
-            Message.sender_telegram_id != TelegramAccount.telegram_user_id,
+            Message.sender_telegram_id.not_in(owner_ids),
         )
         .distinct()
     )
-    if account_id is not None:
-        peers_statement = peers_statement.where(Chat.account_id == account_id)
     peers = peers_statement.cte("forgotten_contact_peers")
     single_peer_chats = (
         select(peers.c.chat_id)
@@ -570,9 +712,16 @@ def build_forgotten_contacts_statistics(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
+            func.coalesce(CanonicalIdentity.id, -Contact.id).label(
+                "identity_group_id"
+            ),
+            case(
+                (CanonicalIdentity.id.is_(None), Chat.account_id),
+                else_=None,
+            ).label("identity_source_account_id"),
+            CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
             Contact.telegram_user_id.label("contact_telegram_user_id"),
-            TelegramAccount.telegram_user_id.label("owner_telegram_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
@@ -585,14 +734,15 @@ def build_forgotten_contacts_statistics(
                 Contact.telegram_user_id == peers.c.peer_telegram_user_id,
             ),
         )
+        .outerjoin(
+            CanonicalIdentity,
+            CanonicalIdentity.id == Contact.canonical_identity_id,
+        )
         .cte("forgotten_eligible_pairs")
     )
 
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = and_(
-        Message.sender_telegram_id == eligible_pairs.c.owner_telegram_user_id,
-        Message.is_outgoing.is_(True),
-    )
+    owner_direction = Message.sender_telegram_id.in_(owner_ids)
     contact_direction = and_(
         Message.sender_telegram_id == eligible_pairs.c.contact_telegram_user_id,
         Message.is_outgoing.is_(False),
@@ -622,10 +772,14 @@ def build_forgotten_contacts_statistics(
 
     aggregate_statement = (
         select(
-            eligible_pairs.c.account_id,
-            eligible_pairs.c.contact_id,
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            func.min(eligible_pairs.c.contact_id).label("contact_id"),
+            func.min(eligible_pairs.c.canonical_identity_id).label(
+                "canonical_identity_id"
+            ),
             eligible_pairs.c.contact_telegram_user_id.label("telegram_user_id"),
-            eligible_pairs.c.display_name,
+            func.min(eligible_pairs.c.display_name).label("display_name"),
             count_when(and_(ordinary_message, owner_direction)).label(
                 "owner_message_count"
             ),
@@ -719,10 +873,9 @@ def build_forgotten_contacts_statistics(
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
         .group_by(
-            eligible_pairs.c.account_id,
-            eligible_pairs.c.contact_id,
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
             eligible_pairs.c.contact_telegram_user_id,
-            eligible_pairs.c.display_name,
         )
     )
 
@@ -739,7 +892,8 @@ def build_forgotten_contacts_statistics(
     )
     monthly_statement = (
         select(
-            eligible_pairs.c.contact_id,
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
             month_expression.label("month"),
             count_when(and_(historical_month, owner_direction)).label(
                 "historical_owner_message_count"
@@ -757,13 +911,25 @@ def build_forgotten_contacts_statistics(
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
         .where(Message.message_date.is_not(None), dated_message)
-        .group_by(eligible_pairs.c.contact_id, month_expression)
-        .order_by(eligible_pairs.c.contact_id, month_expression)
+        .group_by(
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            month_expression,
+        )
+        .order_by(
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            month_expression,
+        )
     )
 
-    monthly_by_contact: dict[int, list[dict[str, int | str]]] = {}
+    monthly_by_contact: dict[
+        tuple[int, int | None], list[dict[str, int | str]]
+    ] = {}
     for month_row in db.execute(monthly_statement):
-        monthly_by_contact.setdefault(month_row.contact_id, []).append(
+        monthly_by_contact.setdefault(
+            (month_row.identity_group_id, month_row.identity_source_account_id), []
+        ).append(
             {
                 "month": month_row.month,
                 "historical_owner_message_count": int(
@@ -779,6 +945,36 @@ def build_forgotten_contacts_statistics(
                     month_row.recent_contact_message_count
                 ),
             }
+        )
+
+    source_rows = db.execute(
+        select(
+            eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.identity_source_account_id,
+            eligible_pairs.c.account_id,
+            eligible_pairs.c.contact_id,
+            TelegramAccount.username.label("account_username"),
+            TelegramAccount.name.label("account_name"),
+        ).distinct()
+        .join(TelegramAccount, TelegramAccount.id == eligible_pairs.c.account_id)
+    )
+    source_ids: dict[
+        tuple[int, int | None], tuple[set[int], set[int], set[str]]
+    ] = {}
+    for source_row in source_rows:
+        key = (
+            source_row.identity_group_id,
+            source_row.identity_source_account_id,
+        )
+        accounts, contact_ids, account_labels = source_ids.setdefault(
+            key, (set(), set(), set())
+        )
+        accounts.add(source_row.account_id)
+        contact_ids.add(source_row.contact_id)
+        account_labels.add(
+            f"@{source_row.account_username}"
+            if source_row.account_username
+            else source_row.account_name
         )
 
     contacts: list[ForgottenContact] = []
@@ -818,7 +1014,8 @@ def build_forgotten_contacts_statistics(
 
         historical_months: list[ForgottenContactMonthlyActivity] = []
         recent_months: list[ForgottenContactMonthlyActivity] = []
-        monthly_rows = monthly_by_contact.get(row.contact_id, [])
+        group_key = (row.identity_group_id, row.identity_source_account_id)
+        monthly_rows = monthly_by_contact.get(group_key, [])
         historical_active_month_count = 0
         for month_row in monthly_rows:
             historical_owner = int(month_row["historical_owner_message_count"])
@@ -930,10 +1127,21 @@ def build_forgotten_contacts_statistics(
         else:
             classification = "active"
 
+        source_account_ids, source_contact_ids, source_account_labels = source_ids[
+            group_key
+        ]
         contacts.append(
             ForgottenContact(
-                account_id=row.account_id,
+                account_id=(
+                    min(source_account_ids)
+                    if len(source_account_ids) == 1
+                    else None
+                ),
                 contact_id=row.contact_id,
+                canonical_identity_id=row.canonical_identity_id,
+                source_account_ids=sorted(source_account_ids),
+                source_account_labels=sorted(source_account_labels),
+                source_contact_ids=sorted(source_contact_ids),
                 telegram_user_id=row.telegram_user_id,
                 display_name=row.display_name,
                 first_message_at=first_message_at,
@@ -1005,7 +1213,7 @@ def build_forgotten_contacts_statistics(
         )
 
     summary = ForgottenContactsSummary(
-        account_id=account_id,
+        source_account_count=source_account_count,
         eligible_contacts=len(contacts),
         meaningful_historical_contacts=sum(
             contact.historical_message_count >= FORGOTTEN_MIN_HISTORICAL_MESSAGES
@@ -1042,8 +1250,10 @@ def build_forgotten_contacts_statistics(
     summary="Rank private contacts by inactivity and declining communication",
     description=(
         "Uses only ordinary messages in 'personal_chat' chats with a known "
-        "account owner, exactly one non-owner sender ID, and a matching "
-        "account-local contact. Sender ID and is_outgoing must agree; contacts "
+        "owner alias, exactly one non-owner sender ID, and a matching "
+        "canonical contact identity. Owner IDs across every imported source "
+        "account are treated as aliases and override source-local outgoing "
+        "flags. Contact sender ID and is_outgoing must agree; contacts "
         "with any ambiguous ordinary-message direction are returned without a "
         "score. Group chats are excluded. The recent window is the trailing "
         "90 days ending at request time. Historical evidence requires at least "
@@ -1062,7 +1272,6 @@ def build_forgotten_contacts_statistics(
 )
 def get_forgotten_contacts(
     db: Session = Depends(get_db),
-    account_id: int | None = Query(default=None, gt=0),
     sort_by: Literal[
         "ranking_score",
         "display_name",
@@ -1073,7 +1282,6 @@ def get_forgotten_contacts(
 ) -> ForgottenContactsStatistics:
     return build_forgotten_contacts_statistics(
         db,
-        account_id=account_id,
         sort_by=sort_by,
         limit=limit,
     )

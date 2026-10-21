@@ -12,13 +12,25 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import SessionLocal
-from app.models import Chat, Contact, ImportSession, Message, TelegramAccount
+from app.models import (
+    CanonicalIdentity,
+    Chat,
+    Contact,
+    ImportSession,
+    Message,
+    TelegramAccount,
+)
 from app.telegram_parser import parse_telegram_export
 
 logger = logging.getLogger(__name__)
 
 
-def get_or_create_account(session, owner_telegram_id: str | None, account_name: str) -> TelegramAccount:
+def get_or_create_account(
+    session,
+    owner_telegram_id: str | None,
+    account_name: str,
+    account_username: str | None = None,
+) -> TelegramAccount:
     if owner_telegram_id is None:
         raise ValueError("Missing or invalid Telegram account owner ID in personal_information.user_id")
 
@@ -30,9 +42,17 @@ def get_or_create_account(session, owner_telegram_id: str | None, account_name: 
         raise ValueError(f"Found multiple Telegram accounts for owner ID {owner_telegram_id}; import cannot continue safely.")
 
     if existing_accounts:
-        return existing_accounts[0]
+        account = existing_accounts[0]
+        if account_username is not None:
+            account.username = account_username
+            session.flush()
+        return account
 
-    account = TelegramAccount(name=account_name, telegram_user_id=owner_telegram_id)
+    account = TelegramAccount(
+        name=account_name,
+        username=account_username,
+        telegram_user_id=owner_telegram_id,
+    )
     session.add(account)
     session.flush()
     return account
@@ -68,19 +88,42 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
     if not sender_telegram_id:
         return None
 
+    identity_statement = insert(CanonicalIdentity).values(
+        platform="telegram",
+        platform_user_id=sender_telegram_id,
+    ).on_conflict_do_nothing(
+        index_elements=["platform", "platform_user_id"]
+    )
+    session.execute(identity_statement)
+    canonical_identity = session.scalar(
+        select(CanonicalIdentity).where(
+            CanonicalIdentity.platform == "telegram",
+            CanonicalIdentity.platform_user_id == sender_telegram_id,
+        )
+    )
+    if canonical_identity is None:
+        raise RuntimeError("Canonical Telegram identity could not be created.")
+
     stmt = insert(Contact).values(
         account_id=account_id,
         telegram_user_id=sender_telegram_id,
+        canonical_identity_id=canonical_identity.id,
         display_name=sender_name,
     ).on_conflict_do_nothing(index_elements=["account_id", "telegram_user_id"])
     session.execute(stmt)
     session.flush()
-    return session.scalar(
+    contact = session.scalar(
         select(Contact).where(
             Contact.account_id == account_id,
             Contact.telegram_user_id == sender_telegram_id,
         )
     )
+    if contact is None:
+        raise RuntimeError("Telegram contact could not be created.")
+    if contact.canonical_identity_id != canonical_identity.id:
+        contact.canonical_identity_id = canonical_identity.id
+        session.flush()
+    return contact
 
 
 def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int) -> bool:
@@ -147,7 +190,12 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
         should_close = False
 
     try:
-        account = get_or_create_account(session, parsed_export.owner_telegram_id, parsed_export.account_name)
+        account = get_or_create_account(
+            session,
+            parsed_export.owner_telegram_id,
+            parsed_export.account_name,
+            parsed_export.account_username,
+        )
 
         file_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
         import_session = ImportSession(
