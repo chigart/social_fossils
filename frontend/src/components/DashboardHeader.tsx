@@ -26,6 +26,9 @@ export function DashboardHeader() {
         <a className={navigationLinkClassName} href="#communication-balance">
           Balance
         </a>
+        <a className={navigationLinkClassName} href="#forgotten-contacts">
+          Forgotten
+        </a>
       </nav>
     </header>
   );

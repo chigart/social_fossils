@@ -29,18 +29,18 @@ The repository already contains:
 - A Telegram JSON parser and idempotent command-line importer.
 - Overview, chat, sender/contact, and communication-balance analytics APIs.
 - A Forgotten Contacts API with inactivity/decline calculations, evidence
-  indicators, monthly activity, ranking, limits, and a single-account query
-  parameter.
+  indicators, monthly activity, ranking, and limits, plus a combined-owner
+  dashboard with ranked contacts, evidence status, and activity comparisons.
 - A React dashboard with overview, chats, contacts, and communication-balance
   sections and frontend/backend tests.
 - A local Docker Compose setup for frontend, backend, PostgreSQL, and Adminer.
 
-The immediate gaps are the Forgotten Contacts UI, timeline endpoint and UI, and
-consistent combined-owner scope. Existing analytics other than Forgotten
-Contacts currently aggregate across accounts without a common canonical contact
-identity. There is no Airflow DAG, additional platform importer, or Kubernetes
-deployment configuration. The README's roadmap/TODO is behind the implemented
-features and should be updated as roadmap work lands.
+The remaining Phase 3 gap is the Communication Timeline endpoint and UI.
+Existing analytics other than Forgotten Contacts currently aggregate across
+accounts without a common canonical contact identity. There is no Airflow DAG,
+additional platform importer, or Kubernetes deployment configuration. The
+README's roadmap/TODO is behind the implemented features and should be updated
+as roadmap work lands.
 
 Relevant existing code includes `backend/app/models.py`,
 `backend/app/importer.py`, `backend/app/routers/analytics.py`,
@@ -360,4 +360,3 @@ and a repeatable release/rollback path; local Compose remains straightforward.
 5. Airflow design and reusable service adapters, then DAG/retry/history/schedule.
 6. Additional importer and identity/cross-platform analytics.
 7. Production container/configuration work, then Kubernetes deployment and CI/CD.
-

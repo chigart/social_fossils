@@ -3,6 +3,7 @@ import {
   getChats,
   getCommunicationBalance,
   getContacts,
+  getForgottenContacts,
   getOverview,
 } from "./api";
 
@@ -12,6 +13,7 @@ describe("analytics API helpers", () => {
     const chats = [{ chat_id: 1 }];
     const contacts = [{ account_id: 2 }];
     const balance = { summary: { eligible_contacts: 1 }, contacts: [] };
+    const forgotten = { summary: { eligible_contacts: 1 }, contacts: [] };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -29,6 +31,10 @@ describe("analytics API helpers", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => balance,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => forgotten,
       });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -36,12 +42,14 @@ describe("analytics API helpers", () => {
     await expect(getChats()).resolves.toEqual(chats);
     await expect(getContacts()).resolves.toEqual(contacts);
     await expect(getCommunicationBalance()).resolves.toEqual(balance);
+    await expect(getForgottenContacts()).resolves.toEqual(forgotten);
 
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
       ["/api/analytics/chats"],
       ["/api/analytics/contacts"],
       ["/api/analytics/communication-balance"],
+      ["/api/analytics/forgotten-contacts"],
     ]);
   });
 

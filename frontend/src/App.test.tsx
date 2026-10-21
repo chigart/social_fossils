@@ -5,7 +5,7 @@ import {
   balance,
   chats,
   contacts,
-  emptyBalanceSummary,
+  forgotten,
   overview,
 } from "./App.testFixtures";
 import { renderLoadedDashboard, rowTitles } from "./App.testUtils";
@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   getChats: vi.fn(),
   getContacts: vi.fn(),
   getCommunicationBalance: vi.fn(),
+  getForgottenContacts: vi.fn(),
 }));
 
 vi.mock("./api", () => api);
@@ -25,6 +26,7 @@ beforeEach(() => {
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
   api.getCommunicationBalance.mockResolvedValue(balance);
+  api.getForgottenContacts.mockResolvedValue(forgotten);
 });
 
 describe("dashboard", () => {
@@ -124,6 +126,11 @@ describe("dashboard", () => {
       "href",
       "#communication-balance",
     );
+    expect(screen.getByRole("link", { name: "Forgotten" })).toHaveAttribute(
+      "href",
+      "#forgotten-contacts",
+    );
+    expect(screen.getByRole("heading", { name: "Forgotten contacts" })).toBeInTheDocument();
     expect(screen.getByText("All messages")).toBeInTheDocument();
     expect(screen.getByText("Ordinary messages")).toBeInTheDocument();
     expect(
@@ -174,8 +181,8 @@ describe("dashboard", () => {
 
     render(<App />);
 
-    expect(screen.getAllByRole("status")).toHaveLength(4);
-    expect(screen.getAllByText("Loading analytics…")).toHaveLength(4);
+    expect(screen.getAllByRole("status")).toHaveLength(5);
+    expect(screen.getAllByText("Loading analytics…")).toHaveLength(5);
   });
 
   it("shows the no-import guidance when analytics contain no imported data", async () => {
@@ -197,6 +204,9 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("Import messages to see incoming communication by sender."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "No imported data yet" }),
     ).toBeInTheDocument();
   });
 
@@ -375,5 +385,112 @@ describe("dashboard", () => {
       await within(contactsRegion).findByRole("row", { name: /Avery/ }),
     ).toBeInTheDocument();
     expect(api.getContacts).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows ranked Forgotten Contacts with monthly activity, evidence, and filtering", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+
+    const region = screen.getByRole("region", { name: "Forgotten contacts" });
+    expect(within(region).getByText(/Scope: Combined owner data/)).toBeInTheDocument();
+    expect(
+      within(region).getByRole("columnheader", { name: "Monthly activity" }),
+    ).toBeInTheDocument();
+    expect(
+      within(region).getAllByRole("img", { name: /Historical monthly activity/ }),
+    ).toHaveLength(forgotten.contacts.length);
+    expect(within(region).getAllByText("Inactive")).toHaveLength(2);
+    expect(within(region).getAllByText("Reliable baseline")).toHaveLength(
+      forgotten.contacts.length,
+    );
+    expect(within(region).getByText(/descriptive heuristics/)).toBeInTheDocument();
+
+    const table = within(region).getByRole("table");
+    expect(rowTitles(table)).toEqual(["Mika", "Zoe", "Lena"]);
+
+    await user.click(within(region).getByRole("button", { name: "Sort by Name" }));
+    expect(rowTitles(table)).toEqual(["Lena", "Mika", "Zoe"]);
+    await user.type(
+      within(region).getByRole("searchbox", { name: "Search forgotten contacts" }),
+      "zoe",
+    );
+    expect(rowTitles(table)).toEqual(["Zoe"]);
+  });
+
+  it("shows insufficient-history evidence and a no-match state", async () => {
+    const user = userEvent.setup();
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      summary: {
+        ...forgotten.summary,
+        insufficient_data_contacts: 1,
+      },
+      contacts: [
+        {
+          ...forgotten.contacts[0],
+          classification: "insufficient_data",
+          evidence_status: "insufficient_history",
+          ranking_score: null,
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+
+    const region = screen.getByRole("region", { name: "Forgotten contacts" });
+    expect(
+      within(region).getByText(/insufficient history or ambiguous message direction/),
+    ).toBeInTheDocument();
+    expect(within(region).getByText("Insufficient history")).toBeInTheDocument();
+    await user.type(
+      within(region).getByRole("searchbox", { name: "Search forgotten contacts" }),
+      "nobody",
+    );
+    expect(
+      within(region).getByText("No contacts match the selected search."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a distinct no-eligible-contact state after imports exist", async () => {
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      summary: {
+        ...forgotten.summary,
+        eligible_contacts: 0,
+        meaningful_historical_contacts: 0,
+        currently_inactive_contacts: 0,
+        declining_activity_contacts: 0,
+        insufficient_data_contacts: 0,
+      },
+      contacts: [],
+    });
+    await renderLoadedDashboard();
+
+    const region = screen.getByRole("region", { name: "Forgotten contacts" });
+    expect(
+      within(region).getByRole("heading", {
+        name: "No eligible contacts available",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(region).getByText(
+        "No identifiable one-to-one contacts are available for comparison.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("retries a failed Forgotten Contacts request", async () => {
+    const user = userEvent.setup();
+    api.getForgottenContacts.mockRejectedValueOnce(
+      new Error("Forgotten contacts unavailable."),
+    );
+    render(<App />);
+
+    const region = screen.getByRole("region", { name: "Forgotten contacts" });
+    expect(await within(region).findByRole("alert")).toHaveTextContent(
+      "Forgotten contacts unavailable.",
+    );
+    await user.click(within(region).getByRole("button", { name: "Retry" }));
+    expect(await within(region).findByText("Mika")).toBeInTheDocument();
+    expect(api.getForgottenContacts).toHaveBeenCalledTimes(2);
   });
 });

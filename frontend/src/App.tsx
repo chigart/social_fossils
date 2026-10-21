@@ -3,11 +3,14 @@ import {
   getChats,
   getCommunicationBalance,
   getContacts,
+  getForgottenContacts,
   getOverview,
   type ChatStatistics,
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
   type ContactStatistics,
+  type ForgottenContact,
+  type ForgottenContactsStatistics,
   type OverviewStatistics,
 } from "./api";
 import { ChatsView } from "./components/ChatsView";
@@ -19,6 +22,7 @@ import {
 import { ContactsView } from "./components/ContactsView";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardIntro } from "./components/DashboardIntro";
+import { ForgottenContactsView } from "./components/ForgottenContactsView";
 import { OverviewView } from "./components/OverviewView";
 import type { Resource, SortDirection } from "./types";
 
@@ -34,12 +38,20 @@ export default function App() {
     useState<Resource<ContactStatistics[]>>(emptyResource);
   const [balance, setBalance] =
     useState<Resource<CommunicationBalanceStatistics>>(emptyResource);
+  const [forgottenContacts, setForgottenContacts] =
+    useState<Resource<ForgottenContactsStatistics>>(emptyResource);
   const [chatSearch, setChatSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [balanceSearch, setBalanceSearch] = useState("");
+  const [forgottenSearch, setForgottenSearch] = useState("");
   const [balanceClassification, setBalanceClassification] = useState<
     CommunicationBalanceClassification | "all"
   >("all");
+  const [forgottenSortKey, setForgottenSortKey] = useState<
+    "ranking_score" | "display_name" | "days_since_last_communication"
+  >("ranking_score");
+  const [forgottenSortDirection, setForgottenSortDirection] =
+    useState<SortDirection>("desc");
   const [balanceSortKey, setBalanceSortKey] =
     useState<BalanceSortKey>("text_volume");
   const [balanceSortDirection, setBalanceSortDirection] =
@@ -119,11 +131,32 @@ export default function App() {
     }
   };
 
+  const loadForgottenContacts = async () => {
+    setForgottenContacts((current) => ({ ...current, error: null, loading: true }));
+    try {
+      setForgottenContacts({
+        data: await getForgottenContacts(),
+        error: null,
+        loading: false,
+      });
+    } catch (error) {
+      setForgottenContacts((current) => ({
+        ...current,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load forgotten contacts.",
+        loading: false,
+      }));
+    }
+  };
+
   useEffect(() => {
     void loadOverview();
     void loadChats();
     void loadContacts();
     void loadBalance();
+    void loadForgottenContacts();
   }, []);
 
   const changeChatSort = (key: "title" | "total_messages") => {
@@ -175,6 +208,35 @@ export default function App() {
     balanceSortKey,
     balanceSortDirection,
   );
+
+  const visibleForgottenContacts = (forgottenContacts.data?.contacts ?? [])
+    .filter((contact) =>
+      (contact.display_name ?? "")
+        .toLocaleLowerCase()
+        .includes(forgottenSearch.trim().toLocaleLowerCase()),
+    )
+    .sort((left, right) => {
+      const direction = forgottenSortDirection === "asc" ? 1 : -1;
+
+      if (forgottenSortKey === "display_name") {
+        return (
+          direction *
+          (left.display_name ?? "").localeCompare(right.display_name ?? "")
+        );
+      }
+
+      const leftValue = forgottenSortKey === "days_since_last_communication"
+        ? left.days_since_last_communication
+        : left.ranking_score;
+      const rightValue = forgottenSortKey === "days_since_last_communication"
+        ? right.days_since_last_communication
+        : right.ranking_score;
+
+      if (leftValue === null) return rightValue === null ? 0 : 1;
+      if (rightValue === null) return -1;
+
+      return direction * (leftValue - rightValue);
+    });
 
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
@@ -228,6 +290,18 @@ export default function App() {
           onSortKeyChange={setBalanceSortKey}
           onSortDirectionChange={setBalanceSortDirection}
           onRetry={() => void loadBalance()}
+        />
+        <ForgottenContactsView
+          forgotten={forgottenContacts}
+          noImportedData={noImportedData}
+          visibleContacts={visibleForgottenContacts}
+          search={forgottenSearch}
+          onSearchChange={setForgottenSearch}
+          sortKey={forgottenSortKey}
+          sortDirection={forgottenSortDirection}
+          onSortKeyChange={setForgottenSortKey}
+          onSortDirectionChange={setForgottenSortDirection}
+          onRetry={() => void loadForgottenContacts()}
         />
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">
           Statistics are aggregated from imported data. Message contents are not shown.
