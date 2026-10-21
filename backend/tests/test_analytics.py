@@ -1,11 +1,14 @@
 from datetime import datetime, timezone
+from datetime import timedelta
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.main import app
 from app.routers.analytics import (
+    build_forgotten_contacts_statistics,
     get_chat_statistics,
     get_communication_balance,
     get_contact_statistics,
@@ -136,6 +139,86 @@ def add_message(
     db_session.flush()
 
 
+FORGOTTEN_AS_OF = datetime(2026, 10, 20, 12, tzinfo=timezone.utc)
+HISTORICAL_ACTIVITY_DATES = [
+    datetime(2026, 1, 10, tzinfo=timezone.utc),
+    datetime(2026, 2, 10, tzinfo=timezone.utc),
+    datetime(2026, 3, 10, tzinfo=timezone.utc),
+    datetime(2026, 4, 10, tzinfo=timezone.utc),
+    datetime(2026, 6, 10, tzinfo=timezone.utc),
+]
+
+
+def add_forgotten_candidate(
+    db_session,
+    contact_id: int,
+    *,
+    account_id: int = 1,
+    peer_id: str | None = None,
+    name: str | None = None,
+    chat_type: str = "personal_chat",
+) -> tuple[int, str]:
+    peer_id = peer_id or f"user-contact-{contact_id}"
+    chat_id = account_id * 10_000 + contact_id
+    add_contact(
+        db_session,
+        contact_id,
+        account_id,
+        peer_id,
+        name or f"Contact {contact_id}",
+    )
+    add_chat(
+        db_session,
+        chat_id,
+        account_id,
+        f"telegram-chat-{chat_id}",
+        chat_type=chat_type,
+    )
+    return chat_id, peer_id
+
+
+def add_exchanges(
+    db_session,
+    contact_id: int,
+    chat_id: int,
+    peer_id: str,
+    dates: list[datetime | None],
+    *,
+    exchanges_per_day: int = 5,
+    message_id_start: int = 1,
+    owner_id: str = "user-owner",
+    owner_text: str | None = "owner",
+    contact_text: str | None = "contact",
+) -> int:
+    message_id = contact_id * 10_000 + message_id_start
+    for message_date in dates:
+        for _ in range(exchanges_per_day):
+            add_message(
+                db_session,
+                message_id,
+                chat_id,
+                "message",
+                owner_id,
+                message_date=message_date,
+                is_outgoing=True,
+                text_content=owner_text,
+            )
+            message_id += 1
+            add_message(
+                db_session,
+                message_id,
+                chat_id,
+                "message",
+                peer_id,
+                message_date=message_date,
+                is_outgoing=False,
+                sender_contact_id=contact_id,
+                text_content=contact_text,
+            )
+            message_id += 1
+    return message_id - contact_id * 10_000
+
+
 def test_empty_database_returns_zeroes_and_empty_lists(db_session):
     overview = get_overview(db_session)
 
@@ -160,6 +243,7 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
         "/api/analytics/chats",
         "/api/analytics/contacts",
         "/api/analytics/communication-balance",
+        "/api/analytics/forgotten-contacts",
     }
 
 
@@ -567,3 +651,432 @@ def test_communication_balance_sorts_by_requested_metric(db_session):
         "Zed",
     ]
     assert [contact.display_name for contact in by_name.contacts] == ["Alex", "Zed"]
+
+
+def test_forgotten_contacts_classifies_and_ranks_by_history_and_decline(db_session):
+    add_account(db_session, 1, "user-owner")
+    forgotten_chat, forgotten_peer = add_forgotten_candidate(db_session, 20)
+    declining_chat, declining_peer = add_forgotten_candidate(db_session, 21)
+    active_chat, active_peer = add_forgotten_candidate(db_session, 22)
+    little_chat, little_peer = add_forgotten_candidate(db_session, 23)
+    add_exchanges(
+        db_session,
+        20,
+        forgotten_chat,
+        forgotten_peer,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_exchanges(
+        db_session,
+        21,
+        declining_chat,
+        declining_peer,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_exchanges(
+        db_session,
+        22,
+        active_chat,
+        active_peer,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_exchanges(
+        db_session,
+        21,
+        declining_chat,
+        declining_peer,
+        [
+            FORGOTTEN_AS_OF - timedelta(days=80),
+            FORGOTTEN_AS_OF - timedelta(days=60),
+            FORGOTTEN_AS_OF - timedelta(days=30),
+        ],
+        exchanges_per_day=1,
+        message_id_start=100,
+    )
+    add_exchanges(
+        db_session,
+        22,
+        active_chat,
+        active_peer,
+        [
+            datetime(2026, 8, 1, tzinfo=timezone.utc),
+            datetime(2026, 9, 1, tzinfo=timezone.utc),
+            FORGOTTEN_AS_OF - timedelta(days=2),
+        ],
+        exchanges_per_day=5,
+        message_id_start=100,
+    )
+    add_exchanges(
+        db_session,
+        23,
+        little_chat,
+        little_peer,
+        [
+            datetime(2025, 6, 1, tzinfo=timezone.utc),
+            datetime(2025, 7, 1, tzinfo=timezone.utc),
+        ],
+        exchanges_per_day=1,
+    )
+
+    result = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    by_id = {contact.contact_id: contact for contact in result.contacts}
+
+    assert [contact.contact_id for contact in result.contacts] == [20, 21, 22, 23]
+    assert by_id[20].classification == "inactive"
+    assert by_id[20].evidence_status == "reliable_baseline"
+    assert by_id[20].historical_message_count == 50
+    assert by_id[20].recent_message_count == 0
+    assert by_id[20].days_since_last_communication == 132
+    assert by_id[20].activity_decline_percentage == 100
+    assert by_id[20].ranking_score is not None
+
+    assert by_id[21].classification == "activity_declined"
+    assert 0 < by_id[21].recent_message_count < by_id[21].historical_message_count
+    assert by_id[21].activity_decline_percentage is not None
+    assert by_id[21].activity_decline_percentage >= 50
+    assert by_id[22].classification == "active"
+    assert by_id[22].recent_message_count > 0
+    assert by_id[22].activity_decline_percentage == 0
+    assert by_id[23].classification == "insufficient_data"
+    assert by_id[23].ranking_score is None
+
+    assert result.summary.account_id == 1
+    assert result.summary.eligible_contacts == 4
+    assert result.summary.meaningful_historical_contacts == 3
+    assert result.summary.currently_inactive_contacts == 2
+    assert result.summary.declining_activity_contacts == 2
+    assert result.summary.insufficient_data_contacts == 1
+
+
+def test_forgotten_contacts_excludes_service_and_counts_normalized_text(db_session):
+    add_account(db_session, 1, "user-owner")
+    chat_id, peer_id = add_forgotten_candidate(db_session, 20)
+    next_message_id = add_exchanges(
+        db_session,
+        20,
+        chat_id,
+        peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+        owner_text="é😀",
+        contact_text="x ",
+    )
+    add_message(
+        db_session,
+        20 * 10_000 + next_message_id,
+        chat_id,
+        "message",
+        "user-owner",
+        is_outgoing=True,
+        text_content="",
+    )
+    add_message(
+        db_session,
+        20 * 10_000 + next_message_id + 1,
+        chat_id,
+        "service",
+        "user-owner",
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=True,
+        text_content="service text must not contribute",
+    )
+    add_message(
+        db_session,
+        20 * 10_000 + next_message_id + 2,
+        chat_id,
+        "service",
+        peer_id,
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=False,
+        text_content="service text must not contribute",
+    )
+
+    result = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    contact = result.contacts[0]
+
+    assert contact.owner_message_count == 26
+    assert contact.contact_message_count == 25
+    assert contact.historical_message_count == 50
+    assert contact.owner_text_length == 25 * len("é😀")
+    assert contact.contact_text_length == 25 * len("x ")
+    assert contact.total_text_length == 100
+
+
+def test_forgotten_contacts_marks_ambiguous_direction_unscored(db_session):
+    add_account(db_session, 1, "user-owner")
+    chat_id, peer_id = add_forgotten_candidate(db_session, 20)
+    add_exchanges(
+        db_session,
+        20,
+        chat_id,
+        peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_message(
+        db_session,
+        20 * 10_000 + 100,
+        chat_id,
+        "message",
+        peer_id,
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=None,
+    )
+    add_message(
+        db_session,
+        20 * 10_000 + 101,
+        chat_id,
+        "message",
+        None,
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=None,
+    )
+
+    contact = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    ).contacts[0]
+
+    assert contact.excluded_ambiguous_message_count == 2
+    assert contact.evidence_status == "ambiguous_direction"
+    assert contact.classification == "insufficient_data"
+    assert contact.ranking_score is None
+    assert contact.activity_decline_percentage is None
+
+
+def test_forgotten_contacts_requires_long_enough_baseline(db_session):
+    add_account(db_session, 1, "user-owner")
+    chat_id, peer_id = add_forgotten_candidate(db_session, 20)
+    dates = [
+        datetime(2026, 4, 1, tzinfo=timezone.utc),
+        datetime(2026, 4, 15, tzinfo=timezone.utc),
+        datetime(2026, 5, 1, tzinfo=timezone.utc),
+        datetime(2026, 5, 15, tzinfo=timezone.utc),
+        datetime(2026, 6, 1, tzinfo=timezone.utc),
+    ]
+    add_exchanges(db_session, 20, chat_id, peer_id, dates, exchanges_per_day=10)
+
+    contact = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    ).contacts[0]
+
+    assert contact.historical_message_count == 100
+    assert contact.historical_active_days == 5
+    assert contact.historical_active_month_count == 3
+    assert contact.evidence_status == "insufficient_baseline"
+    assert contact.activity_decline_percentage is None
+    assert contact.ranking_score is None
+
+
+def test_forgotten_contacts_splits_partial_cutoff_month_and_orders_ties(db_session):
+    add_account(db_session, 1, "user-owner")
+    first_chat, first_peer = add_forgotten_candidate(db_session, 20, name="Zed")
+    second_chat, second_peer = add_forgotten_candidate(db_session, 21, name="Alex")
+    dates = HISTORICAL_ACTIVITY_DATES + [
+        datetime(2026, 7, 10, tzinfo=timezone.utc),
+    ]
+    add_exchanges(db_session, 20, first_chat, first_peer, dates)
+    add_exchanges(db_session, 21, second_chat, second_peer, dates)
+    for contact_id, chat_id, peer_id in (
+        (20, first_chat, first_peer),
+        (21, second_chat, second_peer),
+    ):
+        add_exchanges(
+            db_session,
+            contact_id,
+            chat_id,
+            peer_id,
+            [datetime(2026, 7, 25, tzinfo=timezone.utc)],
+            exchanges_per_day=1,
+            message_id_start=100,
+        )
+
+    full_result = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+        sort_by="historical_message_count",
+    )
+    limited_result = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+        limit=1,
+    )
+    first = next(c for c in full_result.contacts if c.contact_id == 20)
+
+    assert [contact.contact_id for contact in full_result.contacts] == [20, 21]
+    assert [activity.month for activity in first.historical_activity_by_month][-1] == "2026-07"
+    assert first.historical_activity_by_month[-1].total_message_count == 10
+    assert first.recent_activity_by_month[0].month == "2026-07"
+    assert first.recent_activity_by_month[0].total_message_count == 2
+    assert limited_result.summary.eligible_contacts == 2
+    assert [contact.contact_id for contact in limited_result.contacts] == [20]
+
+
+def test_forgotten_contacts_does_not_use_missing_timestamps_as_baseline(db_session):
+    add_account(db_session, 1, "user-owner")
+    chat_id, peer_id = add_forgotten_candidate(db_session, 20)
+    add_exchanges(
+        db_session,
+        20,
+        chat_id,
+        peer_id,
+        [None],
+        exchanges_per_day=1,
+    )
+
+    contact = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    ).contacts[0]
+
+    assert contact.total_message_count == 2
+    assert contact.first_message_at is None
+    assert contact.last_message_at is None
+    assert contact.days_since_last_communication is None
+    assert contact.historical_message_count == 0
+    assert contact.evidence_status == "insufficient_history"
+    assert contact.classification == "insufficient_data"
+    assert contact.ranking_score is None
+
+
+def test_forgotten_contacts_excludes_groups_and_multiple_peer_chats(db_session):
+    add_account(db_session, 1, "user-owner")
+    group_chat, group_peer = add_forgotten_candidate(
+        db_session,
+        20,
+        chat_type="supergroup",
+    )
+    add_exchanges(
+        db_session,
+        20,
+        group_chat,
+        group_peer,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+
+    chat_id, peer_id = add_forgotten_candidate(db_session, 21)
+    third_peer_id = "user-third-peer"
+    add_contact(db_session, 31, 1, third_peer_id, "Third peer")
+    add_exchanges(
+        db_session,
+        21,
+        chat_id,
+        peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_message(
+        db_session,
+        21 * 10_000 + 100,
+        chat_id,
+        "message",
+        third_peer_id,
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=False,
+        sender_contact_id=31,
+    )
+
+    result = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    )
+
+    assert result.summary.eligible_contacts == 0
+    assert result.contacts == []
+
+
+def test_forgotten_contacts_scopes_accounts_and_requires_selection(db_session):
+    add_account(db_session, 1, "user-owner-one")
+    add_account(db_session, 2, "user-owner-two")
+    for account_id, contact_id in ((1, 20), (2, 30)):
+        chat_id, peer_id = add_forgotten_candidate(
+            db_session,
+            contact_id,
+            account_id=account_id,
+            peer_id="user-shared-telegram-peer",
+        )
+        add_exchanges(
+            db_session,
+            contact_id,
+            chat_id,
+            peer_id,
+            HISTORICAL_ACTIVITY_DATES,
+            owner_id=f"user-owner-{'one' if account_id == 1 else 'two'}",
+        )
+
+    with pytest.raises(HTTPException) as selection_error:
+        build_forgotten_contacts_statistics(
+            db_session,
+            as_of=FORGOTTEN_AS_OF,
+        )
+    assert selection_error.value.status_code == 400
+
+    first_account = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=1,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    second_account = build_forgotten_contacts_statistics(
+        db_session,
+        account_id=2,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    assert [contact.contact_id for contact in first_account.contacts] == [20]
+    assert [contact.account_id for contact in first_account.contacts] == [1]
+    assert first_account.contacts[0].total_message_count == 50
+    assert [contact.contact_id for contact in second_account.contacts] == [30]
+    assert [contact.account_id for contact in second_account.contacts] == [2]
+    assert second_account.contacts[0].total_message_count == 50
+
+    with pytest.raises(HTTPException) as missing_account_error:
+        build_forgotten_contacts_statistics(
+            db_session,
+            account_id=99,
+            as_of=FORGOTTEN_AS_OF,
+        )
+    assert missing_account_error.value.status_code == 404
+
+
+def test_forgotten_contacts_empty_database_and_account_without_private_chats(
+    db_session,
+):
+    empty_result = build_forgotten_contacts_statistics(
+        db_session,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    assert empty_result.summary.account_id is None
+    assert empty_result.summary.eligible_contacts == 0
+    assert empty_result.contacts == []
+
+    add_account(db_session, 1, "user-owner")
+    group_chat, group_peer = add_forgotten_candidate(
+        db_session,
+        20,
+        chat_type="group",
+    )
+    add_exchanges(
+        db_session,
+        20,
+        group_chat,
+        group_peer,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    no_private_results = build_forgotten_contacts_statistics(
+        db_session,
+        as_of=FORGOTTEN_AS_OF,
+    )
+    assert no_private_results.summary.account_id == 1
+    assert no_private_results.summary.eligible_contacts == 0
+    assert no_private_results.contacts == []

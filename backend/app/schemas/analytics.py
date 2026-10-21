@@ -79,6 +79,94 @@ CommunicationBalanceClassification = Literal[
 ]
 
 
+ForgottenContactClassification = Literal[
+    "insufficient_data",
+    "inactive",
+    "activity_declined",
+    "active",
+]
+
+ForgottenContactEvidenceStatus = Literal[
+    "reliable_baseline",
+    "insufficient_history",
+    "insufficient_baseline",
+    "ambiguous_direction",
+]
+
+
+class ForgottenContactMonthlyActivity(BaseModel):
+    month: str = Field(description="UTC calendar month in YYYY-MM format.")
+    owner_message_count: int
+    contact_message_count: int
+    total_message_count: int
+
+
+class ForgottenContact(BaseModel):
+    account_id: int = Field(description="Internal Telegram account ID.")
+    contact_id: int = Field(description="Stable account-local contact ID.")
+    telegram_user_id: str = Field(description="Matched Telegram user ID.")
+    display_name: str | None
+    first_message_at: datetime | None
+    last_message_at: datetime | None
+    days_since_last_communication: int | None
+    owner_message_count: int = Field(
+        description="Ordinary messages with reliable owner direction across all dates."
+    )
+    contact_message_count: int = Field(
+        description="Ordinary messages with reliable contact direction across all dates."
+    )
+    total_message_count: int = Field(
+        description="Known-direction ordinary messages across all dates."
+    )
+    excluded_ambiguous_message_count: int = Field(
+        description="Ordinary messages not counted because sender identity or direction was ambiguous."
+    )
+    owner_text_length: int
+    contact_text_length: int
+    total_text_length: int
+    distinct_active_days: int
+    historical_message_count: int = Field(
+        description="Known-direction ordinary messages before the recent window."
+    )
+    historical_active_days: int
+    historical_active_month_count: int
+    historical_activity_by_month: list[ForgottenContactMonthlyActivity]
+    recent_activity_by_month: list[ForgottenContactMonthlyActivity]
+    recent_owner_message_count: int
+    recent_contact_message_count: int
+    recent_message_count: int
+    historical_monthly_baseline: float | None = Field(
+        description="Historical messages per FORGOTTEN_RECENT_MONTH_DAYS days over the dated historical activity span."
+    )
+    recent_monthly_activity: float
+    activity_decline_percentage: float | None = Field(
+        description="Recent rate decline versus historical baseline, capped to 0-100; null without a reliable baseline."
+    )
+    classification: ForgottenContactClassification
+    evidence_status: ForgottenContactEvidenceStatus
+    ranking_score: float | None = Field(
+        description="0-100 ranking score; null when historical evidence or direction is insufficient."
+    )
+
+
+class ForgottenContactsSummary(BaseModel):
+    account_id: int | None = Field(
+        description="Selected account ID, or null when the database has no accounts."
+    )
+    eligible_contacts: int = Field(
+        description="Identifiable contacts in private chats with exactly one non-owner sender."
+    )
+    meaningful_historical_contacts: int
+    currently_inactive_contacts: int
+    declining_activity_contacts: int
+    insufficient_data_contacts: int
+
+
+class ForgottenContactsStatistics(BaseModel):
+    summary: ForgottenContactsSummary
+    contacts: list[ForgottenContact]
+
+
 class CommunicationBalanceContact(BaseModel):
     account_id: int = Field(description="Internal Telegram account ID.")
     contact_id: int = Field(description="Stable account-local contact ID.")

@@ -31,3 +31,7 @@
 ## TODO
 1. Mobile adaptive
 2. Design
+3. Chats analytics
+
+## BUGS
+1. Image/sticker doesn't count at all in text volume
