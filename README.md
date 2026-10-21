@@ -1,6 +1,6 @@
 # MVP for Social Fossils
 
-### For development
+### Development
 - cd frontend
 - nvm install
 - npm install
@@ -13,6 +13,10 @@
 
 - docker compose up --build -d
 - docker compose exec backend alembic upgrade head
+
+### Test
+- Backend: `cd backend && pytest`
+- Frontend: `cd frontend && npm test`
 
 ### Run Project
 - docker compose up

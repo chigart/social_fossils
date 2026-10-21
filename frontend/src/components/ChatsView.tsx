@@ -115,7 +115,7 @@ export function ChatsView({
                 </th>
                 <th className={tableHeaderClassName} scope="col">Ordinary</th>
                 <th className={tableHeaderClassName} scope="col">Service</th>
-                <th className={tableHeaderClassName} scope="col">Identified senders</th>
+                <th className={tableHeaderClassName} scope="col">Senders</th>
                 <th className={tableHeaderClassName} scope="col">First message</th>
                 <th className={tableHeaderClassName} scope="col">Latest message</th>
               </tr>

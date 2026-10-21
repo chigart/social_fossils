@@ -1,0 +1,267 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  balance,
+  chats,
+  contacts,
+  emptyBalanceSummary,
+  overview,
+} from "./App.testFixtures";
+import { renderLoadedDashboard, rowTitles } from "./App.testUtils";
+import App from "./App";
+
+const api = vi.hoisted(() => ({
+  getOverview: vi.fn(),
+  getChats: vi.fn(),
+  getContacts: vi.fn(),
+  getCommunicationBalance: vi.fn(),
+}));
+
+vi.mock("./api", () => api);
+
+beforeEach(() => {
+  api.getOverview.mockResolvedValue(overview);
+  api.getChats.mockResolvedValue(chats);
+  api.getContacts.mockResolvedValue(contacts);
+  api.getCommunicationBalance.mockResolvedValue(balance);
+});
+
+describe("communication balance dashboard", () => {
+  it("retries a failed communication balance request without crashing other sections", async () => {
+    const user = userEvent.setup();
+    api.getCommunicationBalance.mockRejectedValueOnce(
+      new Error("Balance analytics unavailable."),
+    );
+    render(<App />);
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+
+    expect(await within(balanceRegion).findByRole("alert")).toHaveTextContent(
+      "Balance analytics unavailable.",
+    );
+    expect(
+      screen.getByRole("region", { name: "Overview" }),
+    ).toBeInTheDocument();
+    await user.click(within(balanceRegion).getByRole("button", { name: "Retry" }));
+
+    expect(
+      await within(balanceRegion).findByRole("row", { name: /Alex/ }),
+    ).toBeInTheDocument();
+    expect(api.getCommunicationBalance).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the eligible-contact empty state when the API has no results", async () => {
+    api.getCommunicationBalance.mockResolvedValue({
+      summary: emptyBalanceSummary,
+      contacts: [],
+    });
+    render(<App />);
+
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    expect(
+      await within(balanceRegion).findByRole("heading", {
+        name: "No eligible contacts available",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(balanceRegion).getByText("Eligible contacts").parentElement,
+    ).toHaveTextContent("0");
+  });
+
+  it("renders summary values directly from the communication balance API", async () => {
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+
+    for (const [label, value] of [
+      ["Eligible contacts", "5"],
+      ["Balanced", "1"],
+      ["Mostly owner", "1"],
+      ["Mostly contact", "1"],
+      ["Strongly owner", "1"],
+      ["Strongly contact", "0"],
+      ["Insufficient data", "1"],
+      ["Total text exchanged", "3,700"],
+    ]) {
+      expect(
+        within(balanceRegion).getByText(label, { selector: "h3" }).parentElement,
+      ).toHaveTextContent(value);
+    }
+  });
+
+  it("shows text volume, API shares, date values, and supplementary message counts", async () => {
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    const alexRow = within(balanceRegion).getByRole("row", { name: /Alex/ });
+
+    expect(alexRow).toHaveTextContent("1,000");
+    expect(alexRow).toHaveTextContent("500");
+    expect(alexRow).toHaveTextContent("Balanced");
+    expect(alexRow).toHaveTextContent("1");
+    expect(alexRow).toHaveTextContent("5");
+    const alexShare = within(alexRow).getByRole("img", {
+      name: "Owner 50%, contact 50%",
+    });
+    const alexBar = alexShare.querySelectorAll(".flex")[1];
+    expect(alexBar?.children[0]).toHaveStyle({ width: "50%" });
+    expect(alexBar?.children[1]).toHaveStyle({ width: "50%" });
+
+    const coraRow = within(balanceRegion).getByRole("row", { name: /Cora/ });
+    const coraShare = within(coraRow).getByRole("img", {
+      name: "Owner 25%, contact 75%",
+    });
+    const coraBar = coraShare.querySelectorAll(".flex")[1];
+    expect(coraBar?.children[0]).toHaveStyle({ width: "25%" });
+    expect(coraBar?.children[1]).toHaveStyle({ width: "75%" });
+    expect(
+      balanceRegion,
+    ).toHaveTextContent("Text volume counts Unicode code points");
+    expect(balanceRegion).toHaveTextContent("First seen");
+    expect(balanceRegion).toHaveTextContent("Last seen");
+  });
+
+  it("filters contacts by API classification and searches display names", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    const classificationFilter = within(balanceRegion).getByRole("combobox", {
+      name: "Filter by classification",
+    });
+
+    await user.selectOptions(classificationFilter, "mostly_owner");
+    expect(within(balanceRegion).getAllByRole("row")).toHaveLength(2);
+    expect(within(balanceRegion).getByRole("row", { name: /Bea/ })).toBeInTheDocument();
+    expect(within(balanceRegion).queryByRole("row", { name: /Alex/ })).not.toBeInTheDocument();
+
+    await user.selectOptions(classificationFilter, "all");
+    const search = within(balanceRegion).getByRole("searchbox", {
+      name: "Search balance contacts by display name",
+    });
+    await user.type(search, "  cOrA ");
+    expect(within(balanceRegion).getAllByRole("row")).toHaveLength(2);
+    expect(within(balanceRegion).getByRole("row", { name: /Cora/ })).toBeInTheDocument();
+  });
+
+  it("sorts by total text volume, not message counts", async () => {
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    const sortBy = within(balanceRegion).getByRole("combobox", {
+      name: "Sort contacts by",
+    });
+    const table = within(balanceRegion).getByRole("table");
+
+    expect(rowTitles(table)).toEqual([
+      "Cora",
+      "Alex",
+      "Drew",
+      "Bea",
+      "Zero text",
+    ]);
+    await userEvent.setup().selectOptions(sortBy, "owner_share");
+    expect(rowTitles(table)).toEqual([
+      "Drew",
+      "Bea",
+      "Alex",
+      "Cora",
+      "Zero text",
+    ]);
+  });
+
+  it("sorts owner text share in the selected direction and keeps missing shares last", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    await user.selectOptions(
+      within(balanceRegion).getByRole("combobox", { name: "Sort contacts by" }),
+      "owner_share",
+    );
+    await user.selectOptions(
+      within(balanceRegion).getByRole("combobox", { name: "Sort direction" }),
+      "asc",
+    );
+
+    expect(rowTitles(within(balanceRegion).getByRole("table"))).toEqual([
+      "Cora",
+      "Alex",
+      "Bea",
+      "Drew",
+      "Zero text",
+    ]);
+  });
+
+  it("sorts most recent activity with undated contacts last", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    await user.selectOptions(
+      within(balanceRegion).getByRole("combobox", { name: "Sort contacts by" }),
+      "recent_activity",
+    );
+
+    expect(rowTitles(within(balanceRegion).getByRole("table"))).toEqual([
+      "Drew",
+      "Cora",
+      "Bea",
+      "Alex",
+      "Zero text",
+    ]);
+  });
+
+  it("marks insufficient-data contacts distinctly and avoids invalid zero-volume shares", async () => {
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    const zeroRow = within(balanceRegion).getByRole("row", { name: /Zero text/ });
+
+    expect(zeroRow).toHaveTextContent("Insufficient data");
+    expect(zeroRow).toHaveTextContent("Less than 500 characters");
+    expect(zeroRow).toHaveTextContent("No text volume to compare");
+    expect(zeroRow).toHaveTextContent("Owner — · Contact —");
+    expect(zeroRow).not.toHaveTextContent("NaN");
+    expect(zeroRow).not.toHaveTextContent("Infinity");
+  });
+
+  it("keeps the balance table scrollable and controls usable on narrow screens", async () => {
+    await renderLoadedDashboard();
+    const balanceRegion = screen.getByRole("region", {
+      name: "Communication balance",
+    });
+    const table = within(balanceRegion).getByRole("table");
+
+    expect(table).toHaveClass("min-w-[1050px]");
+    expect(
+      within(balanceRegion).getByRole("region", {
+        name: "Scrollable communication balance table",
+      }),
+    ).toHaveClass("overflow-x-scroll");
+    expect(
+      within(balanceRegion).getByText(
+        "The table is wider than this panel. Scroll horizontally to see the remaining columns.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(balanceRegion).getByRole("combobox", { name: "Sort direction" }),
+    ).toBeVisible();
+    expect(
+      within(balanceRegion).getByRole("searchbox", {
+        name: "Search balance contacts by display name",
+      }),
+    ).toBeVisible();
+  });
+});
