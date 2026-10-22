@@ -138,19 +138,27 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(8);
+    expect(screen.getAllByRole("tab")).toHaveLength(7);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute(
+    expect(
+      screen.getByRole("tab", { name: "Conversation insights" }),
+    ).toHaveAttribute(
       "aria-controls",
-      "communication-timeline-panel",
+      "conversation-insights-panel",
     );
     expect(screen.getByRole("tab", { name: "Import" })).toHaveAttribute(
       "aria-controls",
       "uploads-panel",
     );
+    expect(
+      screen.queryByRole("tab", { name: /^Insights$/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /^Timeline$/ }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("All messages")).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Overview" })).getByText(
@@ -253,7 +261,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Insights");
+    await selectDashboardTab("Conversation insights");
 
     expect(
       screen.getByRole("heading", { name: "Chat insights" }),
@@ -280,6 +288,12 @@ describe("dashboard", () => {
     expect(textShare).toHaveTextContent("260 characters · 59.1%");
     expect(textShare).toHaveTextContent("180 characters · 40.9%");
     expect(screen.getByText("Most popular words")).toBeInTheDocument();
+    expect(screen.getByText("Conversation flow")).toBeInTheDocument();
+    expect(screen.getByText("Who reopens after a pause")).toBeInTheDocument();
+    expect(screen.getByText("Anton → Lena")).toBeInTheDocument();
+    expect(screen.getByText("Message type breakdown")).toBeInTheDocument();
+    expect(screen.getByText("Photo")).toBeInTheDocument();
+    expect(screen.getByText("30 min")).toBeInTheDocument();
     expect(screen.getByText("Popular words and emojis by sender")).toBeInTheDocument();
     expect(screen.getByText("Observed reactions by person")).toBeInTheDocument();
     const popularWordChip = screen.getByRole("listitem", {
@@ -356,7 +370,7 @@ describe("dashboard", () => {
       ),
     );
     expect(
-      screen
+      within(screen.getByRole("region", { name: "Chat insights" }))
         .getByRole("heading", { name: "Ordinary messages" })
         .closest("article"),
     ).toHaveTextContent("5");
@@ -381,7 +395,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Insights");
+    await selectDashboardTab("Conversation insights");
 
     const messageShare = screen.getByRole("region", {
       name: "Share of messages by person",
@@ -424,7 +438,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Insights");
+    await selectDashboardTab("Conversation insights");
 
     const matchingChats = screen.getByRole("group", { name: "Matching chats" });
     const optionLabels = within(matchingChats)
@@ -446,7 +460,7 @@ describe("dashboard", () => {
     await user.click(filteredResults[0]);
 
     expect(
-      screen
+      within(screen.getByRole("region", { name: "Chat insights" }))
         .getByRole("heading", { name: "Ordinary messages" })
         .closest("article"),
     ).toHaveTextContent("5");
@@ -478,17 +492,37 @@ describe("dashboard", () => {
     await user.click(overviewTab);
     await user.keyboard("{ArrowRight}");
 
-    expect(screen.getByRole("tab", { name: "Insights" })).toHaveAttribute(
+    expect(
+      screen.getByRole("tab", { name: "Conversation insights" }),
+    ).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(window.location.hash).toBe("#chat-insights");
+    expect(window.location.hash).toBe("#conversation-insights");
     expect(
-      screen.getByRole("tabpanel", { name: "Insights" }),
+      screen.getByRole("tabpanel", { name: "Conversation insights" }),
     ).not.toHaveAttribute(
       "hidden",
     );
     expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
+  });
+
+  it("maps legacy insight and timeline hashes to the combined destination", async () => {
+    window.history.replaceState(null, "", "/#communication-timeline");
+    await renderLoadedDashboard();
+
+    expect(
+      screen.getByRole("tab", { name: "Conversation insights" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      screen.getByRole("tabpanel", { name: "Conversation insights" }),
+    ).not.toHaveAttribute("hidden");
+
+    window.history.replaceState(null, "", "/#chat-insights");
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(
+      screen.getByRole("tab", { name: "Conversation insights" }),
+    ).toHaveAttribute("aria-selected", "true");
   });
 
   it("shows the no-import guidance when analytics contain no imported data", async () => {
@@ -829,7 +863,7 @@ describe("dashboard", () => {
         },
       });
     await renderLoadedDashboard();
-    await selectDashboardTab("Timeline");
+    await selectDashboardTab("Conversation insights");
 
     const region = screen.getByRole("region", {
       name: "Communication timeline",
@@ -873,7 +907,7 @@ describe("dashboard", () => {
         months: [],
       });
     render(<App />);
-    await selectDashboardTab("Timeline");
+    await selectDashboardTab("Conversation insights");
 
     const region = screen.getByRole("region", {
       name: "Communication timeline",

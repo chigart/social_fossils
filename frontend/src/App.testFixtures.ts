@@ -184,6 +184,43 @@ export const chatInsights: ChatInsightsResponse = {
           observed_message_percentage: 50,
         },
       ],
+      message_type_breakdown: [
+        { category: "Text", count: 20, with_text_count: 20 },
+        { category: "Photo", count: 3, with_text_count: 1 },
+      ],
+      reply_tempo: {
+        reply_reference_count: 7,
+        measured_reply_count: 5,
+        median_response_seconds: 1800,
+      },
+      conversation_activity: {
+        session_gap_hours: 12,
+        session_count: 8,
+        messages_without_timestamp_count: 1,
+        sender_transition_count: 14,
+        sender_switch_count: 12,
+        sender_switch_percentage: 85.7,
+        longest_turn_taking_streak: 6,
+        attributed_handoff_count: 3,
+        unattributed_handoff_count: 1,
+        opening_senders: [
+          { sender_telegram_id: "user-anton", display_name: "Anton", count: 5 },
+          { sender_telegram_id: "user-lena", display_name: "Lena", count: 3 },
+        ],
+        closing_senders: [
+          { sender_telegram_id: "user-lena", display_name: "Lena", count: 5 },
+          { sender_telegram_id: "user-anton", display_name: "Anton", count: 3 },
+        ],
+        handoffs: [
+          {
+            previous_closer_id: "user-anton",
+            previous_closer_name: "Anton",
+            next_opener_id: "user-lena",
+            next_opener_name: "Lena",
+            count: 2,
+          },
+        ],
+      },
     },
   ],
 };

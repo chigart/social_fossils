@@ -235,3 +235,129 @@ def test_empty_supported_chat_and_unattributed_reactions_are_safe(db_session):
     assert result.chats[1].reaction_count == 2
     assert result.chats[1].reactors == []
     assert result.chats[1].reactor_author_pairs == []
+
+
+def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_session):
+    from datetime import datetime, timedelta, timezone
+
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")
+    start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        "user-owner",
+        message_date=start,
+        text_content="Photo caption",
+        raw_payload={"media_type": "photo", "file": "photo.jpg"},
+    )
+    add_message(
+        db_session,
+        2,
+        10,
+        "message",
+        "user200",
+        message_date=start + timedelta(minutes=5),
+        text_content="Reply",
+        reply_to_telegram_message_id="1",
+    )
+    add_message(
+        db_session,
+        3,
+        10,
+        "message",
+        "user-owner",
+        message_date=start + timedelta(minutes=10),
+        text_content="Another reply",
+        reply_to_telegram_message_id="2",
+    )
+    add_message(
+        db_session,
+        4,
+        10,
+        "message",
+        "user200",
+        message_date=start + timedelta(hours=12, minutes=10),
+        raw_payload={"media_type": "voice_message", "duration_seconds": 8},
+    )
+    add_message(
+        db_session,
+        5,
+        10,
+        "message",
+        "user-owner",
+        message_date=start + timedelta(hours=12, minutes=15),
+        raw_payload={"sticker_emoji": "🙂"},
+        reply_to_telegram_message_id="missing",
+    )
+    add_message(
+        db_session,
+        6,
+        10,
+        "service",
+        "user200",
+        message_date=start + timedelta(hours=12, minutes=16),
+        raw_payload={"action": "join_group"},
+    )
+
+    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    chat = result.chats[0]
+
+    assert chat.reply_tempo.reply_reference_count == 3
+    assert chat.reply_tempo.measured_reply_count == 2
+    assert chat.reply_tempo.median_response_seconds == 300
+    assert chat.conversation_activity.session_gap_hours == 12
+    assert chat.conversation_activity.session_count == 2
+    assert chat.conversation_activity.sender_transition_count == 3
+    assert chat.conversation_activity.sender_switch_count == 3
+    assert chat.conversation_activity.sender_switch_percentage == 100
+    assert chat.conversation_activity.longest_turn_taking_streak == 3
+    assert {
+        (sender.sender_telegram_id, sender.count)
+        for sender in chat.conversation_activity.opening_senders
+    } == {("user-owner", 1), ("user200", 1)}
+    assert chat.conversation_activity.attributed_handoff_count == 1
+    assert chat.conversation_activity.unattributed_handoff_count == 0
+    handoff = chat.conversation_activity.handoffs[0]
+    assert (handoff.previous_closer_id, handoff.next_opener_id, handoff.count) == (
+        "user-owner",
+        "user200",
+        1,
+    )
+    assert [(item.category, item.count) for item in chat.message_type_breakdown] == [
+        ("Text", 2),
+        ("Photo", 1),
+        ("Service event", 1),
+        ("Sticker", 1),
+        ("Voice message", 1),
+    ]
+    photo = next(item for item in chat.message_type_breakdown if item.category == "Photo")
+    assert photo.with_text_count == 1
+
+
+def test_conversation_metrics_keep_undated_and_unknown_senders_unattributed(db_session):
+    from datetime import datetime, timezone
+
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        None,
+        message_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    add_message(db_session, 2, 10, "message", "user200", message_date=None)
+
+    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    activity = result.chats[0].conversation_activity
+
+    assert activity.session_count == 1
+    assert activity.messages_without_timestamp_count == 1
+    assert activity.sender_transition_count == 0
+    assert activity.opening_senders[0].sender_telegram_id is None
+    assert activity.opening_senders[0].display_name == "Unknown sender"

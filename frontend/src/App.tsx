@@ -375,13 +375,22 @@ export default function App() {
           />
         </div>
         <div
-          id="chat-insights-panel"
+          id="conversation-insights-panel"
           role="tabpanel"
-          aria-labelledby="chat-insights-tab"
-          aria-label="Insights"
+          aria-labelledby="conversation-insights-tab"
+          aria-label="Conversation insights"
           tabIndex={0}
-          hidden={selectedTab !== "chat-insights"}
+          hidden={selectedTab !== "conversation-insights"}
         >
+          <CommunicationTimelineView
+            timeline={communicationTimeline}
+            contactOptions={timelineContactOptions}
+            selectedContactId={selectedTimelineContactId}
+            onContactChange={setSelectedTimelineContactId}
+            onRetry={() =>
+              void loadCommunicationTimeline(selectedTimelineContactId)
+            }
+          />
           <ChatInsightsView
             insights={chatInsights}
             selectedChatId={selectedInsightsChatId}
@@ -485,24 +494,6 @@ export default function App() {
             onSortKeyChange={setForgottenSortKey}
             onSortDirectionChange={setForgottenSortDirection}
             onRetry={() => void loadForgottenContacts()}
-          />
-        </div>
-        <div
-          id="communication-timeline-panel"
-          role="tabpanel"
-          aria-labelledby="communication-timeline-tab"
-          aria-label="Timeline"
-          tabIndex={0}
-          hidden={selectedTab !== "communication-timeline"}
-        >
-          <CommunicationTimelineView
-            timeline={communicationTimeline}
-            contactOptions={timelineContactOptions}
-            selectedContactId={selectedTimelineContactId}
-            onContactChange={setSelectedTimelineContactId}
-            onRetry={() =>
-              void loadCommunicationTimeline(selectedTimelineContactId)
-            }
           />
         </div>
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">

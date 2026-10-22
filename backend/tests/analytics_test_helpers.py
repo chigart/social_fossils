@@ -107,24 +107,30 @@ def add_message(
     sender_contact_id: int | None = None,
     text_content: str | None = None,
     raw_payload: dict[str, Any] | None = None,
+    telegram_message_id: str | None = None,
+    reply_to_telegram_message_id: str | None = None,
 ):
     db_session.execute(
         text(
             "INSERT INTO messages "
-            "(id, chat_id, message_type, sender_telegram_id, message_date, "
-            "is_outgoing, sender_contact_id, text_content, raw_payload) "
-            "VALUES (:id, :chat_id, :message_type, :sender_id, :message_date, "
-            ":is_outgoing, :contact_id, :text_content, :raw_payload)"
+            "(id, chat_id, telegram_message_id, message_type, sender_telegram_id, "
+            "message_date, is_outgoing, sender_contact_id, text_content, "
+            "reply_to_telegram_message_id, raw_payload) "
+            "VALUES (:id, :chat_id, :telegram_message_id, :message_type, "
+            ":sender_id, :message_date, :is_outgoing, :contact_id, :text_content, "
+            ":reply_to_telegram_message_id, :raw_payload)"
         ),
         {
             "id": message_id,
             "chat_id": chat_id,
+            "telegram_message_id": telegram_message_id or str(message_id),
             "message_type": message_type,
             "sender_id": sender_id,
             "message_date": message_date,
             "is_outgoing": is_outgoing,
             "contact_id": sender_contact_id,
             "text_content": text_content,
+            "reply_to_telegram_message_id": reply_to_telegram_message_id,
             "raw_payload": json.dumps(raw_payload or {}),
         },
     )

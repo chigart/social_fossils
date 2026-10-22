@@ -293,6 +293,187 @@ function SenderShareChart({
   );
 }
 
+function formatResponseTime(seconds: number | null) {
+  if (seconds === null) return "Not available";
+  if (seconds < 60) return `${Math.round(seconds)} sec`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)} hr`;
+  return `${(seconds / 86400).toFixed(1)} days`;
+}
+
+function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
+  const activity = chat.conversation_activity;
+  const replyTempo = chat.reply_tempo;
+  const senderGroups = [
+    { title: "Conversation openers", senders: activity.opening_senders },
+    { title: "Conversation closers", senders: activity.closing_senders },
+  ];
+
+  return (
+    <section className="mt-6" aria-labelledby="conversation-flow-title">
+      <div className="mb-3">
+        <p className={sectionEyebrowClassName}>REPLY TEMPO & TURN-TAKING</p>
+        <h3
+          id="conversation-flow-title"
+          className="m-0 text-subheading font-bold text-ink"
+        >
+          Conversation flow
+        </h3>
+      </div>
+      <p className="mb-4 text-small leading-[1.5] text-ink-muted">
+        A conversation starts after {activity.session_gap_hours} hours without
+        an ordinary message. Reply times include only matched, dated replies
+        between identified senders; unknown senders and missing timestamps are
+        excluded.
+      </p>
+      <div className="mb-4 grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
+        <MetricCard
+          label="Conversations"
+          value={formatNumber(activity.session_count)}
+          detail={`${formatNumber(activity.messages_without_timestamp_count)} undated messages excluded`}
+        />
+        <MetricCard
+          label="Median reply time"
+          value={formatResponseTime(replyTempo.median_response_seconds)}
+          detail={`${formatNumber(replyTempo.measured_reply_count)} measured of ${formatNumber(replyTempo.reply_reference_count)} reply references`}
+        />
+        <MetricCard
+          label="Turn-taking"
+          value={`${activity.sender_switch_percentage.toFixed(1)}%`}
+          detail={`${formatNumber(activity.sender_switch_count)} sender switches of ${formatNumber(activity.sender_transition_count)} identified transitions`}
+        />
+        <MetricCard
+          label="Longest turn-taking streak"
+          value={formatNumber(activity.longest_turn_taking_streak)}
+          detail="messages with a sender switch each turn"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3 max-[820px]:grid-cols-1">
+        {senderGroups.map(({ title, senders }) => (
+          <section
+            className="rounded-lg border border-border-subtle bg-surface p-4"
+            key={title}
+          >
+            <h4 className="mb-3 text-ui font-semibold text-ink">{title}</h4>
+            {senders.length === 0 ? (
+              <p className="m-0 text-small text-ink-muted">
+                No dated conversations available.
+              </p>
+            ) : (
+              <ul className="m-0 list-none space-y-2 p-0">
+                {senders.map((sender) => (
+                  <li
+                    className="flex justify-between gap-3 text-small"
+                    key={sender.sender_telegram_id ?? "unknown"}
+                  >
+                    <span className="truncate text-ink">{sender.display_name}</span>
+                    <span className="shrink-0 text-ink-muted">
+                      {formatNumber(sender.count)} conversations
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
+      </div>
+      <section
+        className="mt-3 rounded-lg border border-border-subtle bg-surface p-4"
+        aria-labelledby="conversation-handoffs-title"
+      >
+        <h4
+          id="conversation-handoffs-title"
+          className="mb-3 text-ui font-semibold text-ink"
+        >
+          Who reopens after a pause
+        </h4>
+        <p className="mb-3 text-caption text-ink-muted">
+          Previous conversation closer → next conversation opener ·{" "}
+          {formatNumber(activity.unattributed_handoff_count)} transitions have
+          an unknown participant.
+        </p>
+        {activity.handoffs.length === 0 ? (
+          <p className="m-0 text-small text-ink-muted">
+            No fully attributed conversation handoffs available.
+          </p>
+        ) : (
+          <ul className="m-0 list-none space-y-2 p-0">
+            {activity.handoffs.map((handoff) => (
+              <li
+                className="flex justify-between gap-3 text-small"
+                key={`${handoff.previous_closer_id}:${handoff.next_opener_id}`}
+              >
+                <span className="truncate text-ink">
+                  {handoff.previous_closer_name} → {handoff.next_opener_name}
+                </span>
+                <span className="shrink-0 text-ink-muted">
+                  {formatNumber(handoff.count)} times
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function MessageTypeBreakdown({ chat }: { chat: ChatInsightsStatistics }) {
+  return (
+    <section className="mt-6" aria-labelledby="message-type-breakdown-title">
+      <div className="mb-3">
+        <p className={sectionEyebrowClassName}>TEXT, MEDIA & EVENTS</p>
+        <h3
+          id="message-type-breakdown-title"
+          className="m-0 text-subheading font-bold text-ink"
+        >
+          Message type breakdown
+        </h3>
+      </div>
+      <p className="mb-4 text-small leading-[1.5] text-ink-muted">
+        Each exported message is counted once by its primary type. Captions
+        remain attached to their media category; service events and unclassified
+        messages are shown separately.
+      </p>
+      {chat.message_type_breakdown.length === 0 ? (
+        <p className="m-0 text-small text-ink-muted">
+          No message type information is available.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border-subtle bg-surface">
+          <table className="w-full border-collapse text-left text-small">
+            <thead>
+              <tr className="border-b border-border-subtle text-caption text-ink-muted">
+                <th className="px-4 py-2 font-semibold">Message type</th>
+                <th className="px-4 py-2 font-semibold">Messages</th>
+                <th className="px-4 py-2 font-semibold">With text</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chat.message_type_breakdown.map((item) => (
+                <tr
+                  className="border-b border-border-subtle last:border-b-0"
+                  key={item.category}
+                >
+                  <th scope="row" className="px-4 py-2 font-medium text-ink">
+                    {item.category}
+                  </th>
+                  <td className="px-4 py-2 text-ink">
+                    {formatNumber(item.count)}
+                  </td>
+                  <td className="px-4 py-2 text-ink">
+                    {formatNumber(item.with_text_count)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ChatInsightsDetails({ chat }: { chat: ChatInsightsStatistics }) {
   const popularWords = filterRepeatedItems(chat.popular_words);
   const popularEmojis = filterRepeatedItems(chat.popular_emojis);
@@ -328,6 +509,8 @@ export function ChatInsightsDetails({ chat }: { chat: ChatInsightsStatistics }) 
           metric="characters"
         />
       </div>
+      <ConversationFlow chat={chat} />
+      <MessageTypeBreakdown chat={chat} />
       <div className="grid grid-cols-2 gap-3 max-[820px]:grid-cols-1">
         <section className="rounded-lg border border-border-subtle bg-surface p-4">
           <h3 className="mb-3 text-ui font-semibold text-ink">

@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from statistics import median
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -16,9 +18,14 @@ from app.schemas.analytics import (
     ChatInsightsResponse,
     ChatInsightsStatistics,
     ChatInsightSender,
+    ConversationActivityStatistics,
+    ConversationHandoffCount,
+    ConversationParticipantCount,
     EmojiFrequency,
+    MessageTypeCount,
     ReactionAuthorPair,
     ReactionReactor,
+    ReplyTempoStatistics,
     WordFrequency,
 )
 from app.telegram_parser import normalize_user_id
@@ -28,6 +35,7 @@ router = APIRouter()
 SUPPORTED_CHAT_TYPES = ("personal_chat", "private_group", "private_supergroup")
 ORDINARY_MESSAGE_TYPE = "message"
 RANKING_LIMIT = 10
+CONVERSATION_GAP = timedelta(hours=12)
 WORD_PATTERN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
 
 
@@ -60,6 +68,17 @@ class _PairCounts:
 
 
 @dataclass
+class _ConversationMessage:
+    message_id: int
+    telegram_message_id: str
+    sender_id: str | None
+    sender_name: str | None
+    message_type: str
+    message_date: datetime | None
+    reply_to_message_id: str | None
+
+
+@dataclass
 class _ChatCounts:
     chat_id: int
     account_id: int
@@ -75,6 +94,9 @@ class _ChatCounts:
     reactors: dict[str, _ReactorCounts] = field(default_factory=dict)
     pairs: dict[tuple[str, str], _PairCounts] = field(default_factory=dict)
     sender_message_counts: Counter[str] = field(default_factory=Counter)
+    message_type_counts: Counter[str] = field(default_factory=Counter)
+    with_text_counts: Counter[str] = field(default_factory=Counter)
+    messages: list[_ConversationMessage] = field(default_factory=list)
 
 
 def _is_emoji_base(character: str) -> bool:
@@ -189,6 +211,247 @@ def _clean_display_name(value: Any) -> str | None:
     return value.strip() or None
 
 
+def _message_category(payload: Any, message_type: str, text: str) -> str:
+    if message_type == "service":
+        return "Service event"
+    if message_type != ORDINARY_MESSAGE_TYPE:
+        return "Other message type"
+    if not isinstance(payload, dict):
+        return "Text" if text else "Unclassified"
+
+    media_type = payload.get("media_type")
+    normalized_media_type = (
+        media_type.casefold().replace("-", "_").replace(" ", "_")
+        if isinstance(media_type, str)
+        else ""
+    )
+    media_type_categories = {
+        "photo": "Photo",
+        "video": "Video",
+        "video_file": "Video",
+        "video_message": "Video",
+        "voice": "Voice message",
+        "voice_message": "Voice message",
+        "audio": "Audio",
+        "audio_file": "Audio",
+        "sticker": "Sticker",
+        "animation": "Animation / GIF",
+        "gif": "Animation / GIF",
+        "file": "File",
+        "document": "File",
+        "location": "Location",
+        "live_location": "Location",
+        "venue": "Location",
+        "poll": "Poll",
+        "contact": "Contact",
+    }
+    if normalized_media_type in media_type_categories:
+        return media_type_categories[normalized_media_type]
+    if normalized_media_type:
+        return "Other media"
+
+    field_categories = (
+        (("sticker_emoji", "sticker"), "Sticker"),
+        (("animation", "animation_file", "gif"), "Animation / GIF"),
+        (("voice_message", "voice_file"), "Voice message"),
+        (("audio_file", "audio"), "Audio"),
+        (("video", "video_file", "video_message"), "Video"),
+        (("photo", "photo_file"), "Photo"),
+        (("location", "live_location", "venue"), "Location"),
+        (("poll",), "Poll"),
+        (("contact_information",), "Contact"),
+    )
+    for fields, category in field_categories:
+        if any(field_name in payload for field_name in fields):
+            return category
+
+    mime_type = payload.get("mime_type")
+    if isinstance(mime_type, str):
+        if mime_type.startswith("image/"):
+            return "Photo"
+        if mime_type.startswith("video/"):
+            return "Video"
+        if mime_type.startswith("audio/"):
+            return "Audio"
+
+    if "file" in payload:
+        return "File"
+    return "Text" if text else "Unclassified"
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _build_reply_tempo(messages: list[_ConversationMessage]) -> ReplyTempoStatistics:
+    ordinary_messages = [
+        message
+        for message in messages
+        if message.message_type == ORDINARY_MESSAGE_TYPE
+    ]
+    by_telegram_id = {
+        message.telegram_message_id: message for message in messages
+    }
+    reply_reference_count = 0
+    response_times: list[float] = []
+
+    for reply in ordinary_messages:
+        if reply.reply_to_message_id is None:
+            continue
+        reply_reference_count += 1
+        original = by_telegram_id.get(reply.reply_to_message_id)
+        if (
+            original is None
+            or original.message_type != ORDINARY_MESSAGE_TYPE
+            or original.sender_id is None
+            or reply.sender_id is None
+            or original.sender_id == reply.sender_id
+            or original.message_date is None
+            or reply.message_date is None
+        ):
+            continue
+        elapsed_seconds = (
+            _as_utc(reply.message_date) - _as_utc(original.message_date)
+        ).total_seconds()
+        if elapsed_seconds >= 0:
+            response_times.append(elapsed_seconds)
+
+    return ReplyTempoStatistics(
+        reply_reference_count=reply_reference_count,
+        measured_reply_count=len(response_times),
+        median_response_seconds=(
+            float(median(response_times)) if response_times else None
+        ),
+    )
+
+
+def _build_conversation_activity(
+    messages: list[_ConversationMessage],
+) -> ConversationActivityStatistics:
+    ordinary_messages = [
+        message
+        for message in messages
+        if message.message_type == ORDINARY_MESSAGE_TYPE
+    ]
+    dated_messages = sorted(
+        (message for message in ordinary_messages if message.message_date is not None),
+        key=lambda message: (_as_utc(message.message_date), message.message_id),
+    )
+    undated_count = len(ordinary_messages) - len(dated_messages)
+    sessions: list[list[_ConversationMessage]] = []
+    for message in dated_messages:
+        if (
+            not sessions
+            or _as_utc(message.message_date)
+            - _as_utc(sessions[-1][-1].message_date)
+            >= CONVERSATION_GAP
+        ):
+            sessions.append([message])
+        else:
+            sessions[-1].append(message)
+
+    names: dict[str, str] = {}
+    for message in ordinary_messages:
+        if message.sender_id and message.sender_name:
+            names.setdefault(message.sender_id, message.sender_name)
+
+    opening_counts: Counter[str | None] = Counter()
+    closing_counts: Counter[str | None] = Counter()
+    handoff_counts: Counter[tuple[str, str]] = Counter()
+    unattributed_handoff_count = 0
+    sender_transition_count = 0
+    sender_switch_count = 0
+    longest_turn_taking_streak = 0
+
+    for session in sessions:
+        opening_counts[session[0].sender_id] += 1
+        closing_counts[session[-1].sender_id] += 1
+        previous_sender: str | None = None
+        current_streak = 0
+        for message in session:
+            sender_id = message.sender_id
+            if sender_id is None:
+                previous_sender = None
+                current_streak = 0
+                continue
+            if previous_sender is None:
+                current_streak = 1
+            else:
+                sender_transition_count += 1
+                if sender_id != previous_sender:
+                    sender_switch_count += 1
+                    current_streak += 1
+                    longest_turn_taking_streak = max(
+                        longest_turn_taking_streak,
+                        current_streak,
+                    )
+                else:
+                    current_streak = 1
+            previous_sender = sender_id
+
+    for previous_session, next_session in zip(sessions, sessions[1:]):
+        previous_closer_id = previous_session[-1].sender_id
+        next_opener_id = next_session[0].sender_id
+        if previous_closer_id is None or next_opener_id is None:
+            unattributed_handoff_count += 1
+            continue
+        handoff_counts[(previous_closer_id, next_opener_id)] += 1
+
+    def participants(
+        counts: Counter[str | None],
+    ) -> list[ConversationParticipantCount]:
+        return [
+            ConversationParticipantCount(
+                sender_telegram_id=sender_id,
+                display_name=(
+                    names.get(sender_id, sender_id)
+                    if sender_id is not None
+                    else "Unknown sender"
+                ),
+                count=count,
+            )
+            for sender_id, count in sorted(
+                counts.items(),
+                key=lambda item: (-item[1], item[0] or ""),
+            )
+        ]
+
+    handoffs = [
+        ConversationHandoffCount(
+            previous_closer_id=previous_closer_id,
+            previous_closer_name=names.get(previous_closer_id, previous_closer_id),
+            next_opener_id=next_opener_id,
+            next_opener_name=names.get(next_opener_id, next_opener_id),
+            count=count,
+        )
+        for (previous_closer_id, next_opener_id), count in sorted(
+            handoff_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    ]
+
+    return ConversationActivityStatistics(
+        session_gap_hours=int(CONVERSATION_GAP.total_seconds() / 3600),
+        session_count=len(sessions),
+        messages_without_timestamp_count=undated_count,
+        sender_transition_count=sender_transition_count,
+        sender_switch_count=sender_switch_count,
+        sender_switch_percentage=(
+            100 * sender_switch_count / sender_transition_count
+            if sender_transition_count
+            else 0
+        ),
+        longest_turn_taking_streak=longest_turn_taking_streak,
+        attributed_handoff_count=sum(handoff_counts.values()),
+        unattributed_handoff_count=unattributed_handoff_count,
+        opening_senders=participants(opening_counts),
+        closing_senders=participants(closing_counts),
+        handoffs=handoffs,
+    )
+
+
 def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
     senders = [
         ChatInsightSender(
@@ -261,6 +524,19 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
         reaction_emojis=_rank_emojis(counts.reactions),
         reactors=reactors,
         reactor_author_pairs=pairs,
+        message_type_breakdown=[
+            MessageTypeCount(
+                category=category,
+                count=count,
+                with_text_count=counts.with_text_counts[category],
+            )
+            for category, count in sorted(
+                counts.message_type_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ],
+        reply_tempo=_build_reply_tempo(counts.messages),
+        conversation_activity=_build_conversation_activity(counts.messages),
     )
 
 
@@ -273,7 +549,10 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
         "for personal chats, private groups, and private supergroups. Reaction "
         "totals use each message's full reaction count. Per-reactor and "
         "reactor-to-author statistics use only Telegram's recent reactor list "
-        "and therefore represent observed coverage, not complete totals."
+        "and therefore represent observed coverage, not complete totals. Reply "
+        "tempo requires an in-chat reply reference, two identified senders, and "
+        "reliable non-negative timestamps. Conversation sessions use a 12-hour "
+        "gap between dated ordinary messages."
     ),
 )
 def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
@@ -286,17 +565,20 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             TelegramAccount.username.label("account_username"),
             TelegramAccount.name.label("account_name"),
             Message.id.label("message_id"),
+            Message.telegram_message_id,
             Message.sender_telegram_id,
             Message.sender_name,
             Message.message_type,
             Message.text_content,
+            Message.message_date,
+            Message.reply_to_telegram_message_id,
             Message.raw_payload,
         )
         .select_from(Chat)
         .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
         .outerjoin(Message, Message.chat_id == Chat.id)
         .where(Chat.chat_type.in_(SUPPORTED_CHAT_TYPES))
-        .order_by(Chat.id, Message.id)
+        .order_by(Chat.id, Message.message_date, Message.id)
     )
 
     chats: dict[int, _ChatCounts] = {}
@@ -316,7 +598,43 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             chats[row.chat_id] = chat
 
         if row.message_id is None or row.message_type != ORDINARY_MESSAGE_TYPE:
+            if row.message_id is None:
+                continue
+            message_type = row.message_type or "unknown"
+            text = row.text_content or ""
+            category = _message_category(row.raw_payload, message_type, text)
+            chat.message_type_counts[category] += 1
+            if text:
+                chat.with_text_counts[category] += 1
+            chat.messages.append(
+                _ConversationMessage(
+                    message_id=row.message_id,
+                    telegram_message_id=row.telegram_message_id,
+                    sender_id=row.sender_telegram_id,
+                    sender_name=_clean_display_name(row.sender_name),
+                    message_type=message_type,
+                    message_date=row.message_date,
+                    reply_to_message_id=row.reply_to_telegram_message_id,
+                )
+            )
             continue
+
+        text = row.text_content or ""
+        category = _message_category(row.raw_payload, row.message_type, text)
+        chat.message_type_counts[category] += 1
+        if text:
+            chat.with_text_counts[category] += 1
+        chat.messages.append(
+            _ConversationMessage(
+                message_id=row.message_id,
+                telegram_message_id=row.telegram_message_id,
+                sender_id=row.sender_telegram_id,
+                sender_name=_clean_display_name(row.sender_name),
+                message_type=row.message_type,
+                message_date=row.message_date,
+                reply_to_message_id=row.reply_to_telegram_message_id,
+            )
+        )
 
         sender_id = row.sender_telegram_id
         sender = chat.senders.get(sender_id)
@@ -329,7 +647,6 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         elif not sender.name:
             sender.name = _clean_display_name(row.sender_name)
 
-        text = row.text_content or ""
         words = [word.casefold() for word in WORD_PATTERN.findall(text)]
         emojis = extract_emojis(text)
         chat.message_count += 1

@@ -433,6 +433,65 @@ class ReactionAuthorPair(BaseModel):
     )
 
 
+class MessageTypeCount(BaseModel):
+    category: str
+    count: int
+    with_text_count: int = Field(
+        description="Messages in this category that also contain normalized text."
+    )
+
+
+class ReplyTempoStatistics(BaseModel):
+    reply_reference_count: int = Field(
+        description="Ordinary messages that reference another Telegram message."
+    )
+    measured_reply_count: int = Field(
+        description="References resolved to a dated ordinary message by a different identified sender."
+    )
+    median_response_seconds: float | None = Field(
+        description="Median elapsed time from the referenced message to its reply, for measured replies."
+    )
+
+
+class ConversationParticipantCount(BaseModel):
+    sender_telegram_id: str | None
+    display_name: str
+    count: int
+
+
+class ConversationHandoffCount(BaseModel):
+    previous_closer_id: str
+    previous_closer_name: str
+    next_opener_id: str
+    next_opener_name: str
+    count: int
+
+
+class ConversationActivityStatistics(BaseModel):
+    session_gap_hours: int
+    session_count: int = Field(
+        description="Dated ordinary-message sessions separated by the configured inactivity gap."
+    )
+    messages_without_timestamp_count: int
+    sender_transition_count: int = Field(
+        description="Adjacent, identified sender pairs within sessions."
+    )
+    sender_switch_count: int = Field(
+        description="Adjacent, identified messages in a session written by different senders."
+    )
+    sender_switch_percentage: float
+    longest_turn_taking_streak: int = Field(
+        description="Longest sequence of dated messages where every adjacent identified sender switched."
+    )
+    attributed_handoff_count: int = Field(
+        description="Adjacent dated conversation sessions with identified previous closers and next openers."
+    )
+    unattributed_handoff_count: int
+    opening_senders: list[ConversationParticipantCount]
+    closing_senders: list[ConversationParticipantCount]
+    handoffs: list[ConversationHandoffCount]
+
+
 class ChatInsightsStatistics(BaseModel):
     chat_id: int
     account_id: int
@@ -456,6 +515,9 @@ class ChatInsightsStatistics(BaseModel):
     reactor_author_pairs: list[ReactionAuthorPair] = Field(
         description="Observed reactor-to-author coverage, not exhaustive when recent lists are incomplete."
     )
+    message_type_breakdown: list[MessageTypeCount]
+    reply_tempo: ReplyTempoStatistics
+    conversation_activity: ConversationActivityStatistics
 
 
 class ChatInsightsResponse(BaseModel):

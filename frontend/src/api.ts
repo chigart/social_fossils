@@ -45,6 +45,47 @@ export type ReactionAuthorPair = {
   observed_message_percentage: number;
 };
 
+export type MessageTypeCount = {
+  category: string;
+  count: number;
+  with_text_count: number;
+};
+
+export type ReplyTempoStatistics = {
+  reply_reference_count: number;
+  measured_reply_count: number;
+  median_response_seconds: number | null;
+};
+
+export type ConversationParticipantCount = {
+  sender_telegram_id: string | null;
+  display_name: string;
+  count: number;
+};
+
+export type ConversationHandoffCount = {
+  previous_closer_id: string;
+  previous_closer_name: string;
+  next_opener_id: string;
+  next_opener_name: string;
+  count: number;
+};
+
+export type ConversationActivityStatistics = {
+  session_gap_hours: number;
+  session_count: number;
+  messages_without_timestamp_count: number;
+  sender_transition_count: number;
+  sender_switch_count: number;
+  sender_switch_percentage: number;
+  longest_turn_taking_streak: number;
+  attributed_handoff_count: number;
+  unattributed_handoff_count: number;
+  opening_senders: ConversationParticipantCount[];
+  closing_senders: ConversationParticipantCount[];
+  handoffs: ConversationHandoffCount[];
+};
+
 export type ChatInsightsStatistics = {
   chat_id: number;
   account_id: number;
@@ -60,6 +101,9 @@ export type ChatInsightsStatistics = {
   reaction_emojis: EmojiFrequency[];
   reactors: ReactionReactor[];
   reactor_author_pairs: ReactionAuthorPair[];
+  message_type_breakdown: MessageTypeCount[];
+  reply_tempo: ReplyTempoStatistics;
+  conversation_activity: ConversationActivityStatistics;
 };
 
 export type ChatInsightsResponse = {
