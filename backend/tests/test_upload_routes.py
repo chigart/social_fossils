@@ -1,0 +1,72 @@
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from app.db import Base, get_db
+from app.main import app
+from app.models import UploadJob
+from app.routers import upload
+
+
+class FakeAirflowClient:
+    def trigger_dag_run(self, _dag_id, _conf):
+        return {"dag_run_id": "run-1"}
+
+    def get_dag_run(self, _dag_id, _run_id):
+        return {"state": "success", "start_date": None, "end_date": None}
+
+    def get_dag_run_tasks(self, _dag_id, _run_id):
+        return []
+
+
+def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypatch):
+    engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'uploads.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    UploadJob.__table__.create(engine)
+    session = Session(engine)
+    monkeypatch.setattr(upload.settings, "upload_staging_dir", str(tmp_path / "staging"))
+    monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
+
+    def override_get_db():
+        yield session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            uploaded = client.post(
+                "/api/uploads/upload",
+                files={"file": ("export.json", b'{"synthetic": true}', "application/json")},
+            )
+            assert uploaded.status_code == 202
+            job = uploaded.json()
+            assert job["status"] == "pending"
+            assert job["airflow_dag_run_id"] == "run-1"
+
+            jobs = client.get("/api/uploads/jobs")
+            assert jobs.status_code == 200
+            assert [item["id"] for item in jobs.json()] == [job["id"]]
+
+            status = client.get(f"/api/uploads/jobs/{job['id']}/status")
+            assert status.status_code == 200
+            assert status.json()["airflow_run_details"]["state"] == "success"
+
+            duplicate = client.post(
+                "/api/uploads/upload",
+                files={"file": ("another-name.json", b'{"synthetic": true}', "application/json")},
+            )
+            assert duplicate.status_code == 409
+            assert len(client.get("/api/uploads/jobs").json()) == 1
+            assert len(list((tmp_path / "staging").iterdir())) == 1
+
+            assert client.post("/api/auth/login", json={}).status_code == 404
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+            session.close()
+            engine.dispose()
+
+
+def test_upload_job_schema_has_no_app_user():
+    assert "users" not in Base.metadata.tables
+    assert "user_id" not in UploadJob.__table__.columns

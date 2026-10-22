@@ -2,7 +2,16 @@ import os
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
+
+# Handle both SQLAlchemy 1.4 and 2.0+
+try:
+    from sqlalchemy.orm import DeclarativeBase
+    class Base(DeclarativeBase):
+        pass
+except ImportError:
+    from sqlalchemy.ext.declarative import declarative_base
+    Base = declarative_base()
 
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -18,10 +27,6 @@ SessionLocal = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 def get_db() -> Generator[Session, None, None]:

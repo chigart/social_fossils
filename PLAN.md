@@ -2,10 +2,11 @@
 
 ## Goal and planning assumptions
 
-Phases 1–3 are complete. Next, add upload-triggered orchestration, then expand
-platform support and deployment infrastructure. Keep import and analytics
-business logic independently runnable and testable; Airflow orchestrates the
-local end-to-end workflow but is not a dependency of the core services or CLI.
+Phases 1–4 are complete. The target product is a single-owner local app that
+starts with `docker compose up --build`. Keep import and analytics business
+logic independently runnable and testable; Airflow orchestrates the local
+upload workflow but is not a dependency of the core services or CLI. There is
+no Social Fossils account system, and personal app data is ephemeral.
 
 Decisions confirmed for this plan:
 
@@ -19,6 +20,10 @@ Decisions confirmed for this plan:
   their source account.
 - The Communication Timeline uses monthly UTC buckets over all available
   history by default.
+- The application has no login or authorization. Its services are exposed only
+  on localhost, and imported data is held in ephemeral container/RAM-backed
+  storage. Airflow retains its separate local UI account.
+- Kubernetes and production deployment are out of scope.
 
 ## Current project state
 
@@ -33,13 +38,14 @@ The repository already contains:
   dashboard with ranked contacts, evidence status, and activity comparisons.
 - A React dashboard with overview, chats, contacts, and communication-balance
   sections and frontend/backend tests.
-- A local Docker Compose setup for frontend, backend, PostgreSQL, and Adminer.
+- A local Docker Compose setup for frontend, backend, PostgreSQL, Adminer, and
+  the Airflow upload pipeline.
 
-Phases 1–3, including combined-owner analytics, Forgotten Contacts, and the
-Communication Timeline, are considered complete. There is no upload endpoint,
-Airflow DAG, additional platform importer, or Kubernetes deployment
-configuration yet. The README's roadmap/TODO is behind the implemented
-features and should be updated as roadmap work lands.
+Phases 1–4, including combined-owner analytics, Forgotten Contacts, the
+Communication Timeline, and per-file upload-triggered Airflow processing, are
+considered complete. The upload/job API is single-owner and unauthenticated.
+There is no additional platform importer or Kubernetes deployment
+configuration. Phase 5 remains a possible future expansion of data sources.
 
 Relevant existing code includes `backend/app/models.py`,
 `backend/app/importer.py`, `backend/app/routers/analytics.py`,
@@ -47,12 +53,12 @@ Relevant existing code includes `backend/app/models.py`,
 `frontend/src/App.tsx`, `frontend/src/api.ts`, and
 `frontend/src/components/`.
 
-## Recommended order and rationale
+## Product scope
 
-Proceed with upload-triggered processing in Phase 4, then add a platform only
-after its export quality and identity semantics are understood in Phase 5.
-Phase 6 hardens the existing Compose-based development setup and deploys the
-stabilized application and pipeline to Kubernetes.
+The maintained workflow is local Docker Compose with ephemeral personal data.
+The application and database ports are bound to localhost; do not add
+multi-user authorization, durable personal-data storage, or Kubernetes
+deployment without a new product requirement.
 
 ## Phase 3: Complete the analytics product
 
@@ -147,7 +153,7 @@ supported by the existing test setup.
 and renewal patterns, direction uncertainty, contact selection, accessibility
 labels, and loading/error/empty states.
 
-## Phase 4: Upload-triggered processing with Airflow
+## Phase 4: Upload-triggered processing with Airflow (complete)
 
 The final web workflow accepts multiple data files from a user and starts
 processing when each upload is accepted. Create an independent job and Airflow
@@ -156,11 +162,11 @@ uploads. The confirmed account scope is one person's combined analytics across
 their Telegram accounts; preserve account/source provenance for every import.
 
 Airflow owns task scheduling, dependencies, retries, concurrency, orchestration
-history, and pipeline-level failure reporting. FastAPI owns authentication and
-authorization, upload validation and durable acceptance, and user-facing
-upload/job status. Reusable application services own parsing, normalization,
-imports, and domain logic. DAGs orchestrate those services and must not
-duplicate business logic.
+history, and pipeline-level failure reporting. FastAPI owns upload validation,
+job acceptance, and local job status; app endpoints are unauthenticated and
+intended only for localhost use. Reusable application services own parsing,
+normalization, imports, and domain logic. DAGs orchestrate those services and
+must not duplicate business logic.
 
 Airflow is part of the default Docker Compose stack to exercise the local
 end-to-end workflow. Document how to start only named application services
@@ -169,17 +175,16 @@ Airflow.
 
 ### 16. Define upload and job lifecycle
 
-- Add an authenticated upload boundary and durable per-file job record linked
-  to the importing user/owner and the source account identified from the
-  export. Do not trust a client-supplied account identity in place of validating
-  the export.
-- Define allowed file types and size limits, staging ownership and retention,
-  duplicate-upload behavior, and job status/error contracts.
+- Accept per-file uploads and create a job linked to the source account
+  identified from the export. Do not trust a client-supplied account identity
+  in place of validating the export.
+- Define allowed file types and size limits, ephemeral staging, duplicate
+  upload behavior, and job status/error contracts.
 - Determine whether existing `import_sessions` can represent import progress
   and link to orchestration history. Add schema only for a demonstrated gap;
   avoid duplicating status records.
-- If the application supports multiple users, enforce ownership boundaries
-  across upload, staging file access, jobs, imports, and status APIs.
+- Keep uploads and job history within the single local owner scope; do not add
+  app users or ownership authorization.
 
 ### 17. Make application pipeline services reusable
 
@@ -194,7 +199,7 @@ Airflow.
 
 ### 18. Dispatch reliably and orchestrate each file
 
-- Persist the uploaded file and job before triggering Airflow. Use stable
+- Stage the uploaded file and persist the job before triggering Airflow. Use stable
   job/run identifiers and define recovery for scheduler/API outages, duplicate
   trigger requests, ambiguous trigger timeouts, and accepted uploads that
   never start.
@@ -208,17 +213,17 @@ Airflow.
 ### 19. Add Airflow to the default local Compose stack
 
 - Add the minimum Airflow API/scheduler/task-processing services, initialization,
-  health checks, persistent Airflow metadata storage, and private shared upload
-  staging needed for local execution.
+  health checks, ephemeral Airflow metadata storage, and RAM-backed shared
+  upload staging needed for local execution.
 - Keep Airflow metadata separate from application data/schema. Use a simple
   single-host executor for local development; defer distributed workers until
   workload evidence requires them.
 - Package the same application services and pinned dependencies into the task
   environment. Do not assume the host virtual environment provides container
   dependencies.
-- Preserve app-only startup as an option using explicitly named services.
-  Document default startup, app-only startup, test upload/trigger, migration,
-  and local Airflow UI access.
+- Make `docker compose up --build` start the complete local workflow and apply
+  application migrations automatically. Document upload/job access and the
+  separate local Airflow UI account.
 
 ### 20. Expose job history and verify failure recovery
 
@@ -289,54 +294,6 @@ same reusable upload pipeline; cross-platform links are explicit and auditable;
 combined analytics preserve provenance; and any incremental processing is
 safe to retry and validated against a full re-import.
 
-## Phase 6: Production deployment with Kubernetes
-
-Begin only after application and pipeline boundaries stabilize. Docker Compose
-remains the local development workflow and includes Airflow by default.
-
-### 26. Harden production images and configuration
-
-- Standardize backend, frontend, and required Airflow images for deterministic
-  builds, minimal runtime contents, non-root execution where practical, and
-  explicit health/readiness behavior.
-- Separate development defaults from production configuration. Validate
-  required settings and inject secrets at deployment; never commit credentials
-  or bake them into images.
-- Preserve straightforward Compose startup and document app-only startup.
-
-### 27. Deploy application and Airflow services
-
-- Add Kubernetes configuration for the backend, frontend hosting choice, and
-  the Airflow API/scheduler/task-processing components and executor selected
-  from Phase 4 workload evidence.
-- Add resource requests/limits, non-root security settings, readiness/liveness
-  probes, restricted Airflow access, and externalized database credentials.
-- Configure the frontend API URL per environment and verify browser access,
-  CORS, and release compatibility.
-
-### 28. Define durable data, logs, and recovery
-
-- Define durable private upload storage and retention, Airflow logs and
-  metadata persistence, PostgreSQL ownership, backups, restore procedures,
-  and recovery verification before storing production exports.
-- Prefer managed PostgreSQL/object storage where they meet requirements;
-  do not treat local Compose volumes as production backups.
-- Verify cleanup and access controls for staged uploads and retained source
-  files.
-
-### 29. Add monitoring and repeatable releases
-
-- Monitor API and database health/capacity, upload-job state, DAG failures,
-  and request latency without logging private content.
-- Add CI/CD after images and deployment configuration are reproducible. Build
-  and test images, use approved dependency/image scanning, promote through
-  environment-specific stages, and verify rollback.
-
-**Phase 6 exit criteria:** production app and pipeline services have
-externalized secrets, working probes, resource bounds, durable storage and
-tested backups, observable processing runs, restricted orchestration access,
-and a repeatable release/rollback path; local Compose remains straightforward.
-
 ## Cross-cutting implementation and test rules
 
 - Keep HTTP concerns in FastAPI, import/business logic in reusable Python
@@ -355,7 +312,7 @@ and a repeatable release/rollback path; local Compose remains straightforward.
 
 ## Suggested delivery slices
 
-1. Per-file authenticated upload contract, durable staging, and job lifecycle.
+1. Per-file local upload contract, ephemeral staging, and job lifecycle.
 2. Reusable retry-safe pipeline services and reliable Airflow dispatch/recovery.
 3. Per-file Airflow DAG, default Compose integration, job status/history, and
    operational/privacy tests.
@@ -363,5 +320,3 @@ and a repeatable release/rollback path; local Compose remains straightforward.
    the upload pipeline.
 5. Explicit cross-platform identity links and provenance-preserving analytics;
    profile before scaling imports or materializing analytics.
-6. Production image/configuration hardening, then Kubernetes deployment,
-   persistence/backups, monitoring, CI/CD, and rollback.

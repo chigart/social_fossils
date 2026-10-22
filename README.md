@@ -28,13 +28,6 @@
 ### Full Reset
 - docker compose down -v
 
-## PLAN
-1. Development Docker
-2. Prod Local Docker
-3. Multiple social media
-4. Interactive contacts merge
-5. Encrypted Web App (Mock JSON testing)
-
 ## TODO
 1. Mobile adaptive
 2. Design
@@ -42,6 +35,8 @@
 4. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 5. Split all ingestion into DAG tasks.
 6. Same version SQLalchemy 2 and all versions in requirements
+7. Interactive contacts merge
+8. Multi file upload
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume

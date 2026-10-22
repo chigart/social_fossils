@@ -4,3 +4,7 @@ psycopg[binary]
 sqlalchemy
 alembic
 pydantic-settings
+pydantic
+python-multipart
+requests
+apache-airflow-client

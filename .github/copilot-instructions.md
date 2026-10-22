@@ -22,19 +22,18 @@ The first data source is a Telegram JSON export.
   be tested and executed without an Airflow scheduler.
 
 ### Infrastructure
-- Kubernetes: container orchestration for deployment.
 - Docker: application containerization.
-- Docker Compose: local development and integration testing.
+- Docker Compose: the complete local application and Airflow workflow.
 
 ### Development environment
 - VS Code running locally on the host.
-- The application must run locally using Docker Compose.
+- The application must run locally using `docker compose up --build`.
 - Do not require VS Code Dev Containers.
 
 Do not introduce additional frameworks, services, or dependencies unless they
 solve a concrete problem and are justified.
-Do not require Airflow or Kubernetes for the basic local development workflow
-unless explicitly requested.
+Airflow is part of the default local Compose workflow for upload-triggered
+processing. Do not introduce Kubernetes or production deployment components.
 
 ## Architecture
 
@@ -45,6 +44,8 @@ unless explicitly requested.
 - Use the existing PostgreSQL database and SQLAlchemy models.
 - Do not duplicate business logic between the frontend and backend.
 - Prefer small, focused modules and functions over large monolithic files.
+- The product is single-owner and local-only: do not add app registration,
+  login, or authorization. Keep service ports bound to localhost.
 
 ## Database rules
 
@@ -114,7 +115,11 @@ The export contains `personal_information`, `contacts`, and `chats` sections.
 - Do not require VS Code Dev Containers.
 - Do not require Node.js on the host to run the application in Docker.
 - If host-side tooling is useful, keep it optional.
-- Preserve existing Docker Compose configuration unless a change is necessary.
+- `docker compose up --build` must apply application migrations and start the
+  complete app without a separate setup command.
+- Keep database files, Airflow metadata/logs, and staged exports ephemeral;
+  use RAM-backed staging shared by the backend and Airflow. Do not mount real
+  Telegram exports from the host.
 
 ## Code quality
 
@@ -165,21 +170,6 @@ The export contains `personal_information`, `contacts`, and `chats` sections.
 - Do not introduce Airflow merely to execute a simple one-off local command.
 - Follow the Airflow version and configuration already present in the project.
 
-## Kubernetes
-
-- Kubernetes is the deployment target, not a requirement for local development.
-- Keep application containers compatible with both Docker Compose and
-  Kubernetes.
-- Externalize configuration and credentials; do not hardcode them in images.
-- Use Kubernetes Secrets or the deployment platform's secret-management
-  mechanism for sensitive configuration.
-- Keep container processes independent of persistent local filesystem state.
-- Use appropriate readiness and liveness probes for long-running services.
-- Do not add Kubernetes manifests, Helm charts, or operators unless they are
-  required by the current task.
-- Do not assume that local Docker Compose networking or volumes behave the
-  same way in Kubernetes.
-
 ## Working approach
 
 Before implementing a task:
@@ -197,3 +187,4 @@ Do not add features outside the requested scope.
 If a requirement conflicts with the existing schema or architecture, explain
 the conflict instead of silently redesigning the project.
 Never commit to git.
+Never edit README.md.

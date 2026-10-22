@@ -1,10 +1,11 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar, Generic
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Column,
     DateTime,
     ForeignKey,
     Index,
@@ -16,7 +17,23 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+
+# Handle both SQLAlchemy 1.4 and 2.0+
+SQLALCHEMY_2 = False
+try:
+    from sqlalchemy.orm import Mapped, mapped_column
+    SQLALCHEMY_2 = True
+except ImportError:
+    # SQLAlchemy 1.4: Mapped and mapped_column don't exist
+    # Create stub implementations for compatibility
+    T = TypeVar('T')
+    class Mapped(Generic[T]):
+        """Stub for SQLAlchemy 1.4 compatibility."""
+        pass
+
+    def mapped_column(*args, **kwargs):
+        """Fallback to Column for SQLAlchemy 1.4."""
+        return Column(*args, **kwargs)
 
 from app.db import Base
 
@@ -238,6 +255,52 @@ class ImportSession(Base):
         Integer,
         default=0,
         server_default=text("0"),
+    )
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class UploadJob(Base):
+    __tablename__ = "upload_jobs"
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'completed', 'failed')",
+            name="ck_upload_jobs_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    filename: Mapped[str] = mapped_column(String(500))
+    file_sha256: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="pending",
+        server_default=text("'pending'"),
+    )
+    source_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("telegram_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    import_session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    airflow_dag_run_id: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
     )
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(

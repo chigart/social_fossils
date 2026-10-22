@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.analytics import router as analytics_router
+from app.routers.upload import router as upload_router
 
 app = FastAPI(
     title="Social Fossils API",
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(analytics_router)
+app.include_router(upload_router)
 
 
 @app.get("/api/health")
