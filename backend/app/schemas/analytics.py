@@ -382,3 +382,81 @@ class CommunicationTimelineSummary(BaseModel):
 class CommunicationTimelineStatistics(BaseModel):
     summary: CommunicationTimelineSummary
     months: list[CommunicationTimelineMonth]
+
+
+class WordFrequency(BaseModel):
+    word: str
+    count: int
+
+
+class EmojiFrequency(BaseModel):
+    emoji: str
+    count: int
+
+
+class ChatInsightSender(BaseModel):
+    sender_telegram_id: str | None
+    display_name: str
+    message_count: int
+    text_length: int = Field(
+        description="Unicode code points in normalized ordinary-message text."
+    )
+    popular_words: list[WordFrequency]
+    popular_emojis: list[EmojiFrequency]
+
+
+class ReactionReactor(BaseModel):
+    reactor_telegram_id: str
+    display_name: str
+    reaction_count: int = Field(
+        description="Observed reaction entries in Telegram's recent reactor lists."
+    )
+    popular_emojis: list[EmojiFrequency]
+
+
+class ReactionAuthorPair(BaseModel):
+    reactor_telegram_id: str
+    reactor_name: str
+    author_telegram_id: str
+    author_name: str
+    observed_reaction_count: int = Field(
+        description="Observed reaction entries on this author's messages."
+    )
+    messages_with_observed_reaction_count: int = Field(
+        description="Distinct author messages with at least one observed reaction from this reactor."
+    )
+    author_message_count: int = Field(
+        description="All ordinary messages authored by this sender in this chat."
+    )
+    observed_message_percentage: float = Field(
+        description="Observed reacted-to messages divided by author message count; a lower bound when recent reactors are incomplete."
+    )
+
+
+class ChatInsightsStatistics(BaseModel):
+    chat_id: int
+    account_id: int
+    source_account_label: str
+    title: str | None
+    chat_type: str
+    ordinary_message_count: int
+    text_length: int = Field(
+        description="Unicode code points in normalized ordinary-message text."
+    )
+    popular_words: list[WordFrequency]
+    popular_emojis: list[EmojiFrequency]
+    senders: list[ChatInsightSender]
+    reaction_count: int = Field(
+        description="Sum of Telegram's full per-message emoji reaction counts."
+    )
+    reaction_emojis: list[EmojiFrequency]
+    reactors: list[ReactionReactor] = Field(
+        description="Per-reactor statistics observed in Telegram's recent lists."
+    )
+    reactor_author_pairs: list[ReactionAuthorPair] = Field(
+        description="Observed reactor-to-author coverage, not exhaustive when recent lists are incomplete."
+    )
+
+
+class ChatInsightsResponse(BaseModel):
+    chats: list[ChatInsightsStatistics]

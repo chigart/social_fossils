@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   balance,
+  chatInsights,
   chats,
   contacts,
   forgotten,
@@ -18,6 +19,7 @@ import App from "./App";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
+  getChatInsights: vi.fn(),
   getChats: vi.fn(),
   getContacts: vi.fn(),
   getCommunicationBalance: vi.fn(),
@@ -32,6 +34,7 @@ beforeEach(() => {
   window.history.replaceState(null, "", "/");
   Object.values(api).forEach((mock) => mock.mockReset());
   api.getOverview.mockResolvedValue(overview);
+  api.getChatInsights.mockResolvedValue(chatInsights);
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
   api.getCommunicationBalance.mockResolvedValue(balance);
@@ -135,7 +138,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(7);
+    expect(screen.getAllByRole("tab")).toHaveLength(8);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -208,6 +211,215 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows per-chat word, emoji, and observed reaction insights", async () => {
+    const user = userEvent.setup();
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        chatInsights.chats[0],
+        {
+          ...chatInsights.chats[0],
+          chat_id: 11,
+          title: "One-to-one chat",
+          chat_type: "personal_chat",
+          ordinary_message_count: 5,
+          text_length: 12,
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Insights");
+
+    expect(
+      screen.getByRole("heading", { name: "Chat insights" }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("group", { name: "Matching chats" })).getAllByRole(
+        "button",
+      ),
+    ).toHaveLength(2);
+    const messageShare = screen.getByRole("region", {
+      name: "Share of messages by person",
+    });
+    expect(within(messageShare).getByRole("img")).toHaveAccessibleName(
+      "Share of messages by person: Anton 60.0%, Lena 40.0%",
+    );
+    expect(messageShare).toHaveTextContent("12 messages · 60.0%");
+    expect(messageShare).toHaveTextContent("8 messages · 40.0%");
+    const textShare = screen.getByRole("region", {
+      name: "Share of text volume by person",
+    });
+    expect(within(textShare).getByRole("img")).toHaveAccessibleName(
+      "Share of text volume by person: Anton 59.1%, Lena 40.9%",
+    );
+    expect(textShare).toHaveTextContent("260 characters · 59.1%");
+    expect(textShare).toHaveTextContent("180 characters · 40.9%");
+    expect(screen.getByText("Most popular words")).toBeInTheDocument();
+    expect(screen.getByText("Popular words and emojis by sender")).toBeInTheDocument();
+    expect(screen.getByText("Observed reactions by person")).toBeInTheDocument();
+    const popularWordChip = screen.getByRole("listitem", {
+      name: "hello, 8 uses",
+    });
+    expect(popularWordChip).toBeInTheDocument();
+    expect(popularWordChip.querySelector("span")).toHaveClass(
+      "font-semibold",
+      "text-ink",
+    );
+    expect(popularWordChip.querySelectorAll("span")[1]).toHaveClass(
+      "text-caption",
+      "text-ink-muted",
+    );
+    expect(
+      screen.getByRole("listitem", { name: "❤️, 5 uses" }),
+    ).toBeInTheDocument();
+    const senderWordChip = screen.getByRole("listitem", {
+      name: "hello, 6 uses",
+    });
+    expect(senderWordChip.querySelector("span")).toHaveClass(
+      "font-semibold",
+      "text-ink",
+    );
+    const senderEmojiChip = screen.getByRole("listitem", {
+      name: "❤️, 3 uses",
+    });
+    expect(senderEmojiChip.querySelector("span")).toHaveClass("text-base");
+    expect(senderEmojiChip.querySelectorAll("span")[1]).toHaveClass(
+      "text-caption",
+      "text-ink-muted",
+    );
+    expect(screen.getByRole("columnheader", { name: "Top reactions" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Most popular reactions · 17 total",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("listitem", { name: "👍, 11 reactions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("listitem", {
+        name: "👍, 4 observed reactions",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("listitem", {
+        name: "❤️, 2 observed reactions",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Lena → Anton")).toBeInTheDocument();
+    expect(screen.getByText("50.0%")).toBeInTheDocument();
+    expect(
+      screen.getByText(/show observed coverage and are lower bounds/i),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(screen.getByRole("group", { name: "Matching chats" })).getByRole(
+        "button",
+        { name: /One-to-one chat/ },
+      ),
+    );
+    expect(
+      screen
+        .getByRole("heading", { name: "Ordinary messages" })
+        .closest("article"),
+    ).toHaveTextContent("5");
+  });
+
+  it("limits both sender pie charts to the top ten and groups remaining senders", async () => {
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        {
+          ...chatInsights.chats[0],
+          ordinary_message_count: 78,
+          text_length: 780,
+          senders: Array.from({ length: 12 }, (_, index) => ({
+            sender_telegram_id: `user-${index + 1}`,
+            display_name: `Sender ${index + 1}`,
+            message_count: 12 - index,
+            text_length: (12 - index) * 10,
+            popular_words: [],
+            popular_emojis: [],
+          })),
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Insights");
+
+    const messageShare = screen.getByRole("region", {
+      name: "Share of messages by person",
+    });
+    const textShare = screen.getByRole("region", {
+      name: "Share of text volume by person",
+    });
+    expect(within(messageShare).getAllByRole("listitem")).toHaveLength(11);
+    expect(within(textShare).getAllByRole("listitem")).toHaveLength(11);
+    expect(within(messageShare).getByText("Sender 1")).toBeInTheDocument();
+    expect(within(messageShare).queryByText("Sender 11")).not.toBeInTheDocument();
+    expect(within(messageShare).getByText("Other senders")).toBeInTheDocument();
+    expect(messageShare).toHaveTextContent("3 messages · 3.8%");
+    expect(within(textShare).getByText("Other senders")).toBeInTheDocument();
+    expect(textShare).toHaveTextContent("30 characters · 3.8%");
+  });
+
+  it("sorts insight chats by message count and searches their titles", async () => {
+    const user = userEvent.setup();
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        {
+          ...chatInsights.chats[0],
+          chat_id: 10,
+          title: "Medium chat",
+          ordinary_message_count: 20,
+        },
+        {
+          ...chatInsights.chats[0],
+          chat_id: 11,
+          title: "One-to-one chat",
+          ordinary_message_count: 5,
+        },
+        {
+          ...chatInsights.chats[0],
+          chat_id: 12,
+          title: "Most active chat",
+          ordinary_message_count: 30,
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Insights");
+
+    const matchingChats = screen.getByRole("group", { name: "Matching chats" });
+    const optionLabels = within(matchingChats)
+      .getAllByRole("button")
+      .map((option) => option.textContent);
+    expect(optionLabels[0]).toContain("Most active chat");
+    expect(optionLabels[0]).toContain("30 messages");
+    expect(optionLabels[1]).toContain("Medium chat");
+    expect(optionLabels[2]).toContain("One-to-one chat");
+
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search chats by title" }),
+      "one-to-one",
+    );
+    const filteredResults = within(matchingChats).getAllByRole("button");
+    expect(filteredResults).toHaveLength(1);
+    expect(filteredResults[0]).toHaveTextContent("One-to-one chat");
+    expect(filteredResults[0]).toHaveTextContent("5 messages");
+    await user.click(filteredResults[0]);
+
+    expect(
+      screen
+        .getByRole("heading", { name: "Ordinary messages" })
+        .closest("article"),
+    ).toHaveTextContent("5");
+
+    const filteredLabels = within(matchingChats)
+      .getAllByRole("button")
+      .map((option) => option.textContent);
+    expect(filteredLabels).toHaveLength(1);
+    expect(filteredLabels[0]).toContain("One-to-one chat");
+  });
+
   it("shows loading status while all analytics requests are pending", () => {
     api.getOverview.mockReturnValue(new Promise(() => {}));
     api.getChats.mockReturnValue(new Promise(() => {}));
@@ -228,12 +440,14 @@ describe("dashboard", () => {
     await user.click(overviewTab);
     await user.keyboard("{ArrowRight}");
 
-    expect(screen.getByRole("tab", { name: "Chats" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Insights" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(window.location.hash).toBe("#chats");
-    expect(screen.getByRole("tabpanel", { name: "Chats" })).not.toHaveAttribute(
+    expect(window.location.hash).toBe("#chat-insights");
+    expect(
+      screen.getByRole("tabpanel", { name: "Insights" }),
+    ).not.toHaveAttribute(
       "hidden",
     );
     expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");

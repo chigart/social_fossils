@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   getChats,
+  getChatInsights,
   getCommunicationBalance,
   getCommunicationTimeline,
   getContacts,
@@ -14,6 +15,7 @@ describe("analytics API helpers", () => {
   it("requests each analytics endpoint and returns its JSON data", async () => {
     const overview = { total_messages: 17 };
     const chats = [{ chat_id: 1 }];
+    const chatInsights = { chats: [{ chat_id: 1 }] };
     const contacts = [{ account_id: 2 }];
     const balance = { summary: { eligible_contacts: 1 }, contacts: [] };
     const forgotten = { summary: { eligible_contacts: 1 }, contacts: [] };
@@ -22,6 +24,10 @@ describe("analytics API helpers", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => overview,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => chatInsights,
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -46,6 +52,7 @@ describe("analytics API helpers", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(getOverview()).resolves.toEqual(overview);
+    await expect(getChatInsights()).resolves.toEqual(chatInsights);
     await expect(getChats()).resolves.toEqual(chats);
     await expect(getContacts()).resolves.toEqual(contacts);
     await expect(getCommunicationBalance()).resolves.toEqual(balance);
@@ -57,6 +64,7 @@ describe("analytics API helpers", () => {
 
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
+      ["/api/analytics/chat-insights"],
       ["/api/analytics/chats"],
       ["/api/analytics/contacts"],
       ["/api/analytics/communication-balance"],

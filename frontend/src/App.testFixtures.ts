@@ -1,4 +1,5 @@
 import type {
+  ChatInsightsResponse,
   ChatStatistics,
   CommunicationBalanceStatistics,
   CommunicationTimelineStatistics,
@@ -127,6 +128,65 @@ export const chats: ChatStatistics[] = [
     distinct_identified_senders: 1,
   },
 ];
+
+export const chatInsights: ChatInsightsResponse = {
+  chats: [
+    {
+      chat_id: 10,
+      account_id: 1,
+      source_account_label: "@anton",
+      title: "Private group",
+      chat_type: "private_group",
+      ordinary_message_count: 20,
+      text_length: 440,
+      popular_words: [{ word: "hello", count: 8 }],
+      popular_emojis: [{ emoji: "❤️", count: 5 }],
+      senders: [
+        {
+          sender_telegram_id: "user-anton",
+          display_name: "Anton",
+          message_count: 12,
+          text_length: 260,
+          popular_words: [{ word: "hello", count: 6 }],
+          popular_emojis: [{ emoji: "❤️", count: 3 }],
+        },
+        {
+          sender_telegram_id: "user-lena",
+          display_name: "Lena",
+          message_count: 8,
+          text_length: 180,
+          popular_words: [{ word: "thanks", count: 3 }],
+          popular_emojis: [{ emoji: "🎉", count: 2 }],
+        },
+      ],
+      reaction_count: 17,
+      reaction_emojis: [{ emoji: "👍", count: 11 }],
+      reactors: [
+        {
+          reactor_telegram_id: "user-lena",
+          display_name: "Lena",
+          reaction_count: 6,
+          popular_emojis: [
+            { emoji: "👍", count: 4 },
+            { emoji: "❤️", count: 2 },
+          ],
+        },
+      ],
+      reactor_author_pairs: [
+        {
+          reactor_telegram_id: "user-lena",
+          reactor_name: "Lena",
+          author_telegram_id: "user-anton",
+          author_name: "Anton",
+          observed_reaction_count: 6,
+          messages_with_observed_reaction_count: 6,
+          author_message_count: 12,
+          observed_message_percentage: 50,
+        },
+      ],
+    },
+  ],
+};
 
 export const contacts: ContactStatistics[] = [
   {

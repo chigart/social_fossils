@@ -40,7 +40,7 @@ def db_session():
             "sender_telegram_id VARCHAR(100), sender_contact_id INTEGER, "
             "sender_name VARCHAR(300), is_outgoing BOOLEAN, "
             "message_date DATETIME, message_type VARCHAR(50), "
-            "text_content TEXT)"
+            "text_content TEXT, raw_payload JSON)"
         ))
 
     with Session(engine) as session:

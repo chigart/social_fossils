@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   getChats,
+  getChatInsights,
   getCommunicationBalance,
   getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
   getOverview,
+  type ChatInsightsResponse,
   type ChatStatistics,
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
@@ -15,6 +17,7 @@ import {
   type OverviewStatistics,
 } from "./api";
 import { ChatsView } from "./components/ChatsView";
+import { ChatInsightsView } from "./components/ChatInsightsView";
 import {
   CommunicationBalanceView,
   sortCommunicationBalanceContacts,
@@ -41,6 +44,10 @@ export default function App() {
   const [overview, setOverview] =
     useState<Resource<OverviewStatistics>>(emptyResource);
   const [chats, setChats] = useState<Resource<ChatStatistics[]>>(emptyResource);
+  const [chatInsights, setChatInsights] =
+    useState<Resource<ChatInsightsResponse>>(emptyResource);
+  const [selectedInsightsChatId, setSelectedInsightsChatId] =
+    useState<number | null>(null);
   const [contacts, setContacts] =
     useState<Resource<ContactStatistics[]>>(emptyResource);
   const [balance, setBalance] =
@@ -105,6 +112,26 @@ export default function App() {
           error instanceof Error
             ? error.message
             : "Unable to load chat statistics.",
+        loading: false,
+      }));
+    }
+  };
+
+  const loadChatInsights = async () => {
+    setChatInsights((current) => ({ ...current, error: null, loading: true }));
+    try {
+      setChatInsights({
+        data: await getChatInsights(),
+        error: null,
+        loading: false,
+      });
+    } catch (error) {
+      setChatInsights((current) => ({
+        ...current,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load chat insights.",
         loading: false,
       }));
     }
@@ -199,6 +226,7 @@ export default function App() {
   useEffect(() => {
     void loadOverview();
     void loadChats();
+    void loadChatInsights();
     void loadContacts();
     void loadBalance();
     void loadForgottenContacts();
@@ -344,6 +372,22 @@ export default function App() {
             overview={overview}
             noImportedData={noImportedData}
             onRetry={() => void loadOverview()}
+          />
+        </div>
+        <div
+          id="chat-insights-panel"
+          role="tabpanel"
+          aria-labelledby="chat-insights-tab"
+          aria-label="Insights"
+          tabIndex={0}
+          hidden={selectedTab !== "chat-insights"}
+        >
+          <ChatInsightsView
+            insights={chatInsights}
+            selectedChatId={selectedInsightsChatId}
+            onChatChange={setSelectedInsightsChatId}
+            noImportedData={noImportedData}
+            onRetry={() => void loadChatInsights()}
           />
         </div>
         <div

@@ -1,4 +1,6 @@
+import json
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import text
 
@@ -104,14 +106,15 @@ def add_message(
     is_outgoing: bool | None = None,
     sender_contact_id: int | None = None,
     text_content: str | None = None,
+    raw_payload: dict[str, Any] | None = None,
 ):
     db_session.execute(
         text(
             "INSERT INTO messages "
             "(id, chat_id, message_type, sender_telegram_id, message_date, "
-            "is_outgoing, sender_contact_id, text_content) "
+            "is_outgoing, sender_contact_id, text_content, raw_payload) "
             "VALUES (:id, :chat_id, :message_type, :sender_id, :message_date, "
-            ":is_outgoing, :contact_id, :text_content)"
+            ":is_outgoing, :contact_id, :text_content, :raw_payload)"
         ),
         {
             "id": message_id,
@@ -122,6 +125,7 @@ def add_message(
             "is_outgoing": is_outgoing,
             "contact_id": sender_contact_id,
             "text_content": text_content,
+            "raw_payload": json.dumps(raw_payload or {}),
         },
     )
     db_session.flush()

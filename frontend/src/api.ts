@@ -8,6 +8,64 @@ export type OverviewStatistics = {
   latest_message_timestamp: string | null;
 };
 
+export type WordFrequency = {
+  word: string;
+  count: number;
+};
+
+export type EmojiFrequency = {
+  emoji: string;
+  count: number;
+};
+
+export type ChatInsightSender = {
+  sender_telegram_id: string | null;
+  display_name: string;
+  message_count: number;
+  text_length: number;
+  popular_words: WordFrequency[];
+  popular_emojis: EmojiFrequency[];
+};
+
+export type ReactionReactor = {
+  reactor_telegram_id: string;
+  display_name: string;
+  reaction_count: number;
+  popular_emojis: EmojiFrequency[];
+};
+
+export type ReactionAuthorPair = {
+  reactor_telegram_id: string;
+  reactor_name: string;
+  author_telegram_id: string;
+  author_name: string;
+  observed_reaction_count: number;
+  messages_with_observed_reaction_count: number;
+  author_message_count: number;
+  observed_message_percentage: number;
+};
+
+export type ChatInsightsStatistics = {
+  chat_id: number;
+  account_id: number;
+  source_account_label: string;
+  title: string | null;
+  chat_type: string;
+  ordinary_message_count: number;
+  text_length: number;
+  popular_words: WordFrequency[];
+  popular_emojis: EmojiFrequency[];
+  senders: ChatInsightSender[];
+  reaction_count: number;
+  reaction_emojis: EmojiFrequency[];
+  reactors: ReactionReactor[];
+  reactor_author_pairs: ReactionAuthorPair[];
+};
+
+export type ChatInsightsResponse = {
+  chats: ChatInsightsStatistics[];
+};
+
 export type ChatStatistics = {
   chat_id: number;
   account_id: number;
@@ -304,6 +362,9 @@ export async function retryUploadJob(jobId: number): Promise<UploadJob> {
 
 export const getOverview = () =>
   getJson<OverviewStatistics>("/api/analytics/overview");
+
+export const getChatInsights = () =>
+  getJson<ChatInsightsResponse>("/api/analytics/chat-insights");
 
 export const getChats = () => getJson<ChatStatistics[]>("/api/analytics/chats");
 

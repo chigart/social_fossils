@@ -1,5 +1,6 @@
 export const dashboardTabs = [
   { id: "overview", label: "Overview" },
+  { id: "chat-insights", label: "Insights" },
   { id: "chats", label: "Chats" },
   { id: "contacts", label: "Contacts" },
   { id: "communication-balance", label: "Balance" },
