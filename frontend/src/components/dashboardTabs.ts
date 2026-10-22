@@ -5,6 +5,7 @@ export const dashboardTabs = [
   { id: "communication-balance", label: "Balance" },
   { id: "forgotten-contacts", label: "Forgotten" },
   { id: "communication-timeline", label: "Timeline" },
+  { id: "uploads", label: "Import" },
 ] as const;
 
 export type DashboardTab = (typeof dashboardTabs)[number]["id"];

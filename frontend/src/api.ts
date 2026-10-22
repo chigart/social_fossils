@@ -199,6 +199,19 @@ export type CommunicationTimelineStatistics = {
   months: CommunicationTimelineMonth[];
 };
 
+export type UploadJob = {
+  id: number;
+  filename: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  source_account_id: number | null;
+  import_session_id: number | null;
+  airflow_dag_run_id: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  error_message: string | null;
+  created_at: string;
+};
+
 async function getJson<T>(path: string): Promise<T> {
   let response: Response;
 
@@ -217,6 +230,43 @@ async function getJson<T>(path: string): Promise<T> {
   } catch {
     throw new Error("The analytics API returned an invalid response.");
   }
+}
+
+export async function uploadFile(file: File): Promise<UploadJob> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  let response: Response;
+  try {
+    response = await fetch("/api/uploads/upload", {
+      method: "POST",
+      body: formData,
+    });
+  } catch {
+    throw new Error(
+      "Unable to connect to the upload API. Check that the backend is running.",
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("The upload API returned an invalid response.");
+  }
+
+  if (!response.ok) {
+    const detail =
+      typeof body === "object" &&
+      body !== null &&
+      "detail" in body &&
+      typeof body.detail === "string"
+        ? body.detail
+        : `The upload API returned an error (HTTP ${response.status}).`;
+    throw new Error(detail);
+  }
+
+  return body as UploadJob;
 }
 
 export const getOverview = () =>

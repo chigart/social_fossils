@@ -6,6 +6,7 @@ import {
   getContacts,
   getForgottenContacts,
   getOverview,
+  uploadFile,
 } from "./api";
 
 describe("analytics API helpers", () => {
@@ -110,5 +111,41 @@ describe("analytics API helpers", () => {
     await expect(getContacts()).rejects.toThrow(
       "The analytics API returned an invalid response.",
     );
+  });
+
+  it("uploads one file as multipart form data and returns its job", async () => {
+    const file = new File(["synthetic export"], "export.json", {
+      type: "application/json",
+    });
+    const job = { id: 17, filename: "export.json", status: "pending" };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => job,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(uploadFile(file)).resolves.toEqual(job);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [path, options] = fetchMock.mock.calls[0];
+    expect(path).toBe("/api/uploads/upload");
+    expect(options.method).toBe("POST");
+    expect(options.body).toBeInstanceOf(FormData);
+    expect((options.body as FormData).get("file")).toBe(file);
+  });
+
+  it("uses the server error detail for a rejected file", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        json: async () => ({ detail: "This file has already been uploaded" }),
+      }),
+    );
+
+    await expect(
+      uploadFile(new File(["synthetic export"], "duplicate.json")),
+    ).rejects.toThrow("This file has already been uploaded");
   });
 });

@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  uploadFile: vi.fn(),
 }));
 
 vi.mock("./api", () => api);
@@ -39,6 +40,18 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
+  it("opens the multi-file uploader from the Import tab", async () => {
+    await renderLoadedDashboard();
+    await selectDashboardTab("Import");
+
+    expect(
+      screen.getByRole("heading", { name: "Import files" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Choose Telegram JSON files"),
+    ).toHaveAttribute("multiple");
+  });
+
   it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
     api.getOverview.mockResolvedValue({
       ...overview,
@@ -122,7 +135,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(6);
+    expect(screen.getAllByRole("tab")).toHaveLength(7);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -130,6 +143,10 @@ describe("dashboard", () => {
     expect(screen.getByRole("tab", { name: "Timeline" })).toHaveAttribute(
       "aria-controls",
       "communication-timeline-panel",
+    );
+    expect(screen.getByRole("tab", { name: "Import" })).toHaveAttribute(
+      "aria-controls",
+      "uploads-panel",
     );
     expect(screen.getByText("All messages")).toBeInTheDocument();
     expect(

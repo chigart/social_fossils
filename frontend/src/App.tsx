@@ -26,6 +26,7 @@ import { DashboardIntro } from "./components/DashboardIntro";
 import { CommunicationTimelineView } from "./components/CommunicationTimelineView";
 import { ForgottenContactsView } from "./components/ForgottenContactsView";
 import { OverviewView } from "./components/OverviewView";
+import { UploadView } from "./components/UploadView";
 import {
   dashboardTabFromHash,
   type DashboardTab,
@@ -365,6 +366,16 @@ export default function App() {
             }
             onRetry={() => void loadChats()}
           />
+        </div>
+        <div
+          id="uploads-panel"
+          role="tabpanel"
+          aria-labelledby="uploads-tab"
+          aria-label="Import"
+          tabIndex={0}
+          hidden={selectedTab !== "uploads"}
+        >
+          <UploadView />
         </div>
         <div
           id="contacts-panel"
