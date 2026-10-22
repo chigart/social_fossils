@@ -25,11 +25,9 @@
 - docker compose down 
 
 ## TODO
-1. Chats analytics - most messages
-2. Most popular word and emoji - including chats
-3. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
-4. Split all ingestion into DAG tasks.
-5. Interactive contacts merge
+1. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
+2. Split all ingestion into DAG tasks.
+3. Interactive contacts merge
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume
