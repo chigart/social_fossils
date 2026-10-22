@@ -1,7 +1,31 @@
-from app.routers.analytics_chat_insights import extract_emojis, get_chat_insights
+from collections import Counter
+
+from app.analytics_stop_words import STOP_WORDS
+from app.routers.analytics_chat_insights import (
+    _rank_words,
+    extract_emojis,
+    get_chat_insights,
+)
 from app.schemas.analytics import ChatInsightsResponse
 from analytics_test_helpers import add_account, add_chat, add_message
 from app.main import app
+
+
+def test_stop_words_exclude_personal_pronouns_but_keep_meaningful_words():
+    personal_pronouns = {
+        "меня", "мне", "мной", "мною", "тебе", "тебя", "тобой", "тобою",
+        "нас", "нам", "нами", "me", "you", "us", "them",
+    }
+    meaningful_words = {
+        "пусть", "пускай", "сегодня", "неужели", "однако", "исключительно",
+        "просто", "прямо", "именно",
+    }
+
+    assert personal_pronouns <= STOP_WORDS
+    assert not meaningful_words & STOP_WORDS
+    assert {item.word for item in _rank_words(Counter(personal_pronouns | meaningful_words))} == (
+        meaningful_words
+    )
 
 
 def test_extract_emojis_preserves_combined_sequences():
