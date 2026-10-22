@@ -4,6 +4,13 @@ import type {
   EmojiFrequency,
   WordFrequency,
 } from "../api";
+import {
+  DEGREES_PER_PERCENTAGE_POINT,
+  MINIMUM_REPEATED_ITEM_COUNT,
+  PERCENTAGE_SCALE,
+  PERCENTAGE_DECIMAL_PLACES,
+  TOP_SENDER_COUNT,
+} from "./chatInsightsConstants";
 
 const senderColors = [
   "#5267d8",
@@ -33,7 +40,7 @@ export type SenderShareSlice = {
 export function filterRepeatedItems<T extends WordFrequency | EmojiFrequency>(
   items: T[],
 ) {
-  return items.filter((item) => item.count > 1);
+  return items.filter((item) => item.count >= MINIMUM_REPEATED_ITEM_COUNT);
 }
 
 export function sortChatInsightsChats(chats: ChatInsightsStatistics[]) {
@@ -80,9 +87,9 @@ export function buildSenderShareChart(
       valueForSender(right, metric) - valueForSender(left, metric) ||
       left.display_name.localeCompare(right.display_name),
   );
-  const visibleSenders = rankedSenders.slice(0, 10);
+  const visibleSenders = rankedSenders.slice(0, TOP_SENDER_COUNT);
   const otherSendersValue = rankedSenders
-    .slice(10)
+    .slice(TOP_SENDER_COUNT)
     .reduce((sum, sender) => sum + valueForSender(sender, metric), 0);
   const sliceValues = [
     ...visibleSenders.map((sender, index) => ({
@@ -91,7 +98,7 @@ export function buildSenderShareChart(
       value: valueForSender(sender, metric),
       color: senderColors[index],
     })),
-    ...(rankedSenders.length > 10
+    ...(rankedSenders.length > TOP_SENDER_COUNT
       ? [
           {
             key: "other-senders",
@@ -104,9 +111,10 @@ export function buildSenderShareChart(
   ];
   let nextAngle = 0;
   const slices: SenderShareSlice[] = sliceValues.map((slice) => {
-    const percentage = total > 0 ? (slice.value / total) * 100 : 0;
+    const percentage =
+      total > 0 ? (slice.value / total) * PERCENTAGE_SCALE : 0;
     const startAngle = nextAngle;
-    nextAngle += percentage * 3.6;
+    nextAngle += percentage * DEGREES_PER_PERCENTAGE_POINT;
     return {
       ...slice,
       percentage,
@@ -123,7 +131,10 @@ export function buildSenderShareChart(
           .join(", ")})`
       : "#e7e9ee";
   const chartDescription = slices
-    .map(({ label, percentage }) => `${label} ${percentage.toFixed(1)}%`)
+    .map(
+      ({ label, percentage }) =>
+        `${label} ${percentage.toFixed(PERCENTAGE_DECIMAL_PLACES)}%`,
+    )
     .join(", ");
 
   return { slices, pieBackground, chartDescription };

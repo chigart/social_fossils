@@ -28,6 +28,7 @@
 1. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 2. Split all ingestion into DAG tasks.
 3. Interactive contacts merge
+4. Fix timeline in insights tab, remove unnecessary in insights
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume

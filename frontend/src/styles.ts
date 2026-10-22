@@ -28,3 +28,38 @@ export const emptyStateTextClassName = "m-0 text-small leading-[1.5] text-ink-gr
 export const emptyStateTitleClassName = "mb-[7px] text-subheading text-ink";
 export const screenReaderOnlyClassName = "sr-only";
 export const tableHeaderClassName = "whitespace-nowrap px-[13px] py-3 text-label font-bold";
+export const chatInsightsCardClassName =
+  "rounded-lg border border-border-subtle bg-surface p-4";
+export const chatInsightsEmptyTextClassName = "m-0 text-small text-ink-muted";
+export const chatInsightsGridClassName =
+  "grid grid-cols-2 gap-3 max-[820px]:grid-cols-1";
+export const chatInsightsListClassName = "m-0 list-none space-y-2 p-0";
+export const chatInsightsListItemClassName =
+  "flex justify-between gap-3 text-small";
+export const chatInsightsTableClassName =
+  "w-full border-collapse text-left text-small";
+export const chatInsightsTableHeaderRowClassName =
+  "border-b border-border-subtle text-caption text-ink-muted";
+export const chatInsightsTableRowClassName =
+  "border-b border-border-subtle last:border-b-0";
+export const chatInsightsTableHeaderCellClassName = "px-4 py-2 font-semibold";
+export const chatInsightsTableCellClassName = "px-4 py-2 text-ink";
+export const chatInsightsTableLabelCellClassName =
+  "px-4 py-2 font-medium text-ink";
+export const chatInsightsCompactHeaderCellClassName =
+  "py-2 pr-3 font-semibold";
+export const chatInsightsCompactHeaderCellLastClassName =
+  "py-2 font-semibold";
+export const chatInsightsCompactCellClassName = "py-2 pr-3 text-ink";
+export const chatInsightsCompactCellLastClassName = "py-2 text-ink";
+export const chatInsightsSectionTitleClassName =
+  "mb-3 text-ui font-semibold text-ink";
+export const chatInsightsSubheadingClassName =
+  "m-0 text-subheading font-bold text-ink";
+export const chatInsightsSectionClassName = "mt-6";
+export const chatInsightsSectionHeaderClassName = "mb-3";
+export const chatInsightsTableWrapperClassName = "overflow-x-auto";
+export const chatInsightsDescriptionClassName =
+  "mb-4 text-small leading-[1.5] text-ink-muted";
+export const chatInsightsPersonNameClassName = "truncate text-ink";
+export const chatInsightsParticipantCountClassName = "shrink-0 text-ink-muted";
