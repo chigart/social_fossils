@@ -22,6 +22,9 @@
 - docker compose up
 - docker compose exec backend python -m app.importer /app/data/FILENAME.json
 
+### Finish Work
+- docker compose down 
+
 ### Full Reset
 - docker compose down -v
 
