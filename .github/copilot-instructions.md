@@ -196,3 +196,4 @@ Do not rewrite working components without a clear reason.
 Do not add features outside the requested scope.
 If a requirement conflicts with the existing schema or architecture, explain
 the conflict instead of silently redesigning the project.
+Never commit to git.
