@@ -6,6 +6,7 @@ import {
   getContacts,
   getForgottenContacts,
   getOverview,
+  retryUploadJob,
   uploadFile,
 } from "./api";
 
@@ -147,5 +148,24 @@ describe("analytics API helpers", () => {
     await expect(
       uploadFile(new File(["synthetic export"], "duplicate.json")),
     ).rejects.toThrow("This file has already been uploaded");
+  });
+
+  it("retries dispatch for a previously accepted upload job", async () => {
+    const job = {
+      id: 17,
+      filename: "export.json",
+      status: "pending",
+      airflow_dag_run_id: "upload_job_17",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => job,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(retryUploadJob(17)).resolves.toEqual(job);
+    expect(fetchMock).toHaveBeenCalledWith("/api/uploads/jobs/17/retry", {
+      method: "POST",
+    });
   });
 });

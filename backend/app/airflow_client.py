@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -35,14 +36,35 @@ class AirflowAPIClient:
 
         return response
 
-    def trigger_dag_run(self, dag_id: str, conf: dict[str, Any]) -> dict[str, Any]:
+    def trigger_dag_run(
+        self,
+        dag_id: str,
+        conf: dict[str, Any],
+        dag_run_id: str,
+        logical_date: datetime,
+    ) -> dict[str, Any]:
+        if logical_date.tzinfo is None:
+            logical_date = logical_date.replace(tzinfo=timezone.utc)
+
         try:
             response = self._authorized_request(
-                "POST", f"/api/v2/dags/{dag_id}/dagRuns", json={"conf": conf}
+                "POST",
+                f"/api/v2/dags/{dag_id}/dagRuns",
+                json={
+                    "dag_run_id": dag_run_id,
+                    "logical_date": logical_date.isoformat(),
+                    "conf": conf,
+                },
             )
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:
+            if (
+                isinstance(e, requests.HTTPError)
+                and e.response is not None
+                and e.response.status_code == 409
+            ):
+                return self.get_dag_run(dag_id, dag_run_id)
             logger.error(f"Failed to trigger DAG run for {dag_id}: {e}")
             raise
 

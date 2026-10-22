@@ -9,7 +9,7 @@ from app.routers import upload
 
 
 class FakeAirflowClient:
-    def trigger_dag_run(self, _dag_id, _conf):
+    def trigger_dag_run(self, _dag_id, _conf, **_kwargs):
         return {"dag_run_id": "run-1"}
 
     def get_dag_run(self, _dag_id, _run_id):
@@ -43,6 +43,7 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
             job = uploaded.json()
             assert job["status"] == "pending"
             assert job["airflow_dag_run_id"] == "run-1"
+            assert job["error_message"] is None
 
             jobs = client.get("/api/uploads/jobs")
             assert jobs.status_code == 200
@@ -70,3 +71,42 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
 def test_upload_job_schema_has_no_app_user():
     assert "users" not in Base.metadata.tables
     assert "user_id" not in UploadJob.__table__.columns
+
+
+def test_pending_upload_without_airflow_run_can_be_retried(tmp_path, monkeypatch):
+    engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'retry.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    UploadJob.__table__.create(engine)
+    session = Session(engine)
+    monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
+    job = UploadJob(
+        filename="export.json",
+        file_sha256="a" * 64,
+        file_size=1,
+        status="pending",
+        error_message="Pipeline dispatch failed",
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    def override_get_db():
+        yield session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            response = client.post(f"/api/uploads/jobs/{job.id}/retry")
+
+            assert response.status_code == 200
+            assert response.json()["airflow_dag_run_id"] == "run-1"
+            assert response.json()["error_message"] is None
+
+            repeated = client.post(f"/api/uploads/jobs/{job.id}/retry")
+            assert repeated.status_code == 409
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+            session.close()
+            engine.dispose()

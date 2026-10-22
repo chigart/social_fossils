@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import { uploadFile, type UploadJob } from "../api";
+import { useUploadQueue } from "../hooks/useUploadQueue";
 import {
   sectionClassName,
   sectionEyebrowClassName,
@@ -7,75 +6,16 @@ import {
   sectionTitleClassName,
 } from "../styles";
 
-type UploadItem = {
-  id: number;
-  file: File;
-  status: "queued" | "uploading" | "accepted" | "failed";
-  job?: UploadJob;
-  error?: string;
-};
-
-function uploadError(error: unknown): string {
-  return error instanceof Error ? error.message : "Unable to upload this file.";
-}
-
 export function UploadView() {
-  const [items, setItems] = useState<UploadItem[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const nextId = useRef(0);
-
-  const addFiles = (files: File[]) => {
-    setItems((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: nextId.current++,
-        file,
-        status: "queued" as const,
-      })),
-    ]);
-  };
-
-  const submitFiles = async () => {
-    const queuedItems = items.filter((item) => item.status === "queued");
-    if (queuedItems.length === 0) return;
-
-    setIsSubmitting(true);
-    setItems((current) =>
-      current.map((item) =>
-        item.status === "queued" ? { ...item, status: "uploading" } : item,
-      ),
-    );
-
-    await Promise.all(
-      queuedItems.map(async (item) => {
-        try {
-          const job = await uploadFile(item.file);
-          setItems((current) =>
-            current.map((currentItem) =>
-              currentItem.id === item.id
-                ? { ...currentItem, status: "accepted", job }
-                : currentItem,
-            ),
-          );
-        } catch (error) {
-          setItems((current) =>
-            current.map((currentItem) =>
-              currentItem.id === item.id
-                ? {
-                    ...currentItem,
-                    status: "failed",
-                    error: uploadError(error),
-                  }
-                : currentItem,
-            ),
-          );
-        }
-      }),
-    );
-    setIsSubmitting(false);
-  };
-
-  const queuedCount = items.filter((item) => item.status === "queued").length;
+  const {
+    items,
+    isSubmitting,
+    queuedCount,
+    addFiles,
+    submitFiles,
+    removeFile,
+    retryPipeline,
+  } = useUploadQueue();
 
   return (
     <section
@@ -154,9 +94,19 @@ export function UploadView() {
                   </p>
                 )}
                 {item.status === "accepted" && item.job && (
-                  <p className="m-0 mt-1 text-caption text-ink-green">
-                    Upload accepted · Job #{item.job.id} · {item.job.status}
-                  </p>
+                  item.job.airflow_dag_run_id ? (
+                    <p className="m-0 mt-1 text-caption text-ink-green">
+                      Pipeline queued · Job #{item.job.id} · {item.job.status}
+                    </p>
+                  ) : (
+                    <p
+                      className="m-0 mt-1 text-caption text-ink-warning"
+                      role="alert"
+                    >
+                      Upload saved as job #{item.job.id}, but the pipeline did
+                      not start. {item.error || item.job.error_message}
+                    </p>
+                  )
                 )}
                 {item.status === "failed" && (
                   <p className="m-0 mt-1 text-caption text-ink-warning" role="alert">
@@ -169,15 +119,23 @@ export function UploadView() {
                   className="cursor-pointer rounded-md border border-border-input bg-surface px-3 py-1.5 text-caption font-semibold text-ink-subtle hover:bg-surface-muted focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
                   type="button"
                   aria-label={`Remove ${item.file.name}`}
-                  onClick={() =>
-                    setItems((current) =>
-                      current.filter((currentItem) => currentItem.id !== item.id),
-                    )
-                  }
+                  onClick={() => removeFile(item.id)}
                 >
                   Remove
                 </button>
               )}
+              {item.status === "accepted" &&
+                item.job &&
+                !item.job.airflow_dag_run_id && (
+                  <button
+                    className="cursor-pointer rounded-md border border-border-warning-button bg-surface px-3 py-1.5 text-caption font-semibold text-ink-warning-button hover:bg-surface-warning-hover focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => void retryPipeline(item)}
+                  >
+                    Retry pipeline
+                  </button>
+                )}
             </li>
           ))}
         </ul>

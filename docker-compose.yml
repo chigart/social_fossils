@@ -83,11 +83,18 @@ services:
   airflow-init:
     image: apache/airflow:3.3.2-python3.12
     entrypoint: /bin/bash
+    user: "0:0"
     command:
       - -c
       - |
         set -e
-        airflow db migrate
+        mkdir -p /run/airflow-secrets
+        if [ ! -s /run/airflow-secrets/jwt_secret ]; then
+          python -c 'from pathlib import Path; import secrets; Path("/run/airflow-secrets/jwt_secret").write_text(secrets.token_urlsafe(64))'
+        fi
+        chown airflow:0 /run/airflow-secrets/jwt_secret
+        chmod 640 /run/airflow-secrets/jwt_secret
+        su -p airflow -s /bin/bash -c 'export HOME=/home/airflow; airflow db migrate'
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
       AIRFLOW__CORE__BASE_LOG_FOLDER: /airflow/logs
@@ -101,6 +108,7 @@ services:
     volumes:
       - ./airflow:/airflow
       - airflow_logs:/airflow/logs
+      - airflow_secrets_shared:/run/airflow-secrets
     depends_on:
       airflow-db:
         condition: service_healthy
@@ -109,6 +117,38 @@ services:
     image: apache/airflow:3.3.2-python3.12
     entrypoint: /airflow/entrypoint.sh
     command: scheduler
+    environment:
+      AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
+      AIRFLOW__CORE__BASE_LOG_FOLDER: /airflow/logs
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+      AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__UNIT_TEST_MODE: "False"
+      AIRFLOW__CORE__ENABLE_XCOM_PICKLING: "True"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
+      UPLOAD_STAGING_DIR: /uploads
+    volumes:
+      - ./airflow:/airflow
+      - ./backend:/app
+      - airflow_logs:/airflow/logs
+      - uploads:/uploads
+      - airflow_secrets_shared:/run/airflow-secrets
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  airflow-dag-processor:
+    image: apache/airflow:3.3.2-python3.12
+    entrypoint: /airflow/entrypoint.sh
+    command: dag-processor
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
       AIRFLOW__CORE__BASE_LOG_FOLDER: /airflow/logs
@@ -126,12 +166,13 @@ services:
       - ./backend:/app
       - airflow_logs:/airflow/logs
       - uploads:/uploads
+      - airflow_secrets_shared:/run/airflow-secrets
     depends_on:
       airflow-init:
         condition: service_completed_successfully
       airflow-db:
         condition: service_healthy
-      backend:
+      db:
         condition: service_healthy
     restart: unless-stopped
 
@@ -158,6 +199,7 @@ services:
       - ./backend:/app
       - airflow_logs:/airflow/logs
       - uploads:/uploads
+      - airflow_secrets_shared:/run/airflow-secrets
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -190,6 +232,8 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: "size=256m,mode=1777"
+  airflow_secrets_shared:
+    driver: local
   uploads:
     driver: local
     driver_opts:

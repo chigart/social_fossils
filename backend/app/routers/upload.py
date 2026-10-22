@@ -24,19 +24,25 @@ def _ensure_upload_dir() -> Path:
 
 def dispatch_job_to_airflow(job_id: int, session: Session) -> str:
     try:
+        job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
+        if not job:
+            raise ValueError(f"Upload job {job_id} was not found")
+
         client = get_airflow_client()
         result = client.trigger_dag_run(
             settings.airflow_dag_id,
             {"job_id": job_id},
+            dag_run_id=f"upload_job_{job_id}",
+            logical_date=job.created_at,
         )
-        dag_run_id = result.get('dag_run_id')
-        
-        # Update the job record with the DAG run ID
-        job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
-        if job:
-            job.airflow_dag_run_id = dag_run_id
-            session.commit()
-        
+        dag_run_id = result.get("dag_run_id")
+        if not dag_run_id:
+            raise RuntimeError("Airflow accepted the trigger without returning a run ID")
+
+        job.airflow_dag_run_id = dag_run_id
+        job.error_message = None
+        session.commit()
+
         logger.info(f"Triggered Airflow DAG run {dag_run_id} for job {job_id}")
         return dag_run_id
     except Exception as e:
@@ -118,7 +124,8 @@ async def upload_file(
             logger.info(f"Job {job.id} dispatched to Airflow")
         except Exception as e:
             logger.error(f"Failed to dispatch job {job.id} to Airflow: {e}")
-            # The job is created even if dispatch fails; recovery will retry
+            job.error_message = f"Pipeline dispatch failed: {e}"
+            session.commit()
 
         return UploadJobResponse.model_validate(job)
 
@@ -181,6 +188,42 @@ def get_job_status(
             response["airflow_error"] = str(e)
 
     return response
+
+
+@router.post("/jobs/{job_id}/retry", response_model=UploadJobResponse)
+def retry_job_dispatch(
+    job_id: int,
+    session: Session = Depends(get_db),
+):
+    job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
+
+    if not job:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    if job.status != "pending" or job.airflow_dag_run_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only pending jobs without an Airflow run can be retried",
+        )
+
+    try:
+        dispatch_job_to_airflow(job.id, session)
+    except Exception as e:
+        session.rollback()
+        job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
+        if job:
+            job.error_message = f"Pipeline dispatch failed: {e}"
+            session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to start the pipeline for job {job_id}: {e}",
+        ) from e
+
+    session.refresh(job)
+    return UploadJobResponse.model_validate(job)
 
 
 @router.get("/jobs", response_model=list[UploadJobResponse])

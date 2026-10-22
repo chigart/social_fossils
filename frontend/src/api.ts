@@ -269,6 +269,39 @@ export async function uploadFile(file: File): Promise<UploadJob> {
   return body as UploadJob;
 }
 
+export async function retryUploadJob(jobId: number): Promise<UploadJob> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/uploads/jobs/${jobId}/retry`, {
+      method: "POST",
+    });
+  } catch {
+    throw new Error(
+      "Unable to connect to the upload API. Check that the backend is running.",
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("The upload API returned an invalid response.");
+  }
+
+  if (!response.ok) {
+    const detail =
+      typeof body === "object" &&
+      body !== null &&
+      "detail" in body &&
+      typeof body.detail === "string"
+        ? body.detail
+        : `The upload API returned an error (HTTP ${response.status}).`;
+    throw new Error(detail);
+  }
+
+  return body as UploadJob;
+}
+
 export const getOverview = () =>
   getJson<OverviewStatistics>("/api/analytics/overview");
 

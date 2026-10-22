@@ -5,6 +5,7 @@ from pathlib import Path
 
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import DAG
+from airflow.utils.trigger_rule import TriggerRule
 
 import sys
 sys.path.insert(0, "/app")
@@ -110,7 +111,7 @@ def update_job_status_completed(**context) -> None:
 
 def update_job_status_failed(**context) -> None:
     job_id = context["dag_run"].conf.get("job_id")
-    exception = context["exception"]
+    exception = context.get("exception")
     
     session = SessionLocal()
     try:
@@ -145,5 +146,13 @@ complete_task = PythonOperator(
     dag=dag,
 )
 
+failure_task = PythonOperator(
+    task_id="mark_failed",
+    python_callable=update_job_status_failed,
+    trigger_rule=TriggerRule.ONE_FAILED,
+    dag=dag,
+)
+
 # Set dependencies
 validate_task >> import_task >> complete_task
+[validate_task, import_task, complete_task] >> failure_task
