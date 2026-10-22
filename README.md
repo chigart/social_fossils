@@ -41,6 +41,7 @@
 3. Chats analytics
 4. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 5. Split all ingestion into DAG tasks.
+6. Same version SQLalchemy 2 and all versions in requirements
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume
