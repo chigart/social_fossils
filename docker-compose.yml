@@ -81,20 +81,13 @@ services:
     restart: unless-stopped
 
   airflow-init:
-    image: apache/airflow:2.7.3-python3.11
+    image: apache/airflow:3.3.2-python3.12
     entrypoint: /bin/bash
     command:
       - -c
       - |
         set -e
         airflow db migrate
-        airflow users create \
-          --username admin \
-          --password admin \
-          --firstname Admin \
-          --lastname User \
-          --role Admin \
-          --email admin@example.com
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
       AIRFLOW__CORE__BASE_LOG_FOLDER: /airflow/logs
@@ -104,17 +97,16 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__UNIT_TEST_MODE: "False"
       AIRFLOW__CORE__ENABLE_XCOM_PICKLING: "True"
-      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
     volumes:
       - ./airflow:/airflow
       - airflow_logs:/airflow/logs
     depends_on:
       airflow-db:
         condition: service_healthy
-    restart: "no"
 
   airflow-scheduler:
-    image: apache/airflow:2.7.3-python3.11
+    image: apache/airflow:3.3.2-python3.12
     entrypoint: /airflow/entrypoint.sh
     command: scheduler
     environment:
@@ -126,7 +118,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__UNIT_TEST_MODE: "False"
       AIRFLOW__CORE__ENABLE_XCOM_PICKLING: "True"
-      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
       UPLOAD_STAGING_DIR: /uploads
     volumes:
@@ -144,9 +136,9 @@ services:
     restart: unless-stopped
 
   airflow-api:
-    image: apache/airflow:2.7.3-python3.11
+    image: apache/airflow:3.3.2-python3.12
     entrypoint: /airflow/entrypoint.sh
-    command: webserver
+    command: api-server
     environment:
       AIRFLOW__CORE__DAGS_FOLDER: /airflow/dags
       AIRFLOW__CORE__BASE_LOG_FOLDER: /airflow/logs
@@ -156,7 +148,7 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__UNIT_TEST_MODE: "False"
       AIRFLOW__CORE__ENABLE_XCOM_PICKLING: "True"
-      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
       UPLOAD_STAGING_DIR: /uploads
     ports:
@@ -176,7 +168,7 @@ services:
         - CMD
         - python
         - -c
-        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v2/monitor/health')"
       interval: 10s
       timeout: 5s
       retries: 18

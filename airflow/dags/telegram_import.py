@@ -3,8 +3,8 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sdk import DAG
 
 import sys
 sys.path.insert(0, "/app")
@@ -24,7 +24,7 @@ dag = DAG(
     "telegram_import",
     default_args=default_args,
     description="Import Telegram export and update database",
-    schedule_interval=None,  # Triggered manually
+    schedule=None,  # Triggered manually
     catchup=False,
     start_date=datetime(2024, 1, 1),
     tags=["telegram", "import"],
@@ -130,21 +130,18 @@ def update_job_status_failed(**context) -> None:
 validate_task = PythonOperator(
     task_id="validate_export",
     python_callable=validate_export_file,
-    provide_context=True,
     dag=dag,
 )
 
 import_task = PythonOperator(
     task_id="perform_import",
     python_callable=perform_import,
-    provide_context=True,
     dag=dag,
 )
 
 complete_task = PythonOperator(
     task_id="mark_completed",
     python_callable=update_job_status_completed,
-    provide_context=True,
     dag=dag,
 )
 

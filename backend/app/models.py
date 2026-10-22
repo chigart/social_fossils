@@ -1,11 +1,10 @@
 from datetime import datetime
-from typing import Any, TypeVar, Generic
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
-    Column,
     DateTime,
     ForeignKey,
     Index,
@@ -17,23 +16,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-
-# Handle both SQLAlchemy 1.4 and 2.0+
-SQLALCHEMY_2 = False
-try:
-    from sqlalchemy.orm import Mapped, mapped_column
-    SQLALCHEMY_2 = True
-except ImportError:
-    # SQLAlchemy 1.4: Mapped and mapped_column don't exist
-    # Create stub implementations for compatibility
-    T = TypeVar('T')
-    class Mapped(Generic[T]):
-        """Stub for SQLAlchemy 1.4 compatibility."""
-        pass
-
-    def mapped_column(*args, **kwargs):
-        """Fallback to Column for SQLAlchemy 1.4."""
-        return Column(*args, **kwargs)
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
