@@ -213,9 +213,35 @@ describe("dashboard", () => {
 
   it("shows per-chat word, emoji, and observed reaction insights", async () => {
     const user = userEvent.setup();
+    const chatWithSingleUseItems = {
+      ...chatInsights.chats[0],
+      popular_words: [
+        ...chatInsights.chats[0].popular_words,
+        { word: "single-chat-word", count: 1 },
+      ],
+      popular_emojis: [
+        ...chatInsights.chats[0].popular_emojis,
+        { emoji: "🫥", count: 1 },
+      ],
+      senders: chatInsights.chats[0].senders.map((sender, index) =>
+        index === 0
+          ? {
+              ...sender,
+              popular_words: [
+                ...sender.popular_words,
+                { word: "single-sender-word", count: 1 },
+              ],
+              popular_emojis: [
+                ...sender.popular_emojis,
+                { emoji: "🫡", count: 1 },
+              ],
+            }
+          : sender,
+      ),
+    };
     api.getChatInsights.mockResolvedValue({
       chats: [
-        chatInsights.chats[0],
+        chatWithSingleUseItems,
         {
           ...chatInsights.chats[0],
           chat_id: 11,
@@ -271,6 +297,18 @@ describe("dashboard", () => {
     expect(
       screen.getByRole("listitem", { name: "❤️, 5 uses" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("listitem", { name: "single-chat-word, 1 uses" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("listitem", { name: "🫥, 1 uses" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("listitem", { name: "single-sender-word, 1 uses" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("listitem", { name: "🫡, 1 uses" }),
+    ).not.toBeInTheDocument();
     const senderWordChip = screen.getByRole("listitem", {
       name: "hello, 6 uses",
     });

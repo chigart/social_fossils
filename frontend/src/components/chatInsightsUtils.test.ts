@@ -2,12 +2,28 @@ import { describe, expect, it } from "vitest";
 import { chatInsights } from "../App.testFixtures";
 import {
   buildSenderShareChart,
+  filterRepeatedItems,
   filterChatInsightsChats,
   getSelectedChatInsights,
   sortChatInsightsChats,
 } from "./chatInsightsUtils";
 
 describe("chat insights utilities", () => {
+  it("filters word and emoji frequencies that appear only once", () => {
+    expect(
+      filterRepeatedItems([
+        { word: "often", count: 2 },
+        { word: "once", count: 1 },
+      ]),
+    ).toEqual([{ word: "often", count: 2 }]);
+    expect(
+      filterRepeatedItems([
+        { emoji: "❤️", count: 3 },
+        { emoji: "🎉", count: 1 },
+      ]),
+    ).toEqual([{ emoji: "❤️", count: 3 }]);
+  });
+
   it("sorts chats by message count, title, then ID without mutating input", () => {
     const chats = [
       { ...chatInsights.chats[0], chat_id: 3, title: "Beta", ordinary_message_count: 5 },

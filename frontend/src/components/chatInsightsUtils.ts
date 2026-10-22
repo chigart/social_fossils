@@ -1,6 +1,8 @@
 import type {
   ChatInsightSender,
   ChatInsightsStatistics,
+  EmojiFrequency,
+  WordFrequency,
 } from "../api";
 
 const senderColors = [
@@ -27,6 +29,12 @@ export type SenderShareSlice = {
   startAngle: number;
   endAngle: number;
 };
+
+export function filterRepeatedItems<T extends WordFrequency | EmojiFrequency>(
+  items: T[],
+) {
+  return items.filter((item) => item.count > 1);
+}
 
 export function sortChatInsightsChats(chats: ChatInsightsStatistics[]) {
   return [...chats].sort(
