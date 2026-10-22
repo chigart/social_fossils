@@ -9,7 +9,7 @@
 - python3 -m venv .venv
 - source .venv/bin/activate
 - pip install -r requirements.txt
-- Python: Select Interpreter
+- Python: Select Interpreter (IDE)
 
 - docker compose up --build -d
 - docker compose exec backend alembic upgrade head
@@ -20,20 +20,15 @@
 
 ### Run Project
 - docker compose up
-- docker compose exec backend python -m app.importer /app/data/FILENAME.json
 
 ### Finish Work
 - docker compose down 
-
-### Full Reset
-- docker compose down -v
 
 ## TODO
 1. Chats analytics
 2. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 3. Split all ingestion into DAG tasks.
 4. Interactive contacts merge
-5. Multi file upload
 
 ## BUGS
 1. Image/sticker doesn't count at all in text volume
