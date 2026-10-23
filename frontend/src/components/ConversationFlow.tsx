@@ -1,11 +1,12 @@
 import type { ChatInsightsStatistics } from "../api";
 import { formatNumber } from "../format";
-import { PERCENTAGE_DECIMAL_PLACES } from "./chatInsightsConstants";
+import {
+  MINIMUM_HANDOFF_COUNT,
+  PERCENTAGE_DECIMAL_PLACES,
+} from "./chatInsightsConstants";
 import {
   chatInsightsCardClassName,
   chatInsightsDescriptionClassName,
-  chatInsightsEmptyTextClassName,
-  chatInsightsGridClassName,
   chatInsightsListClassName,
   chatInsightsListItemClassName,
   chatInsightsParticipantCountClassName,
@@ -22,9 +23,22 @@ import { formatResponseTime } from "./formatResponseTime";
 export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
   const activity = chat.conversation_activity;
   const replyTempo = chat.reply_tempo;
+  const qualifyingHandoffs = activity.handoffs.filter(
+    (handoff) => handoff.count >= MINIMUM_HANDOFF_COUNT,
+  );
   const senderGroups = [
-    { title: "Conversation openers", senders: activity.opening_senders },
-    { title: "Conversation closers", senders: activity.closing_senders },
+    {
+      title: "Conversation openers",
+      senders: activity.opening_senders.filter(
+        (sender) => sender.count >= MINIMUM_HANDOFF_COUNT,
+      ),
+    },
+    {
+      title: "Conversation closers",
+      senders: activity.closing_senders.filter(
+        (sender) => sender.count >= MINIMUM_HANDOFF_COUNT,
+      ),
+    },
   ];
 
   return (
@@ -69,71 +83,64 @@ export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
           detail="messages with a sender switch each turn"
         />
       </div>
-      <div className={chatInsightsGridClassName}>
-        {senderGroups.map(({ title, senders }) => (
-          <section className={chatInsightsCardClassName} key={title}>
-            <h4 className={chatInsightsSectionTitleClassName}>{title}</h4>
-            {senders.length === 0 ? (
-              <p className={chatInsightsEmptyTextClassName}>
-                No dated conversations available.
-              </p>
-            ) : (
-              <ul className={chatInsightsListClassName}>
-                {senders.map((sender) => (
-                  <li
-                    className={chatInsightsListItemClassName}
-                    key={sender.sender_telegram_id ?? "unknown"}
-                  >
-                    <span className={chatInsightsPersonNameClassName}>
-                      {sender.display_name}
-                    </span>
-                    <span className={chatInsightsParticipantCountClassName}>
-                      {formatNumber(sender.count)} conversations
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+      <div className="grid grid-cols-2 items-start gap-3 max-sm:grid-cols-1">
+        <div className="flex flex-col gap-3">
+          {senderGroups.map(
+            ({ title, senders }) =>
+              senders.length > 0 && (
+                <section className={chatInsightsCardClassName} key={title}>
+                  <h4 className={chatInsightsSectionTitleClassName}>{title}</h4>
+                  <ul className={chatInsightsListClassName}>
+                    {senders.map((sender) => (
+                      <li
+                        className={chatInsightsListItemClassName}
+                        key={sender.sender_telegram_id ?? "unknown"}
+                      >
+                        <span className={chatInsightsPersonNameClassName}>
+                          {sender.display_name}
+                        </span>
+                        <span className={chatInsightsParticipantCountClassName}>
+                          {formatNumber(sender.count)} conversations
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ),
+          )}
+        </div>
+        {qualifyingHandoffs.length > 0 && (
+          <section
+            className={`${chatInsightsCardClassName} max-sm:col-start-1`}
+            aria-labelledby="conversation-handoffs-title"
+          >
+            <h4
+              id="conversation-handoffs-title"
+              className={chatInsightsSectionTitleClassName}
+            >
+              Who reopens after a pause
+            </h4>
+            <p className="mb-3 text-caption text-ink-muted">
+              Previous conversation closer → next conversation opener
+            </p>
+            <ul className={chatInsightsListClassName}>
+              {qualifyingHandoffs.map((handoff) => (
+                <li
+                  className={chatInsightsListItemClassName}
+                  key={`${handoff.previous_closer_id}:${handoff.next_opener_id}`}
+                >
+                  <span className={chatInsightsPersonNameClassName}>
+                    {handoff.previous_closer_name} → {handoff.next_opener_name}
+                  </span>
+                  <span className={chatInsightsParticipantCountClassName}>
+                    {formatNumber(handoff.count)} times
+                  </span>
+                </li>
+              ))}
+            </ul>
           </section>
-        ))}
-      </div>
-      <section
-        className={`mt-3 ${chatInsightsCardClassName}`}
-        aria-labelledby="conversation-handoffs-title"
-      >
-        <h4
-          id="conversation-handoffs-title"
-          className={chatInsightsSectionTitleClassName}
-        >
-          Who reopens after a pause
-        </h4>
-        <p className="mb-3 text-caption text-ink-muted">
-          Previous conversation closer → next conversation opener ·{" "}
-          {formatNumber(activity.unattributed_handoff_count)} transitions have
-          an unknown participant.
-        </p>
-        {activity.handoffs.length === 0 ? (
-          <p className={chatInsightsEmptyTextClassName}>
-            No fully attributed conversation handoffs available.
-          </p>
-        ) : (
-          <ul className={chatInsightsListClassName}>
-            {activity.handoffs.map((handoff) => (
-              <li
-                className={chatInsightsListItemClassName}
-                key={`${handoff.previous_closer_id}:${handoff.next_opener_id}`}
-              >
-                <span className={chatInsightsPersonNameClassName}>
-                  {handoff.previous_closer_name} → {handoff.next_opener_name}
-                </span>
-                <span className={chatInsightsParticipantCountClassName}>
-                  {formatNumber(handoff.count)} times
-                </span>
-              </li>
-            ))}
-          </ul>
         )}
-      </section>
+      </div>
     </section>
   );
 }

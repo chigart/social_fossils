@@ -219,6 +219,119 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows only conversation handoffs that occurred at least three times", async () => {
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        {
+          ...chatInsights.chats[0],
+          conversation_activity: {
+            ...chatInsights.chats[0].conversation_activity,
+            attributed_handoff_count: 4,
+            handoffs: [
+              {
+                ...chatInsights.chats[0].conversation_activity.handoffs[0],
+                previous_closer_name: "Rare closer",
+                next_opener_name: "Rare opener",
+                count: 1,
+              },
+              {
+                ...chatInsights.chats[0].conversation_activity.handoffs[0],
+                previous_closer_name: "Frequent closer",
+                next_opener_name: "Frequent opener",
+                count: 3,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Conversation insights");
+
+    expect(
+      screen.getByRole("heading", { name: "Who reopens after a pause" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Conversation openers" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Conversation closers" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Frequent closer → Frequent opener")).toBeInTheDocument();
+    expect(screen.getByText("3 times")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Rare closer → Rare opener"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("1 times")).not.toBeInTheDocument();
+    const panelsGrid = screen
+      .getByRole("heading", { name: "Conversation openers" })
+      .closest("div.grid");
+    expect(panelsGrid).toHaveClass("grid-cols-2");
+    const leftColumn = panelsGrid?.children[0];
+    const rightColumn = panelsGrid?.children[1];
+    expect(leftColumn).toHaveClass("flex-col");
+    expect(leftColumn?.children[0]).toContainElement(
+      screen.getByRole("heading", { name: "Conversation openers" }),
+    );
+    expect(leftColumn?.children[1]).toContainElement(
+      screen.getByRole("heading", { name: "Conversation closers" }),
+    );
+    expect(rightColumn).toContainElement(
+      screen.getByRole("heading", { name: "Who reopens after a pause" }),
+    );
+    expect(screen.getByText("Conversation flow")).toBeInTheDocument();
+  });
+
+  it("shows only conversation openers and closers that occurred at least three times", async () => {
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        {
+          ...chatInsights.chats[0],
+          conversation_activity: {
+            ...chatInsights.chats[0].conversation_activity,
+            opening_senders: [
+              {
+                ...chatInsights.chats[0].conversation_activity.opening_senders[0],
+                display_name: "Frequent opener",
+                count: 3,
+              },
+              {
+                ...chatInsights.chats[0].conversation_activity.opening_senders[1],
+                display_name: "Rare opener",
+                count: 2,
+              },
+            ],
+            closing_senders: [
+              {
+                ...chatInsights.chats[0].conversation_activity.closing_senders[0],
+                display_name: "Frequent closer",
+                count: 4,
+              },
+              {
+                ...chatInsights.chats[0].conversation_activity.closing_senders[1],
+                display_name: "Rare closer",
+                count: 1,
+              },
+            ],
+          },
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Conversation insights");
+
+    expect(screen.getByText("Frequent opener")).toBeInTheDocument();
+    expect(screen.getByText("Frequent closer")).toBeInTheDocument();
+    expect(screen.queryByText("Rare opener")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rare closer")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Conversation openers" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Conversation closers" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows per-chat word, emoji, and observed reaction insights", async () => {
     const user = userEvent.setup();
     const chatWithSingleUseItems = {
@@ -289,8 +402,10 @@ describe("dashboard", () => {
     expect(textShare).toHaveTextContent("180 characters · 40.9%");
     expect(screen.getByText("Most popular words")).toBeInTheDocument();
     expect(screen.getByText("Conversation flow")).toBeInTheDocument();
-    expect(screen.getByText("Who reopens after a pause")).toBeInTheDocument();
-    expect(screen.getByText("Anton → Lena")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Who reopens after a pause"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Anton → Lena")).not.toBeInTheDocument();
     expect(screen.getByText("Message type breakdown")).toBeInTheDocument();
     expect(screen.getByText("Photo")).toBeInTheDocument();
     expect(screen.getByText("30 min")).toBeInTheDocument();

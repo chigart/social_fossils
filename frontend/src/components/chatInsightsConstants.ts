@@ -9,3 +9,4 @@ export const TOP_SENDER_COUNT = 10;
 export const PERCENTAGE_SCALE = 100;
 export const DEGREES_PER_PERCENTAGE_POINT = 3.6;
 export const MINIMUM_REPEATED_ITEM_COUNT = 2;
+export const MINIMUM_HANDOFF_COUNT = 3;
