@@ -400,6 +400,42 @@ describe("dashboard", () => {
     );
     expect(textShare).toHaveTextContent("260 characters · 59.1%");
     expect(textShare).toHaveTextContent("180 characters · 40.9%");
+    const averageMessageLength = screen.getByRole("region", {
+      name: "Average message length by person",
+    });
+    expect(averageMessageLength).toHaveTextContent(
+      "Average message length by person (all senders)",
+    );
+    const averageLengthChart = within(averageMessageLength).getByRole("img", {
+      name: "Average message length by person",
+    });
+    expect(averageLengthChart).toBeInTheDocument();
+    expect(averageLengthChart.parentElement).toHaveClass("overflow-x-auto");
+    expect(averageLengthChart).toHaveAccessibleDescription(
+      /scrolled horizontally/,
+    );
+    const senderNameLabel = averageLengthChart.querySelector(
+      'text[data-sender-name="Anton"]',
+    );
+    expect(
+      Array.from(senderNameLabel?.querySelectorAll("tspan") ?? [])
+        .map((line) => line.textContent)
+        .join(" "),
+    ).toBe("Anton");
+    expect(
+      within(averageMessageLength).getByRole("list", {
+        name: "Average message length details",
+      }),
+    ).toHaveTextContent(
+      "Lena: 22.5 characters per message (180 characters across 8 messages)",
+    );
+    expect(
+      within(averageMessageLength).getByRole("list", {
+        name: "Average message length details",
+      }),
+    ).toHaveTextContent(
+      "Anton: 21.7 characters per message (260 characters across 12 messages)",
+    );
     expect(screen.getByText("Most popular words")).toBeInTheDocument();
     expect(screen.getByText("Conversation flow")).toBeInTheDocument();
     expect(

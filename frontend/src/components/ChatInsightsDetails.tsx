@@ -12,6 +12,7 @@ import { ConversationFlow } from "./ConversationFlow";
 import { MessageTypeBreakdown } from "./MessageTypeBreakdown";
 import { ReactionAnalytics } from "./ReactionAnalytics";
 import { RankingChips } from "./RankingChips";
+import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
 import { SenderShareChart } from "./SenderShareChart";
 import { filterRepeatedItems } from "./chatInsightsUtils";
 
@@ -49,6 +50,9 @@ export function ChatInsightsDetails({ chat }: { chat: ChatInsightsStatistics }) 
           total={chat.text_length}
           metric="characters"
         />
+      </div>
+      <div className="mb-5">
+        <SenderAverageLengthChart senders={chat.senders} />
       </div>
       <ConversationFlow chat={chat} />
       <MessageTypeBreakdown chat={chat} />

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { chatInsights } from "../App.testFixtures";
 import {
   buildMessageTypeShareChart,
+  buildSenderAverageLengthChart,
   buildSenderShareChart,
   filterRepeatedItems,
   filterChatInsightsChats,
@@ -93,6 +94,32 @@ describe("chat insights utilities", () => {
 
     expect(chart.pieBackground).toBe("var(--color-chart-empty)");
     expect(chart.slices.every(({ percentage }) => percentage === 0)).toBe(true);
+  });
+
+  it("ranks all senders by average characters per message", () => {
+    const senders = Array.from({ length: 12 }, (_, index) => ({
+      ...chatInsights.chats[0].senders[0],
+      sender_telegram_id: `user-${index}`,
+      display_name: `Sender ${index}`,
+      message_count: index === 11 ? 0 : 1,
+      text_length: index === 11 ? 1000 : 12 - index,
+    }));
+
+    const chart = buildSenderAverageLengthChart(senders);
+
+    expect(chart.senders).toHaveLength(11);
+    expect(chart.senders[0]).toMatchObject({
+      label: "Sender 0",
+      messageCount: 1,
+      textLength: 12,
+      averageLength: 12,
+    });
+    expect(chart.senders[10]).toMatchObject({
+      label: "Sender 10",
+      averageLength: 2,
+    });
+    expect(chart.maximum).toBe(12);
+    expect(chart.senders.some(({ label }) => label === "Sender 11")).toBe(false);
   });
 
   it("normalizes the top five senders in a message type to a complete pie", () => {

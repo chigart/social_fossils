@@ -29,6 +29,14 @@ const senderColors = [
 
 export type SenderShareMetric = "messages" | "characters";
 
+export type SenderAverageLength = {
+  key: string;
+  label: string;
+  messageCount: number;
+  textLength: number;
+  averageLength: number;
+};
+
 export type SenderShareSlice = {
   key: string;
   label: string;
@@ -140,6 +148,28 @@ export function buildSenderShareChart(
     .join(", ");
 
   return { slices, pieBackground, chartDescription };
+}
+
+export function buildSenderAverageLengthChart(senders: ChatInsightSender[]) {
+  const rankedSenders = senders
+    .filter((sender) => sender.message_count > 0)
+    .map((sender) => ({
+      key: sender.sender_telegram_id ?? sender.display_name,
+      label: sender.display_name,
+      messageCount: sender.message_count,
+      textLength: sender.text_length,
+      averageLength: sender.text_length / sender.message_count,
+    }))
+    .sort(
+      (left, right) =>
+        right.averageLength - left.averageLength ||
+        left.label.localeCompare(right.label),
+    );
+
+  return {
+    senders: rankedSenders,
+    maximum: Math.max(0, ...rankedSenders.map(({ averageLength }) => averageLength)),
+  };
 }
 
 export function buildMessageTypeShareChart(senders: ConversationParticipantCount[]) {

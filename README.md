@@ -1,4 +1,10 @@
-# MVP for Social Fossils
+# Social Fossils
+
+### Run Project
+- docker compose up --build -d
+
+### Finish Work
+- docker compose down
 
 ### Development
 - cd frontend
@@ -18,17 +24,7 @@
 - Backend: `cd backend && pytest`
 - Frontend: `cd frontend && npm test`
 
-### Run Project
-- docker compose up
-
-### Finish Work
-- docker compose down 
-
 ## TODO
 1. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
 2. Split all ingestion into DAG tasks.
-3. Interactive contacts merge
-4. Fix timeline in insights tab, remove unnecessary in insights
-
-## BUGS
-1. Image/sticker doesn't count at all in text volume
+3. Fix timeline in insights tab.
