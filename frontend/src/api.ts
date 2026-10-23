@@ -49,6 +49,7 @@ export type MessageTypeCount = {
   category: string;
   count: number;
   with_text_count: number;
+  senders: ConversationParticipantCount[];
 };
 
 export type ReplyTempoStatistics = {

@@ -433,14 +433,6 @@ class ReactionAuthorPair(BaseModel):
     )
 
 
-class MessageTypeCount(BaseModel):
-    category: str
-    count: int
-    with_text_count: int = Field(
-        description="Messages in this category that also contain normalized text."
-    )
-
-
 class ReplyTempoStatistics(BaseModel):
     reply_reference_count: int = Field(
         description="Ordinary messages that reference another Telegram message."
@@ -457,6 +449,17 @@ class ConversationParticipantCount(BaseModel):
     sender_telegram_id: str | None
     display_name: str
     count: int
+
+
+class MessageTypeCount(BaseModel):
+    category: str
+    count: int
+    with_text_count: int = Field(
+        description="Messages in this category that also contain normalized text."
+    )
+    senders: list[ConversationParticipantCount] = Field(
+        description="Top senders for this message category, ranked by message count."
+    )
 
 
 class ConversationHandoffCount(BaseModel):

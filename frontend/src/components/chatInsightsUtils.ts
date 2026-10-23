@@ -1,6 +1,7 @@
 import type {
   ChatInsightSender,
   ChatInsightsStatistics,
+  ConversationParticipantCount,
   EmojiFrequency,
   WordFrequency,
 } from "../api";
@@ -9,20 +10,21 @@ import {
   MINIMUM_REPEATED_ITEM_COUNT,
   PERCENTAGE_SCALE,
   PERCENTAGE_DECIMAL_PLACES,
+  TOP_MESSAGE_TYPE_SENDER_COUNT,
   TOP_SENDER_COUNT,
 } from "./chatInsightsConstants";
 
 const senderColors = [
-  "#5267d8",
-  "#d46c5c",
-  "#36a58b",
-  "#d59b38",
-  "#8b61bc",
-  "#3f92bd",
-  "#bf5f91",
-  "#789449",
-  "#c45b47",
-  "#4d7882",
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
+  "var(--color-chart-6)",
+  "var(--color-chart-7)",
+  "var(--color-chart-8)",
+  "var(--color-chart-9)",
+  "var(--color-chart-10)",
 ];
 
 export type SenderShareMetric = "messages" | "characters";
@@ -104,7 +106,7 @@ export function buildSenderShareChart(
             key: "other-senders",
             label: "Other senders",
             value: otherSendersValue,
-            color: "#9299a8",
+            color: "var(--color-chart-other)",
           },
         ]
       : []),
@@ -129,7 +131,50 @@ export function buildSenderShareChart(
             `${color} ${startAngle}deg ${endAngle}deg`,
           )
           .join(", ")})`
-      : "#e7e9ee";
+      : "var(--color-chart-empty)";
+  const chartDescription = slices
+    .map(
+      ({ label, percentage }) =>
+        `${label} ${percentage.toFixed(PERCENTAGE_DECIMAL_PLACES)}%`,
+    )
+    .join(", ");
+
+  return { slices, pieBackground, chartDescription };
+}
+
+export function buildMessageTypeShareChart(senders: ConversationParticipantCount[]) {
+  const topSenders = [...senders]
+    .sort(
+      (first, second) =>
+        second.count - first.count ||
+        first.display_name.localeCompare(second.display_name),
+    )
+    .slice(0, TOP_MESSAGE_TYPE_SENDER_COUNT);
+  const total = topSenders.reduce((sum, sender) => sum + sender.count, 0);
+  let nextAngle = 0;
+  const slices = topSenders.map((sender, index) => {
+    const percentage =
+      total > 0 ? (sender.count / total) * PERCENTAGE_SCALE : 0;
+    const startAngle = nextAngle;
+    nextAngle += percentage * DEGREES_PER_PERCENTAGE_POINT;
+    return {
+      key: sender.sender_telegram_id ?? sender.display_name,
+      label: sender.display_name,
+      value: sender.count,
+      color: senderColors[index],
+      percentage,
+      startAngle,
+      endAngle: nextAngle,
+    };
+  });
+  const pieBackground =
+    total > 0
+      ? `conic-gradient(${slices
+          .map(({ color, startAngle, endAngle }) =>
+            `${color} ${startAngle}deg ${endAngle}deg`,
+          )
+          .join(", ")})`
+      : "var(--color-chart-empty)";
   const chartDescription = slices
     .map(
       ({ label, percentage }) =>

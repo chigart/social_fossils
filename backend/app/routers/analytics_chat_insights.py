@@ -79,6 +79,13 @@ class _ConversationMessage:
 
 
 @dataclass
+class _MessageTypeSenderCounts:
+    sender_id: str | None
+    name: str
+    count: int = 0
+
+
+@dataclass
 class _ChatCounts:
     chat_id: int
     account_id: int
@@ -96,6 +103,9 @@ class _ChatCounts:
     sender_message_counts: Counter[str] = field(default_factory=Counter)
     message_type_counts: Counter[str] = field(default_factory=Counter)
     with_text_counts: Counter[str] = field(default_factory=Counter)
+    message_type_senders: dict[
+        str, dict[str | None, _MessageTypeSenderCounts]
+    ] = field(default_factory=dict)
     messages: list[_ConversationMessage] = field(default_factory=list)
 
 
@@ -529,6 +539,22 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
                 category=category,
                 count=count,
                 with_text_count=counts.with_text_counts[category],
+                senders=[
+                    ConversationParticipantCount(
+                        sender_telegram_id=sender.sender_id,
+                        display_name=sender.name,
+                        count=sender.count,
+                    )
+                    for sender in sorted(
+                        counts.message_type_senders.get(category, {}).values(),
+                        key=lambda sender: (
+                            -sender.count,
+                            sender.name.casefold(),
+                        ),
+                    )[:5]
+                ]
+                if category.casefold() != "text"
+                else [],
             )
             for category, count in sorted(
                 counts.message_type_counts.items(),
@@ -606,6 +632,19 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             chat.message_type_counts[category] += 1
             if text:
                 chat.with_text_counts[category] += 1
+            type_senders = chat.message_type_senders.setdefault(category, {})
+            type_sender = type_senders.get(row.sender_telegram_id)
+            if type_sender is None:
+                type_sender = _MessageTypeSenderCounts(
+                    sender_id=row.sender_telegram_id,
+                    name=(
+                        _clean_display_name(row.sender_name)
+                        or row.sender_telegram_id
+                        or "Unknown sender"
+                    ),
+                )
+                type_senders[row.sender_telegram_id] = type_sender
+            type_sender.count += 1
             chat.messages.append(
                 _ConversationMessage(
                     message_id=row.message_id,
@@ -624,6 +663,19 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         chat.message_type_counts[category] += 1
         if text:
             chat.with_text_counts[category] += 1
+        type_senders = chat.message_type_senders.setdefault(category, {})
+        type_sender = type_senders.get(row.sender_telegram_id)
+        if type_sender is None:
+            type_sender = _MessageTypeSenderCounts(
+                sender_id=row.sender_telegram_id,
+                name=(
+                    _clean_display_name(row.sender_name)
+                    or row.sender_telegram_id
+                    or "Unknown sender"
+                ),
+            )
+            type_senders[row.sender_telegram_id] = type_sender
+        type_sender.count += 1
         chat.messages.append(
             _ConversationMessage(
                 message_id=row.message_id,

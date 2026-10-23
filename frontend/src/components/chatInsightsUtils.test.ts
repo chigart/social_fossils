@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chatInsights } from "../App.testFixtures";
 import {
+  buildMessageTypeShareChart,
   buildSenderShareChart,
   filterRepeatedItems,
   filterChatInsightsChats,
@@ -81,7 +82,7 @@ describe("chat insights utilities", () => {
       key: "other-senders",
       label: "Other senders",
       value: 1,
-      color: "#9299a8",
+      color: "var(--color-chart-other)",
     });
     expect(chart.chartDescription).toContain("Other senders 1.5%");
     expect(chart.pieBackground).toContain("conic-gradient(");
@@ -90,7 +91,31 @@ describe("chat insights utilities", () => {
   it("uses the neutral chart background when the total is zero", () => {
     const chart = buildSenderShareChart(chatInsights.chats[0].senders, 0, "messages");
 
-    expect(chart.pieBackground).toBe("#e7e9ee");
+    expect(chart.pieBackground).toBe("var(--color-chart-empty)");
     expect(chart.slices.every(({ percentage }) => percentage === 0)).toBe(true);
+  });
+
+  it("normalizes the top five senders in a message type to a complete pie", () => {
+    const senders = Array.from({ length: 6 }, (_, index) => ({
+      sender_telegram_id: `user-${index + 1}`,
+      display_name: `Sender ${index + 1}`,
+      count: 6 - index,
+    }));
+
+    const chart = buildMessageTypeShareChart(senders);
+
+    expect(chart.slices).toHaveLength(5);
+    expect(chart.slices.map(({ label }) => label)).toEqual([
+      "Sender 1",
+      "Sender 2",
+      "Sender 3",
+      "Sender 4",
+      "Sender 5",
+    ]);
+    expect(
+      chart.slices.reduce((sum, { percentage }) => sum + percentage, 0),
+    ).toBeCloseTo(100);
+    expect(chart.slices[chart.slices.length - 1].endAngle).toBeCloseTo(360);
+    expect(chart.pieBackground).toContain("conic-gradient(");
   });
 });

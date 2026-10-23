@@ -408,6 +408,50 @@ describe("dashboard", () => {
     expect(screen.queryByText("Anton → Lena")).not.toBeInTheDocument();
     expect(screen.getByText("Message type breakdown")).toBeInTheDocument();
     expect(screen.getByText("Photo")).toBeInTheDocument();
+    const messageTypeBreakdown = screen.getByRole("region", {
+      name: "Message type breakdown",
+    });
+    expect(
+      within(messageTypeBreakdown).getByRole("listitem", {
+        name: "Anton, 2 messages, 66.7%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(messageTypeBreakdown).getByRole("img", {
+        name: "Photo sender share: Anton 66.7%, Lena 33.3%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(messageTypeBreakdown).getByRole("img", {
+        name: "Video sender share: Lena 100.0%",
+      }),
+    ).toBeInTheDocument();
+    expect(messageTypeBreakdown).toHaveTextContent(
+      "Each category has its own pie chart, using its top 5 senders normalized to 100%",
+    );
+    const messageTypeCharts = within(messageTypeBreakdown).getAllByRole("article");
+    expect(messageTypeCharts).toHaveLength(2);
+    expect(messageTypeCharts[0].parentElement).toHaveClass("grid-cols-3");
+    expect(
+      within(messageTypeBreakdown).queryByRole("listitem", {
+        name: "Text, 20 messages, 20 with text",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(messageTypeBreakdown).queryByRole("listitem", {
+        name: "Unclassified, 2 messages, 0 with text",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(messageTypeBreakdown).getByRole("listitem", {
+        name: "Lena, 1 messages, 33.3%",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(messageTypeBreakdown).queryByRole("listitem", {
+        name: "Anton, 20 messages, 100.0%",
+      }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("30 min")).toBeInTheDocument();
     expect(screen.getByText("Popular words and emojis by sender")).toBeInTheDocument();
     expect(screen.getByText("Observed reactions by person")).toBeInTheDocument();

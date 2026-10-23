@@ -336,6 +336,56 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
     ]
     photo = next(item for item in chat.message_type_breakdown if item.category == "Photo")
     assert photo.with_text_count == 1
+    assert [(sender.display_name, sender.count) for sender in photo.senders] == [
+        ("user-owner", 1)
+    ]
+    assert next(
+        item for item in chat.message_type_breakdown if item.category == "Service event"
+    ).senders[0].display_name == "user200"
+    assert next(
+        item for item in chat.message_type_breakdown if item.category == "Text"
+    ).senders == []
+
+
+def test_message_type_breakdown_ranks_five_senders_and_omits_plain_text_senders(
+    db_session,
+):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")
+
+    message_id = 1
+    for sender_number, message_count in enumerate(range(6, 0, -1), start=1):
+        for _ in range(message_count):
+            add_message(
+                db_session,
+                message_id,
+                10,
+                "message",
+                f"user{sender_number}",
+                raw_payload={"media_type": "photo"},
+            )
+            message_id += 1
+    add_message(
+        db_session,
+        message_id,
+        10,
+        "message",
+        "user-owner",
+        text_content="plain text",
+    )
+
+    chat = ChatInsightsResponse.model_validate(get_chat_insights(db_session)).chats[0]
+    photo = next(item for item in chat.message_type_breakdown if item.category == "Photo")
+    text = next(item for item in chat.message_type_breakdown if item.category == "Text")
+
+    assert [(sender.sender_telegram_id, sender.count) for sender in photo.senders] == [
+        ("user1", 6),
+        ("user2", 5),
+        ("user3", 4),
+        ("user4", 3),
+        ("user5", 2),
+    ]
+    assert text.senders == []
 
 
 def test_conversation_metrics_keep_undated_and_unknown_senders_unattributed(db_session):

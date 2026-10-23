@@ -185,8 +185,37 @@ export const chatInsights: ChatInsightsResponse = {
         },
       ],
       message_type_breakdown: [
-        { category: "Text", count: 20, with_text_count: 20 },
-        { category: "Photo", count: 3, with_text_count: 1 },
+        { category: "Text", count: 20, with_text_count: 20, senders: [] },
+        { category: "Unclassified", count: 2, with_text_count: 0, senders: [] },
+        {
+          category: "Photo",
+          count: 3,
+          with_text_count: 1,
+          senders: [
+            {
+              sender_telegram_id: "user-anton",
+              display_name: "Anton",
+              count: 2,
+            },
+            {
+              sender_telegram_id: "user-lena",
+              display_name: "Lena",
+              count: 1,
+            },
+          ],
+        },
+        {
+          category: "Video",
+          count: 2,
+          with_text_count: 0,
+          senders: [
+            {
+              sender_telegram_id: "user-lena",
+              display_name: "Lena",
+              count: 2,
+            },
+          ],
+        },
       ],
       reply_tempo: {
         reply_reference_count: 7,
