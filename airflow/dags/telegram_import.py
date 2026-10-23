@@ -1,11 +1,11 @@
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import DAG
-from airflow.utils.trigger_rule import TriggerRule
+from airflow.task.trigger_rule import TriggerRule
 
 import sys
 sys.path.insert(0, "/app")
@@ -72,7 +72,7 @@ def perform_import(**context) -> dict:
 
         # Update job status
         job.status = "processing"
-        job.started_at = datetime.utcnow()
+        job.started_at = datetime.now(timezone.utc)
         session.commit()
 
         # Perform the import
@@ -101,7 +101,7 @@ def update_job_status_completed(**context) -> None:
         job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
         if job:
             job.status = "completed"
-            job.finished_at = datetime.utcnow()
+            job.finished_at = datetime.now(timezone.utc)
             job.airflow_dag_run_id = context["dag_run"].run_id
             session.commit()
             logger.info(f"Job {job_id} marked as completed")
@@ -118,7 +118,7 @@ def update_job_status_failed(**context) -> None:
         job = session.query(UploadJob).filter(UploadJob.id == job_id).first()
         if job:
             job.status = "failed"
-            job.finished_at = datetime.utcnow()
+            job.finished_at = datetime.now(timezone.utc)
             job.airflow_dag_run_id = context["dag_run"].run_id
             job.error_message = str(exception) if exception else "Unknown error"
             session.commit()
