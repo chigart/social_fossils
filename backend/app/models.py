@@ -44,12 +44,60 @@ class CanonicalIdentity(Base):
             "platform_user_id",
             name="uq_canonical_identities_platform_user",
         ),
+        UniqueConstraint(
+            "identity_group_id",
+            "platform",
+            name="uq_canonical_identities_group_platform",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     platform: Mapped[str] = mapped_column(String(50))
     platform_user_id: Mapped[str] = mapped_column(String(100))
+    identity_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("canonical_identity_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class CanonicalIdentityGroup(Base):
+    __tablename__ = "canonical_identity_groups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+
+class IdentityLinkEvent(Base):
+    __tablename__ = "identity_link_events"
+
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('linked', 'unlinked')",
+            name="ck_identity_link_events_action",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    identity_id: Mapped[int] = mapped_column(
+        ForeignKey("canonical_identities.id", ondelete="RESTRICT"),
+        index=True,
+    )
+    peer_identity_id: Mapped[int | None] = mapped_column(
+        ForeignKey("canonical_identities.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    action: Mapped[str] = mapped_column(String(20))
+    source: Mapped[str] = mapped_column(String(50))
+    occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
     )
@@ -61,13 +109,13 @@ class Contact(Base):
     __table_args__ = (
         UniqueConstraint(
             "account_id",
-            "telegram_user_id",
-            name="uq_contacts_account_telegram_id",
+            "platform_user_id",
+            name="uq_contacts_account_platform_id",
         ),
         UniqueConstraint(
             "account_id",
-            "platform_user_id",
-            name="uq_contacts_account_platform_id",
+            "source_contact_key",
+            name="uq_contacts_account_source_key",
         ),
     )
 
@@ -77,8 +125,8 @@ class Contact(Base):
         index=True,
     )
     platform: Mapped[str] = mapped_column(String(50))
-    telegram_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     platform_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_contact_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     canonical_identity_id: Mapped[int | None] = mapped_column(
         ForeignKey("canonical_identities.id", ondelete="SET NULL"),
         nullable=True,
@@ -115,35 +163,6 @@ class Chat(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-    )
-
-
-class ChatMember(Base):
-    __tablename__ = "chat_members"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "chat_id",
-            "telegram_user_id",
-            name="uq_chat_members_chat_telegram_user",
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    chat_id: Mapped[int] = mapped_column(
-        ForeignKey("chats.id", ondelete="CASCADE"),
-        index=True,
-    )
-    telegram_user_id: Mapped[str] = mapped_column(String(100))
-    contact_id: Mapped[int | None] = mapped_column(
-        ForeignKey("contacts.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    display_name: Mapped[str | None] = mapped_column(String(300))
-    is_self: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        server_default=text("false"),
     )
 
 

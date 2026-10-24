@@ -48,7 +48,10 @@ def test_parse_instagram_archive_preserves_messages_and_generates_stable_keys(tm
     assert parsed.owner_platform_user_id is None
     assert len(parsed.chats) == 1
     chat = parsed.chats[0]
-    assert chat.platform_chat_id == "inbox/friend_123"
+    assert chat.platform_chat_id == "123"
+    assert chat.legacy_platform_chat_id == "inbox/friend_123"
+    assert chat.correspondent_platform_user_id == "123"
+    assert chat.correspondent_username == "friend"
     assert chat.title == "Example conversation"
     assert chat.chat_type == "private_group"
     assert len(chat.messages) == 3
@@ -113,6 +116,29 @@ def test_parse_instagram_archive_reads_account_identity_from_profile_data(tmp_pa
     assert parsed.account_name == "Owner Display Name"
     assert parsed.account_username == "owner_handle"
     assert parsed.owner_platform_user_id == "user-123"
+
+
+def test_parse_instagram_archive_repairs_latin1_mojibake(tmp_path):
+    archive_path = tmp_path / "mojibake.zip"
+    mojibake_name = "Ð\u0098Ð²Ð°Ð½ Ð§Ð¾Ð¿Ð¾Ð±ÐµÑ\u0081Ð¾Ð²"
+    with ZipFile(archive_path, "w") as archive:
+        _write_conversation(
+            archive,
+            "messages/inbox/person_123/message_1.json",
+            [
+                {
+                    "sender_name": mojibake_name,
+                    "content": mojibake_name,
+                }
+            ],
+            title=mojibake_name,
+        )
+
+    parsed = parse_instagram_archive(archive_path)
+
+    assert parsed.chats[0].title == "Иван Чопобесов"
+    assert parsed.chats[0].messages[0]["sender_name"] == "Иван Чопобесов"
+    assert parsed.chats[0].messages[0]["text_content"] == "Иван Чопобесов"
 
 
 def test_parse_instagram_archive_rejects_malformed_conversation_entries(tmp_path):

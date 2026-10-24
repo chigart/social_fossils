@@ -19,7 +19,7 @@ function renderTimeline(
         {
           canonicalIdentityId: 1,
           displayName: "Avery",
-          telegramUserId: "12345",
+          platformUserId: "12345",
         },
       ]}
       selectedContactId={null}

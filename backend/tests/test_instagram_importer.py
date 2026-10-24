@@ -8,6 +8,7 @@ from app import instagram_importer
 from app.telegram_importer import import_source_export
 from app.models import (
     CanonicalIdentity,
+    Chat,
     Contact,
     ImportSession,
     Message,
@@ -30,7 +31,8 @@ def _create_import_tables(engine) -> None:
             text(
                 "CREATE TABLE canonical_identities ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, platform VARCHAR(50), "
-                "platform_user_id VARCHAR(100), created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "platform_user_id VARCHAR(100), identity_group_id INTEGER, "
+                "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
                 "UNIQUE(platform, platform_user_id))"
             )
         )
@@ -38,11 +40,13 @@ def _create_import_tables(engine) -> None:
             text(
                 "CREATE TABLE contacts ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, account_id INTEGER, "
-                "platform VARCHAR(50), telegram_user_id VARCHAR(100), "
-                "platform_user_id VARCHAR(100), canonical_identity_id INTEGER, "
+                "platform VARCHAR(50), "
+                "platform_user_id VARCHAR(100), source_contact_key VARCHAR(64), "
+                "canonical_identity_id INTEGER, "
                 "display_name VARCHAR(300), username VARCHAR(100), "
                 "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
-                "UNIQUE(account_id, platform_user_id))"
+                "UNIQUE(account_id, platform_user_id), "
+                "UNIQUE(account_id, source_contact_key))"
             )
         )
         connection.execute(
@@ -114,7 +118,7 @@ def _write_archive(path) -> None:
                         },
                         {
                             "message_id": "instagram-message-2",
-                            "sender_id": "instagram-user-2",
+                            "sender_id": "123",
                             "sender_name": "Synthetic sender",
                             "timestamp_ms": 1_700_000_000_456,
                             "content": "synthetic identified message",
@@ -123,8 +127,6 @@ def _write_archive(path) -> None:
                 }
             ),
         )
-
-
 def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_path):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'instagram.db'}")
     _create_import_tables(engine)
@@ -132,6 +134,33 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
     _write_archive(archive_path)
 
     with Session(engine) as session:
+        account = Account(
+            platform="instagram",
+            name="Synthetic Owner",
+            username="synthetic_owner",
+            platform_user_id="synthetic_owner",
+        )
+        session.add(account)
+        session.flush()
+        session.add(
+            Chat(
+                account_id=account.id,
+                platform="instagram",
+                chat_id="inbox/example_123",
+                chat_type="personal_chat",
+                title=None,
+            )
+        )
+        preserved_contact = Contact(
+            account_id=account.id,
+            platform="instagram",
+            platform_user_id="456",
+            canonical_identity_id=None,
+            display_name="Contact from another export",
+        )
+        session.add(preserved_contact)
+        session.commit()
+
         first = instagram_importer.import_instagram_export(
             archive_path,
             session=session,
@@ -144,17 +173,25 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
 
         assert first["platform"] == "instagram"
         assert first["inserted_messages"] == 2
+        assert first["inserted_contacts"] == 1
+        assert first["total_contacts"] == 1
         assert second["inserted_messages"] == 0
+        assert second["inserted_contacts"] == 0
         assert second["skipped_messages"] == 2
 
         account = session.scalar(select(Account))
         messages = session.scalars(select(Message)).all()
+        chat = session.scalar(select(Chat))
         identified_message = session.scalar(
             select(Message).where(
                 Message.source_message_id == "instagram-message-2"
             )
         )
-        contact = session.scalar(select(Contact))
+        contact = session.scalar(
+            select(Contact).where(
+                Contact.platform_user_id == "123"
+            )
+        )
         identity = session.scalar(select(CanonicalIdentity))
         import_sessions = session.scalars(select(ImportSession)).all()
         assert account is not None
@@ -163,6 +200,7 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         assert account.username == "synthetic_owner"
         assert account.name == "Synthetic Owner"
         assert len(messages) == 2
+        assert chat is not None and chat.chat_id == "123"
         unidentified_message = next(
             message for message in messages if message.source_message_id is None
         )
@@ -174,12 +212,17 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         assert unidentified_message.raw_payload["content"] == "synthetic private text"
         assert identified_message is not None
         assert contact is not None
-        assert identified_message.sender_platform_user_id == "instagram-user-2"
+        assert identified_message.sender_platform_user_id == "123"
+        assert identified_message.sender_contact_id == contact.id
         assert identified_message.sender_contact_id == contact.id
         assert contact.platform == "instagram"
-        assert contact.telegram_user_id is None
-        assert contact.platform_user_id == "instagram-user-2"
+        assert contact.platform_user_id == "123"
+        assert contact.username == "example"
         assert identity is not None and identity.platform == "instagram"
+        contacts = session.scalars(select(Contact)).all()
+        assert len(contacts) == 2
+        assert preserved_contact in contacts
+        assert contact.display_name == "Synthetic thread"
         assert len(import_sessions) == 2
         assert all(item.platform == "instagram" for item in import_sessions)
 

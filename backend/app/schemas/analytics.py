@@ -54,6 +54,7 @@ class ChatStatistics(BaseModel):
 
 
 class ContactStatistics(BaseModel):
+    platform: str = Field(description="Messaging platform for this contact group.")
     account_id: int | None = Field(
         default=None,
         description="Single source account ID, or null when combined across accounts.",
@@ -78,8 +79,8 @@ class ContactStatistics(BaseModel):
         default_factory=list,
         description="Account-local contact rows contributing to this group."
     )
-    telegram_user_id: str | None = Field(
-        description="Stored sender Telegram ID, or null for unidentified senders."
+    platform_user_id: str | None = Field(
+        description="Stored platform user ID, or null when the source did not identify the sender."
     )
     display_name: str | None = Field(
         description="Contact display name when the Telegram ID resolves to a contact."
@@ -144,7 +145,7 @@ class ForgottenContact(BaseModel):
     source_contact_ids: list[int] = Field(
         description="Account-local contact rows contributing to this contact."
     )
-    telegram_user_id: str = Field(description="Matched Telegram user ID.")
+    platform_user_id: str = Field(description="Matched platform user ID.")
     display_name: str | None
     first_message_at: datetime | None
     last_message_at: datetime | None
@@ -225,7 +226,7 @@ class CommunicationBalanceContact(BaseModel):
     source_contact_ids: list[int] = Field(
         description="Account-local contact rows contributing to this contact."
     )
-    telegram_user_id: str = Field(description="Matched Telegram user ID.")
+    platform_user_id: str = Field(description="Matched platform user ID.")
     display_name: str | None = Field(description="Contact display name, when available.")
     owner_message_count: int = Field(
         description="Ordinary messages sent by the owner with known direction."

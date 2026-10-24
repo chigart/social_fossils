@@ -316,7 +316,7 @@ def build_forgotten_contacts_statistics(
                 source_account_ids=sorted(source_account_ids),
                 source_account_labels=sorted(source_account_labels),
                 source_contact_ids=sorted(source_contact_ids),
-                telegram_user_id=row.telegram_user_id,
+                platform_user_id=row.platform_user_id,
                 display_name=row.display_name,
                 first_message_at=first_message_at,
                 last_message_at=last_message_at,

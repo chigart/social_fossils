@@ -83,8 +83,8 @@ def add_contact(
     db_session.execute(
         text(
             "INSERT INTO contacts "
-            "(id, account_id, telegram_user_id, canonical_identity_id, display_name) "
-            "VALUES (:id, :account_id, :telegram_user_id, :identity_id, :display_name)"
+            "(id, account_id, platform, platform_user_id, canonical_identity_id, display_name) "
+            "VALUES (:id, :account_id, 'telegram', :telegram_user_id, :identity_id, :display_name)"
         ),
         {
             "id": contact_id,

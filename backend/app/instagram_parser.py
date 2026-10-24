@@ -15,11 +15,15 @@ from typing import Any
 MESSAGE_FILE_PATTERN = re.compile(r"message(?:_\d+)?\.json", re.IGNORECASE)
 MAX_MESSAGE_FILE_BYTES = 100 * 1024 * 1024
 MAX_MESSAGE_DATA_BYTES = 1024 * 1024 * 1024
+USER_FOLDER_PATTERN = re.compile(r"^(?P<username>.+)_(?P<user_id>\d+)$")
 
 
 @dataclass
 class ParsedInstagramChat:
     platform_chat_id: str
+    legacy_platform_chat_id: str
+    correspondent_platform_user_id: str | None
+    correspondent_username: str | None
     title: str | None
     chat_type: str
     messages: list[dict[str, Any]] = field(default_factory=list)
@@ -55,6 +59,28 @@ def _message_files(archive: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]
         files.append((member, thread_path))
 
     return sorted(files, key=lambda item: item[0].filename)
+
+
+def normalize_instagram_text(value: str) -> str:
+    if not any(marker in value for marker in ("Ã", "Ð", "Ñ", "\x80", "\x81", "\x8d")):
+        return value
+    try:
+        decoded = value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return value
+    return decoded if decoded != value else value
+
+
+def _folder_identity(thread_path: str) -> tuple[str, str | None, str | None]:
+    folder_name = thread_path.rsplit("/", 1)[-1]
+    match = USER_FOLDER_PATTERN.fullmatch(folder_name)
+    if match is None:
+        return thread_path, None, None
+    return (
+        match.group("user_id"),
+        normalize_instagram_text(match.group("username")),
+        match.group("user_id"),
+    )
 
 
 def _timestamp_from_message(message: dict[str, Any]) -> datetime | None:
@@ -129,11 +155,15 @@ def _message_payload(
         "sender_platform_user_id": _source_id(
             raw_message.get("sender_id", raw_message.get("sender_user_id"))
         ),
-        "sender_name": sender_name.strip() if sender_name else None,
+        "sender_name": (
+            normalize_instagram_text(sender_name.strip()) if sender_name else None
+        ),
         "is_outgoing": is_outgoing,
         "message_date": _timestamp_from_message(raw_message),
         "message_type": message_type,
-        "text_content": text_content,
+        "text_content": (
+            normalize_instagram_text(text_content) if text_content is not None else None
+        ),
         "source_reply_id": _source_id(raw_message.get("reply_to_message_id")),
         "raw_payload": raw_message,
     }
@@ -149,7 +179,7 @@ def _profile_value(value: Any) -> str | None:
     if isinstance(value, dict):
         value = value.get("value")
     if isinstance(value, (str, int)) and not isinstance(value, bool):
-        normalized = str(value).strip()
+        normalized = normalize_instagram_text(str(value).strip())
         return normalized or None
     return None
 
@@ -167,12 +197,15 @@ def _profile_fields(payload: Any) -> dict[str, str]:
                     "profile username": "username",
                     "name": "name",
                     "full name": "name",
+                    "first name": "first_name",
+                    "last name": "last_name",
                     "user id": "user_id",
                     "user id number": "user_id",
                     "user id (numeric)": "user_id",
                     "user_id": "user_id",
                     "profile user id": "user_id",
                     "instagram user id": "user_id",
+                    "instagram id": "user_id",
                 }.get(normalized_key)
                 candidate = _profile_value(child)
                 if target is not None and candidate is not None:
@@ -220,7 +253,9 @@ def parse_instagram_archive(
         account_details = _account_details(archive)
         message_files = _message_files(archive)
         if not message_files:
-            raise ValueError("Instagram export contains no supported message JSON files.")
+            raise ValueError(
+                "Instagram export contains no supported message JSON files."
+            )
 
         total_size = sum(member.file_size for member, _ in message_files)
         if total_size > MAX_MESSAGE_DATA_BYTES:
@@ -254,24 +289,30 @@ def parse_instagram_archive(
             if not isinstance(raw_messages, list):
                 raise ValueError("Instagram conversation must contain a messages list.")
 
-            chat = chats_by_id.get(chat_id)
+            platform_chat_id, correspondent_username, correspondent_user_id = (
+                _folder_identity(chat_id)
+            )
+            chat = chats_by_id.get(platform_chat_id)
             if chat is None:
                 title = payload.get("title")
                 chat = ParsedInstagramChat(
-                    platform_chat_id=chat_id,
+                    platform_chat_id=platform_chat_id,
+                    legacy_platform_chat_id=chat_id,
+                    correspondent_platform_user_id=correspondent_user_id,
+                    correspondent_username=correspondent_username,
                     title=(
-                        title.strip()
+                        normalize_instagram_text(title.strip())
                         if isinstance(title, str) and title.strip()
                         else None
                     ),
                     chat_type=_chat_type(payload.get("participants")),
                 )
-                chats_by_id[chat_id] = chat
-                identical_message_counts[chat_id] = Counter()
+                chats_by_id[platform_chat_id] = chat
+                identical_message_counts[platform_chat_id] = Counter()
             elif chat.chat_type == "personal_chat":
                 chat.chat_type = _chat_type(payload.get("participants"))
 
-            occurrences = identical_message_counts[chat_id]
+            occurrences = identical_message_counts[platform_chat_id]
             for raw_message in raw_messages:
                 if not isinstance(raw_message, dict):
                     raise ValueError("Instagram message entries must be JSON objects.")

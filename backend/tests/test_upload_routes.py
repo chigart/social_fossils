@@ -59,8 +59,12 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
                 data={"platform": "telegram"},
                 files={"file": ("another-name.json", b'{"synthetic": true}', "application/json")},
             )
-            assert duplicate.status_code == 409
-            assert len(client.get("/api/uploads/jobs").json()) == 1
+            assert duplicate.status_code == 202
+            assert duplicate.json()["warning_message"] == (
+                "This file has already been uploaded"
+            )
+            assert duplicate.json()["airflow_dag_run_id"] == "run-1"
+            assert len(client.get("/api/uploads/jobs").json()) == 2
             assert len(list((tmp_path / "staging").iterdir())) == 1
 
             assert client.post("/api/auth/login", json={}).status_code == 404

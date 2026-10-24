@@ -6,8 +6,11 @@ import {
   getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
+  getIdentityLinks,
   getOverview,
+  linkPlatformIdentities,
   retryUploadJob,
+  unlinkPlatformIdentity,
   uploadFile,
 } from "./api";
 
@@ -87,6 +90,56 @@ describe("analytics API helpers", () => {
     );
   });
 
+  it("lists, links, and unlinks platform identities", async () => {
+    const response = {
+      identities: [],
+      contacts_without_identity: [],
+      events: [],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => response,
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: "linked", identity_group_id: 9 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: "unlinked", identity_group_id: null }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getIdentityLinks()).resolves.toEqual(response);
+    await expect(linkPlatformIdentities(1, 2)).resolves.toEqual({
+      status: "linked",
+      identity_group_id: 9,
+    });
+    await expect(unlinkPlatformIdentity(1)).resolves.toEqual({
+      status: "unlinked",
+      identity_group_id: null,
+    });
+
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/identity-links"]);
+    expect(fetchMock.mock.calls[1]).toEqual([
+      "/api/identity-links",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_identity_id: 1,
+          second_identity_id: 2,
+        }),
+      },
+    ]);
+    expect(fetchMock.mock.calls[2]).toEqual([
+      "/api/identity-links/1",
+      { method: "DELETE" },
+    ]);
+  });
+
   it("reports a useful error when the backend cannot be reached", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
 
@@ -161,13 +214,16 @@ describe("analytics API helpers", () => {
     expect((options.body as FormData).get("platform")).toBe("instagram");
   });
 
-  it("uses the server error detail for a rejected file", async () => {
+  it("returns the duplicate upload warning with an accepted job", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
-        ok: false,
-        status: 409,
-        json: async () => ({ detail: "This file has already been uploaded" }),
+        ok: true,
+        json: async () => ({
+          id: 42,
+          filename: "duplicate.json",
+          warning_message: "This file has already been uploaded",
+        }),
       }),
     );
 
@@ -176,7 +232,10 @@ describe("analytics API helpers", () => {
         new File(["synthetic export"], "duplicate.json"),
         "telegram",
       ),
-    ).rejects.toThrow("This file has already been uploaded");
+    ).resolves.toMatchObject({
+      id: 42,
+      warning_message: "This file has already been uploaded",
+    });
   });
 
   it("retries dispatch for a previously accepted upload job", async () => {

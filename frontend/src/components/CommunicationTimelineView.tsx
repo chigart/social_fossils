@@ -19,7 +19,7 @@ import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
 export type TimelineContactOption = {
   canonicalIdentityId: number;
   displayName: string;
-  telegramUserId: string | null;
+  platformUserId: string | null;
 };
 
 function formatMonth(month: string) {
@@ -247,8 +247,8 @@ export function CommunicationTimelineView({
                 value={contact.canonicalIdentityId}
               >
                 {contact.displayName}
-                {contact.telegramUserId
-                  ? ` · ${contact.telegramUserId}`
+                {contact.platformUserId
+                  ? ` · ${contact.platformUserId}`
                   : ""}
               </option>
             ))}

@@ -3,6 +3,7 @@ export const dashboardTabs = [
   { id: "conversation-insights", label: "Conversation insights" },
   { id: "chats", label: "Chats" },
   { id: "contacts", label: "Contacts" },
+  { id: "identity-links", label: "Identity links" },
   { id: "communication-balance", label: "Balance" },
   { id: "forgotten-contacts", label: "Forgotten" },
   { id: "uploads", label: "Import" },

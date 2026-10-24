@@ -154,4 +154,43 @@ describe("UploadView", () => {
     expect(await screen.findByText("instagram.zip")).toBeInTheDocument();
     expect(uploadFile).toHaveBeenCalledWith(archive, "instagram");
   });
+
+  it("shows duplicate uploads as an informational warning and still queues them", async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadFile).mockResolvedValue({
+      id: 82,
+      filename: "instagram.zip",
+      platform: "instagram",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-82",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      warning_message: "This file has already been uploaded",
+      created_at: "2026-10-24T12:00:00Z",
+    });
+
+    render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "instagram",
+    );
+    await user.upload(
+      screen.getByLabelText("Choose Instagram ZIP files"),
+      new File(["synthetic archive"], "instagram.zip", {
+        type: "application/zip",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+    const warning = await screen.findByRole("status");
+    expect(warning).toHaveTextContent("This file has already been uploaded");
+    expect(warning).toHaveClass("text-ink-muted");
+    expect(warning).not.toHaveClass("text-ink-warning");
+    expect(
+      screen.getByText(/Pipeline queued · Job #82/),
+    ).toBeInTheDocument();
+  });
 });

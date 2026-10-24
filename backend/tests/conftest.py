@@ -16,20 +16,23 @@ def db_session():
             "CREATE TABLE account ("
             "id INTEGER PRIMARY KEY, name VARCHAR(200), "
             "platform VARCHAR(50) DEFAULT 'telegram', "
-            "platform_user_id VARCHAR(100), username VARCHAR(100))"
+            "platform_user_id VARCHAR(100), username VARCHAR(100), "
+            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
         ))
         connection.execute(text(
             "CREATE TABLE canonical_identities ("
             "id INTEGER PRIMARY KEY, platform VARCHAR(50), "
-            "platform_user_id VARCHAR(100))"
+            "platform_user_id VARCHAR(100), identity_group_id INTEGER)"
         ))
         connection.execute(text(
             "CREATE TABLE contacts ("
             "id INTEGER PRIMARY KEY, account_id INTEGER, "
             "platform VARCHAR(50) DEFAULT 'telegram', "
             "platform_user_id VARCHAR(100), "
-            "telegram_user_id VARCHAR(100), canonical_identity_id INTEGER, "
-            "display_name VARCHAR(300))"
+            "source_contact_key VARCHAR(64), "
+            "canonical_identity_id INTEGER, "
+            "display_name VARCHAR(300), username VARCHAR(100), "
+            "created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
         ))
         connection.execute(text(
             "CREATE TABLE chats ("

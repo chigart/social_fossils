@@ -6,7 +6,10 @@ import {
   getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
+  getIdentityLinks,
   getOverview,
+  linkPlatformIdentities,
+  unlinkPlatformIdentity,
   type ChatInsightsResponse,
   type ChatStatistics,
   type CommunicationBalanceClassification,
@@ -14,6 +17,7 @@ import {
   type CommunicationTimelineStatistics,
   type ContactStatistics,
   type ForgottenContactsStatistics,
+  type IdentityLinksResponse,
   type OverviewStatistics,
 } from "./api";
 import { ChatsView } from "./components/ChatsView";
@@ -28,6 +32,7 @@ import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardIntro } from "./components/DashboardIntro";
 import { CommunicationTimelineView } from "./components/CommunicationTimelineView";
 import { ForgottenContactsView } from "./components/ForgottenContactsView";
+import { IdentityLinksView } from "./components/IdentityLinksView";
 import { OverviewView } from "./components/OverviewView";
 import { UploadView } from "./components/UploadView";
 import {
@@ -54,6 +59,8 @@ export default function App() {
     useState<Resource<CommunicationBalanceStatistics>>(emptyResource);
   const [forgottenContacts, setForgottenContacts] =
     useState<Resource<ForgottenContactsStatistics>>(emptyResource);
+  const [identityLinks, setIdentityLinks] =
+    useState<Resource<IdentityLinksResponse>>(emptyResource);
   const [communicationTimeline, setCommunicationTimeline] =
     useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
   const [selectedTimelineContactId, setSelectedTimelineContactId] =
@@ -193,6 +200,39 @@ export default function App() {
     }
   };
 
+  const loadIdentityLinks = async () => {
+    setIdentityLinks((current) => ({ ...current, error: null, loading: true }));
+    try {
+      setIdentityLinks({
+        data: await getIdentityLinks(),
+        error: null,
+        loading: false,
+      });
+    } catch (error) {
+      setIdentityLinks((current) => ({
+        ...current,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to load platform identities.",
+        loading: false,
+      }));
+    }
+  };
+
+  const createIdentityLink = async (
+    firstIdentityId: number,
+    secondIdentityId: number,
+  ) => {
+    await linkPlatformIdentities(firstIdentityId, secondIdentityId);
+    await loadIdentityLinks();
+  };
+
+  const removeIdentityLink = async (identityId: number) => {
+    await unlinkPlatformIdentity(identityId);
+    await loadIdentityLinks();
+  };
+
   const loadCommunicationTimeline = async (
     canonicalIdentityId = selectedTimelineContactId,
   ) => {
@@ -230,6 +270,7 @@ export default function App() {
     void loadContacts();
     void loadBalance();
     void loadForgottenContacts();
+    void loadIdentityLinks();
   }, []);
 
   useEffect(() => {
@@ -340,9 +381,9 @@ export default function App() {
             canonicalIdentityId: contact.canonical_identity_id,
             displayName:
               contact.display_name ||
-              contact.telegram_user_id ||
+              contact.platform_user_id ||
               "Unnamed contact",
-            telegramUserId: contact.telegram_user_id,
+            platformUserId: contact.platform_user_id,
           },
         ]),
     ).values(),
@@ -451,6 +492,21 @@ export default function App() {
             }
             hasMessages={(overview.data?.total_messages ?? 0) > 0}
             onRetry={() => void loadContacts()}
+          />
+        </div>
+        <div
+          id="identity-links-panel"
+          role="tabpanel"
+          aria-labelledby="identity-links-tab"
+          aria-label="Identity links"
+          tabIndex={0}
+          hidden={selectedTab !== "identity-links"}
+        >
+          <IdentityLinksView
+            identityLinks={identityLinks}
+            onRetry={() => void loadIdentityLinks()}
+            onLink={createIdentityLink}
+            onUnlink={removeIdentityLink}
           />
         </div>
         <div

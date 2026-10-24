@@ -111,18 +111,12 @@ async def upload_file(
 
         file_sha256, file_size = await _save_uploaded_file(file)
 
-        # Check for duplicate upload
+        # Allow re-imports; importer idempotency handles duplicate data.
         existing_job = (
             session.query(UploadJob)
             .filter(UploadJob.file_sha256 == file_sha256)
             .first()
         )
-
-        if existing_job:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="This file has already been uploaded",
-            )
 
         # Create upload job
         job = UploadJob(
@@ -146,7 +140,10 @@ async def upload_file(
             job.error_message = f"Pipeline dispatch failed: {e}"
             session.commit()
 
-        return UploadJobResponse.model_validate(job)
+        response = UploadJobResponse.model_validate(job)
+        if existing_job is not None:
+            response.warning_message = "This file has already been uploaded"
+        return response
 
     except HTTPException:
         raise

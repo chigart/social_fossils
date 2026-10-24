@@ -276,11 +276,21 @@ CLI/services remain usable without Airflow.
 
 ### 23. Add explicit cross-platform identity links
 
-- Extend canonical identity handling with explicit, auditable links between
-  platform identities. Include conflict, unlink, and provenance behavior
-  before enabling cross-platform aggregates.
-- Never infer cross-platform identity from display names or contact-book
-  position.
+- Import Instagram address-book contacts from supported JSON entries with
+  stable, account-local source keys so re-imports do not duplicate contacts.
+  Contacts without a reliable platform user ID remain account-local and
+  cannot be identity-linked.
+- Add explicit identity groups across platforms, with at most one identity
+  per platform in a group. Record link/unlink actions, both involved identity
+  IDs, timestamps, and the dashboard as provenance.
+- Let the owner explicitly link and unlink identities through the dashboard.
+  Reject conflicts with an existing group or another identity on the same
+  platform; require unlinking first instead of silently merging groups.
+- Never infer cross-platform identity from display names, usernames, or
+  contact-book position. Keep cross-platform aggregates deferred to section
+  24.
+- Cover synthetic address-book imports, idempotency, malformed input,
+  migration preservation, conflict handling, unlinking, and provenance.
 
 ### 24. Build cross-platform communication analysis
 

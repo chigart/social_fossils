@@ -22,6 +22,9 @@ const api = vi.hoisted(() => ({
   getChatInsights: vi.fn(),
   getChats: vi.fn(),
   getContacts: vi.fn(),
+  getIdentityLinks: vi.fn(),
+  linkPlatformIdentities: vi.fn(),
+  unlinkPlatformIdentity: vi.fn(),
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
@@ -37,6 +40,19 @@ beforeEach(() => {
   api.getChatInsights.mockResolvedValue(chatInsights);
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
+  api.getIdentityLinks.mockResolvedValue({
+    identities: [],
+    contacts_without_identity: [],
+    events: [],
+  });
+  api.linkPlatformIdentities.mockResolvedValue({
+    status: "linked",
+    identity_group_id: 1,
+  });
+  api.unlinkPlatformIdentity.mockResolvedValue({
+    status: "unlinked",
+    identity_group_id: null,
+  });
   api.getCommunicationBalance.mockResolvedValue(balance);
   api.getForgottenContacts.mockResolvedValue(forgotten);
   api.getCommunicationTimeline.mockResolvedValue(timeline);
@@ -44,15 +60,126 @@ beforeEach(() => {
 
 describe("dashboard", () => {
   it("opens the multi-file uploader from the Import tab", async () => {
+    const user = userEvent.setup();
     await renderLoadedDashboard();
     await selectDashboardTab("Import");
 
     expect(
       screen.getByRole("heading", { name: "Import files" }),
     ).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "telegram",
+    );
     expect(
       screen.getByLabelText("Choose Telegram JSON files"),
     ).toHaveAttribute("multiple");
+  });
+
+  it("links and unlinks platform identities explicitly", async () => {
+    const user = userEvent.setup();
+    const firstIdentity = {
+      identity_id: 1,
+      platform: "telegram",
+      platform_user_id: "telegram-user-1",
+      identity_group_id: null,
+      contacts: [],
+    };
+    const secondIdentity = {
+      identity_id: 2,
+      platform: "instagram",
+      platform_user_id: "instagram-user-1",
+      identity_group_id: null,
+      contacts: [],
+    };
+    const initial = {
+      identities: [firstIdentity, secondIdentity],
+      contacts_without_identity: [
+        {
+          contact_id: 7,
+          account_id: 8,
+          account_label: "Synthetic Instagram account",
+          platform: "instagram",
+          display_name: "Address-book-only contact",
+          username: null,
+        },
+      ],
+      events: [],
+    };
+    const linked = {
+      ...initial,
+      identities: [
+        { ...firstIdentity, identity_group_id: 3 },
+        { ...secondIdentity, identity_group_id: 3 },
+      ],
+      events: [
+        {
+          id: 1,
+          group_id: 3,
+          identity_id: 1,
+          peer_identity_id: 2,
+          action: "linked" as const,
+          source: "dashboard",
+          occurred_at: "2026-10-24T08:00:00Z",
+        },
+      ],
+    };
+    const unlinked = {
+      ...initial,
+      events: [
+        ...linked.events,
+        {
+          id: 2,
+          group_id: 3,
+          identity_id: 1,
+          peer_identity_id: 2,
+          action: "unlinked" as const,
+          source: "dashboard",
+          occurred_at: "2026-10-24T08:01:00Z",
+        },
+      ],
+    };
+    api.getIdentityLinks
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(linked)
+      .mockResolvedValueOnce(unlinked);
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const identityPanel = screen.getByRole("region", {
+      name: "Cross-platform identity links",
+    });
+    await user.selectOptions(
+      within(identityPanel).getByLabelText("First platform identity"),
+      "1",
+    );
+    await user.selectOptions(
+      within(identityPanel).getByLabelText("Second platform identity"),
+      "2",
+    );
+    await user.click(
+      within(identityPanel).getByRole("button", { name: "Link identities" }),
+    );
+
+    expect(api.linkPlatformIdentities).toHaveBeenCalledWith(1, 2);
+    expect(
+      await within(identityPanel).findByText("Linked person group 3"),
+    ).toBeInTheDocument();
+    expect(
+      within(identityPanel).getByText("Address-book-only contact"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(identityPanel).getByRole("button", {
+        name: "Unlink telegram telegram-user-1",
+      }),
+    );
+    expect(api.unlinkPlatformIdentity).toHaveBeenCalledWith(1);
+    expect(
+      await within(identityPanel).findByRole("heading", {
+        name: "No cross-platform links yet",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
@@ -138,7 +265,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(7);
+    expect(screen.getAllByRole("tab")).toHaveLength(8);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",

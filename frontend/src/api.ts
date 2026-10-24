@@ -129,17 +129,65 @@ export type ChatStatistics = {
 };
 
 export type ContactStatistics = {
+  platform: string;
   account_id: number | null;
   contact_id: number | null;
   canonical_identity_id: number | null;
   source_account_ids: number[];
   source_account_labels: string[];
   source_contact_ids: number[];
-  telegram_user_id: string | null;
+  platform_user_id: string | null;
   display_name: string | null;
   total_messages_sent: number;
   ordinary_messages_sent: number;
   service_events_attributed: number;
+};
+
+export type IdentityContactSource = {
+  contact_id: number;
+  account_id: number;
+  account_label: string;
+  platform: string;
+  display_name: string | null;
+  username: string | null;
+};
+
+export type PlatformIdentity = {
+  identity_id: number;
+  platform: string;
+  platform_user_id: string;
+  identity_group_id: number | null;
+  contacts: IdentityContactSource[];
+};
+
+export type UnidentifiedContact = {
+  contact_id: number;
+  account_id: number;
+  account_label: string;
+  platform: string;
+  display_name: string | null;
+  username: string | null;
+};
+
+export type IdentityLinkEvent = {
+  id: number;
+  group_id: number | null;
+  identity_id: number;
+  peer_identity_id: number | null;
+  action: "linked" | "unlinked";
+  source: string;
+  occurred_at: string;
+};
+
+export type IdentityLinksResponse = {
+  identities: PlatformIdentity[];
+  contacts_without_identity: UnidentifiedContact[];
+  events: IdentityLinkEvent[];
+};
+
+export type IdentityLinkActionResponse = {
+  status: "linked" | "unlinked";
+  identity_group_id: number | null;
 };
 
 export type CommunicationBalanceClassification =
@@ -157,7 +205,7 @@ export type CommunicationBalanceContact = {
   source_account_ids: number[];
   source_account_labels: string[];
   source_contact_ids: number[];
-  telegram_user_id: string;
+  platform_user_id: string;
   display_name: string | null;
   owner_message_count: number;
   contact_message_count: number;
@@ -225,7 +273,7 @@ export type ForgottenContact = {
   source_account_ids: number[];
   source_account_labels: string[];
   source_contact_ids: number[];
-  telegram_user_id: string;
+  platform_user_id: string;
   display_name: string | null;
   first_message_at: string | null;
   last_message_at: string | null;
@@ -317,6 +365,7 @@ export type UploadJob = {
   started_at: string | null;
   finished_at: string | null;
   error_message: string | null;
+  warning_message?: string | null;
   created_at: string;
 };
 
@@ -338,6 +387,48 @@ async function getJson<T>(path: string): Promise<T> {
   } catch {
     throw new Error("The analytics API returned an invalid response.");
   }
+}
+
+async function sendJson<T>(
+  path: string,
+  method: "POST" | "DELETE",
+  body?: unknown,
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method,
+      ...(body === undefined
+        ? {}
+        : {
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }),
+    });
+  } catch {
+    throw new Error(
+      "Unable to connect to identity links. Check that the backend is running.",
+    );
+  }
+
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error("The identity links API returned an invalid response.");
+  }
+
+  if (!response.ok) {
+    const detail =
+      typeof result === "object" &&
+      result !== null &&
+      "detail" in result &&
+      typeof result.detail === "string"
+        ? result.detail
+        : `The identity links API returned an error (HTTP ${response.status}).`;
+    throw new Error(detail);
+  }
+  return result as T;
 }
 
 export async function uploadFile(
@@ -424,6 +515,24 @@ export const getChats = () => getJson<ChatStatistics[]>("/api/analytics/chats");
 
 export const getContacts = () =>
   getJson<ContactStatistics[]>("/api/analytics/contacts");
+
+export const getIdentityLinks = () =>
+  getJson<IdentityLinksResponse>("/api/identity-links");
+
+export const linkPlatformIdentities = (
+  firstIdentityId: number,
+  secondIdentityId: number,
+) =>
+  sendJson<IdentityLinkActionResponse>("/api/identity-links", "POST", {
+    first_identity_id: firstIdentityId,
+    second_identity_id: secondIdentityId,
+  });
+
+export const unlinkPlatformIdentity = (identityId: number) =>
+  sendJson<IdentityLinkActionResponse>(
+    `/api/identity-links/${identityId}`,
+    "DELETE",
+  );
 
 export const getCommunicationBalance = () =>
   getJson<CommunicationBalanceStatistics>(

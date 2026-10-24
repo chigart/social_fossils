@@ -54,7 +54,7 @@ def build_communication_timeline_statistics(
                 and_(
                     Message.chat_id == Chat.id,
                     or_(
-                        Message.sender_id == Contact.telegram_user_id,
+                        Message.sender_id == Contact.platform_user_id,
                         and_(
                             Message.sender_id.is_(None),
                             Message.sender_contact_id == Contact.id,
@@ -115,17 +115,17 @@ def build_communication_timeline_statistics(
             Contact.platform == TELEGRAM_PLATFORM_ID,
             Contact.canonical_identity_id == canonical_identity_id
         )
-        contact_telegram_ids = select(Contact.telegram_user_id).where(
+        contact_platform_ids = select(Contact.platform_user_id).where(
             Contact.platform == TELEGRAM_PLATFORM_ID,
             Contact.canonical_identity_id == canonical_identity_id
         )
         matching_contact = or_(
-            sender_id.in_(contact_telegram_ids),
+            sender_id.in_(contact_platform_ids),
             scoped_messages.c.sender_contact_id.in_(contact_ids),
         )
         consistent_sender = or_(
             sender_id.is_(None),
-            sender_id.in_(contact_telegram_ids),
+            sender_id.in_(contact_platform_ids),
         )
         contact_direction = and_(
             matching_contact,

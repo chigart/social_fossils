@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers.analytics import router as analytics_router
+from app.routers.identity_links import router as identity_links_router
 from app.routers.upload import router as upload_router
 
 app = FastAPI(
@@ -14,11 +15,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
 app.include_router(analytics_router)
+app.include_router(identity_links_router)
 app.include_router(upload_router)
 
 

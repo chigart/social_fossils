@@ -71,8 +71,8 @@ export function ContactsView({
         )}
       </div>
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
-        Incoming messages grouped by sender ID. Unlinked senders are not matched to
-        contacts by name.
+        Contacts and incoming senders are shown per platform. Identities are
+        never matched by display name.
       </p>
       {contacts.loading && contacts.data === null && <LoadingMessage />}
       {contacts.error && (
@@ -103,7 +103,8 @@ export function ContactsView({
             <thead className={tableHeadClassName}>
               <tr>
                 <th className={tableHeaderClassName} scope="col">Contact / sender</th>
-                <th className={tableHeaderClassName} scope="col">Telegram user ID</th>
+                <th className={tableHeaderClassName} scope="col">Platform</th>
+                <th className={tableHeaderClassName} scope="col">Platform user ID</th>
                 <th className={tableHeaderClassName} scope="col">Accounts</th>
                 <th className={tableHeaderClassName} scope="col">Link status</th>
                 <th className={tableHeaderClassName} scope="col">
@@ -123,23 +124,26 @@ export function ContactsView({
                 const status =
                   contact.contact_id !== null
                     ? "Known contact"
-                    : contact.telegram_user_id === null
+                    : contact.platform_user_id === null
                       ? "Unknown sender"
                       : "Unlinked sender";
 
                 return (
                   <tr
                     className={tableRowClassName}
-                    key={`${contact.canonical_identity_id ?? contact.account_id ?? "sources"}-${contact.telegram_user_id ?? "unknown"}-${index}`}
+                    key={`${contact.platform}-${contact.canonical_identity_id ?? contact.contact_id ?? contact.account_id ?? "sources"}-${contact.platform_user_id ?? "unknown"}-${index}`}
                   >
                     <th className={tableRowTitleClassName} scope="row">
                       {contact.display_name ||
-                        (contact.telegram_user_id
+                        (contact.platform_user_id
                           ? "Unnamed contact"
-                          : "Unknown sender")}
+                          : contact.platform === "telegram"
+                            ? "Unknown sender"
+                            : "Unidentified contact")}
                     </th>
+                    <td className={tableCellClassName}>{contact.platform}</td>
                     <td className="max-w-[200px] break-words border-b border-border-muted px-[13px] py-3 align-middle font-mono text-caption text-ink-code last:border-b-0">
-                      {contact.telegram_user_id ?? "—"}
+                      {contact.platform_user_id ?? "—"}
                     </td>
                     <td className={tableCellClassName}>
                       {contact.source_account_labels.join(", ") || "—"}

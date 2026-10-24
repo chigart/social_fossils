@@ -116,11 +116,10 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
     stmt = insert(Contact).values(
         account_id=account_id,
         platform=TELEGRAM_PLATFORM_ID,
-        telegram_user_id=sender_telegram_id,
         platform_user_id=sender_telegram_id,
         canonical_identity_id=canonical_identity.id,
         display_name=sender_name,
-    ).on_conflict_do_nothing(index_elements=["account_id", "telegram_user_id"])
+    ).on_conflict_do_nothing(index_elements=["account_id", "platform_user_id"])
     session.execute(stmt)
     session.flush()
     contact = session.scalar(

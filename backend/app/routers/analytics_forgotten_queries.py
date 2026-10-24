@@ -64,7 +64,7 @@ def build_forgotten_contact_queries(
             ).label("identity_source_account_id"),
             CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
-            Contact.telegram_user_id.label("contact_telegram_user_id"),
+            Contact.platform_user_id.label("contact_platform_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(Account, Account.id == Chat.account_id)
@@ -79,7 +79,7 @@ def build_forgotten_contact_queries(
             and_(
                 Contact.account_id == Chat.account_id,
                 Contact.platform == TELEGRAM_PLATFORM_ID,
-                Contact.telegram_user_id == peers.c.peer_telegram_user_id,
+                Contact.platform_user_id == peers.c.peer_telegram_user_id,
             ),
         )
         .outerjoin(
@@ -92,7 +92,7 @@ def build_forgotten_contact_queries(
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
     owner_direction = Message.sender_id.in_(owner_ids)
     contact_direction = and_(
-        Message.sender_id == eligible_pairs.c.contact_telegram_user_id,
+        Message.sender_id == eligible_pairs.c.contact_platform_user_id,
         Message.is_outgoing.is_(False),
     )
     known_direction = or_(owner_direction, contact_direction)
@@ -126,7 +126,7 @@ def build_forgotten_contact_queries(
             func.min(eligible_pairs.c.canonical_identity_id).label(
                 "canonical_identity_id"
             ),
-            eligible_pairs.c.contact_telegram_user_id.label("telegram_user_id"),
+            eligible_pairs.c.contact_platform_user_id.label("platform_user_id"),
             func.min(eligible_pairs.c.display_name).label("display_name"),
             count_when(and_(ordinary_message, owner_direction)).label(
                 "owner_message_count"
@@ -224,7 +224,7 @@ def build_forgotten_contact_queries(
         .group_by(
             eligible_pairs.c.identity_group_id,
             eligible_pairs.c.identity_source_account_id,
-            eligible_pairs.c.contact_telegram_user_id,
+            eligible_pairs.c.contact_platform_user_id,
         )
     )
 

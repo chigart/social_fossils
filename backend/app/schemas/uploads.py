@@ -14,6 +14,7 @@ class UploadJobResponse(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     error_message: str | None
+    warning_message: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

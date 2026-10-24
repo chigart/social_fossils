@@ -21,6 +21,9 @@ const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
   getChats: vi.fn(),
   getContacts: vi.fn(),
+  getIdentityLinks: vi.fn(),
+  linkPlatformIdentities: vi.fn(),
+  unlinkPlatformIdentity: vi.fn(),
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
@@ -34,6 +37,19 @@ beforeEach(() => {
   api.getOverview.mockResolvedValue(overview);
   api.getChats.mockResolvedValue(chats);
   api.getContacts.mockResolvedValue(contacts);
+  api.getIdentityLinks.mockResolvedValue({
+    identities: [],
+    contacts_without_identity: [],
+    events: [],
+  });
+  api.linkPlatformIdentities.mockResolvedValue({
+    status: "linked",
+    identity_group_id: 1,
+  });
+  api.unlinkPlatformIdentity.mockResolvedValue({
+    status: "unlinked",
+    identity_group_id: null,
+  });
   api.getCommunicationBalance.mockResolvedValue(balance);
   api.getForgottenContacts.mockResolvedValue(forgotten);
   api.getCommunicationTimeline.mockResolvedValue(timeline);

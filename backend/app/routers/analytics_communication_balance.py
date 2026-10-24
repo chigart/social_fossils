@@ -120,7 +120,7 @@ def get_communication_balance(
             ).label("identity_source_account_id"),
             CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
-            Contact.telegram_user_id.label("contact_telegram_user_id"),
+            Contact.platform_user_id.label("contact_platform_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(Account, Account.id == Chat.account_id)
@@ -135,7 +135,7 @@ def get_communication_balance(
             and_(
                 Contact.account_id == Chat.account_id,
                 Contact.platform == TELEGRAM_PLATFORM_ID,
-                Contact.telegram_user_id == peers.c.peer_telegram_user_id,
+                Contact.platform_user_id == peers.c.peer_telegram_user_id,
             ),
         )
         .outerjoin(
@@ -148,7 +148,7 @@ def get_communication_balance(
     is_ordinary = Message.message_type == ORDINARY_MESSAGE_TYPE
     owner_direction = Message.sender_id.in_(owner_ids)
     contact_direction = and_(
-        Message.sender_id == eligible_pairs.c.contact_telegram_user_id,
+        Message.sender_id == eligible_pairs.c.contact_platform_user_id,
         Message.is_outgoing.is_(False),
     )
     known_direction = or_(owner_direction, contact_direction)
@@ -166,7 +166,7 @@ def get_communication_balance(
             func.min(eligible_pairs.c.canonical_identity_id).label(
                 "canonical_identity_id"
             ),
-            eligible_pairs.c.contact_telegram_user_id.label("telegram_user_id"),
+            eligible_pairs.c.contact_platform_user_id.label("platform_user_id"),
             func.min(eligible_pairs.c.display_name).label("display_name"),
             func.coalesce(
                 func.sum(
@@ -249,7 +249,7 @@ def get_communication_balance(
         .group_by(
             eligible_pairs.c.identity_group_id,
             eligible_pairs.c.identity_source_account_id,
-            eligible_pairs.c.contact_telegram_user_id,
+            eligible_pairs.c.contact_platform_user_id,
         )
         .having(func.count(case((is_ordinary, Message.id))) > 0)
     )
@@ -312,7 +312,7 @@ def get_communication_balance(
                 source_account_ids=sorted(source_account_ids),
                 source_account_labels=sorted(source_account_labels),
                 source_contact_ids=sorted(source_contact_ids),
-                telegram_user_id=row.telegram_user_id,
+                platform_user_id=row.platform_user_id,
                 display_name=row.display_name,
                 owner_message_count=owner_message_count,
                 contact_message_count=contact_message_count,

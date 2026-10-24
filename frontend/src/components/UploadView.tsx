@@ -132,19 +132,26 @@ export function UploadView() {
                   </p>
                 )}
                 {item.status === "accepted" && item.job && (
-                  item.job.airflow_dag_run_id ? (
-                    <p className="m-0 mt-1 text-caption text-ink-green">
-                      Pipeline queued · Job #{item.job.id} · {item.job.status}
-                    </p>
-                  ) : (
-                    <p
-                      className="m-0 mt-1 text-caption text-ink-warning"
-                      role="alert"
-                    >
-                      Upload saved as job #{item.job.id}, but the pipeline did
-                      not start. {item.error || item.job.error_message}
-                    </p>
-                  )
+                  <>
+                    {item.job.warning_message && (
+                      <p className="m-0 mt-1 text-caption text-ink-muted" role="status">
+                        {item.job.warning_message}
+                      </p>
+                    )}
+                    {item.job.airflow_dag_run_id ? (
+                      <p className="m-0 mt-1 text-caption text-ink-green">
+                        Pipeline queued · Job #{item.job.id} · {item.job.status}
+                      </p>
+                    ) : (
+                      <p
+                        className="m-0 mt-1 text-caption text-ink-warning"
+                        role="alert"
+                      >
+                        Upload saved as job #{item.job.id}, but the pipeline did
+                        not start. {item.error || item.job.error_message}
+                      </p>
+                    )}
+                  </>
                 )}
                 {item.status === "failed" && (
                   <p className="m-0 mt-1 text-caption text-ink-warning" role="alert">
