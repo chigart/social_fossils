@@ -258,7 +258,6 @@ export const contacts: ContactStatistics[] = [
   {
     platform: "telegram",
     account_id: 1,
-    contact_id: 11,
     canonical_identity_id: 1,
     source_account_ids: [1],
     source_account_labels: ["@anton"],
@@ -272,7 +271,6 @@ export const contacts: ContactStatistics[] = [
   {
     platform: "telegram",
     account_id: 1,
-    contact_id: null,
     canonical_identity_id: null,
     source_account_ids: [1],
     source_account_labels: ["@anton"],
@@ -286,7 +284,6 @@ export const contacts: ContactStatistics[] = [
   {
     platform: "telegram",
     account_id: 1,
-    contact_id: null,
     canonical_identity_id: null,
     source_account_ids: [1],
     source_account_labels: ["@anton"],

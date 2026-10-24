@@ -621,11 +621,17 @@ describe("dashboard", () => {
     ).toHaveLength(chats.length);
 
     await selectDashboardTab("Contacts");
-    expect(screen.getByText("Known contact")).toBeInTheDocument();
+    const contactsRegion = screen.getByRole("region", {
+      name: "Contacts & senders",
+    });
     expect(
-      within(screen.getByRole("region", { name: "Contacts & senders" }))
-        .getByRole("columnheader", { name: "Accounts" }),
+      within(contactsRegion).getByRole("columnheader", { name: "Accounts" }),
     ).toBeInTheDocument();
+    expect(
+      within(contactsRegion).queryByRole("columnheader", {
+        name: "Link status",
+      }),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Contacts & senders" }))
         .queryByRole("columnheader", { name: "Service events" }),
@@ -636,13 +642,9 @@ describe("dashboard", () => {
         { name: /Avery.*TG@anton/ },
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Unlinked sender")).toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "Contacts & senders" })).getByRole(
-        "row",
-        { name: /Unknown sender/ },
-      ),
-    ).toBeInTheDocument();
+      within(contactsRegion).queryByText(/Unknown sender|Unidentified contact/),
+    ).not.toBeInTheDocument();
     await selectDashboardTab("Balance");
     expect(
       screen.getByRole("heading", { name: "Communication balance" }),
@@ -1347,9 +1349,9 @@ describe("dashboard", () => {
       name: "Sort by Messages sent, descending",
     });
 
-    expect(rowTitles(contactsTable)).toEqual(["Avery", "Morgan", "Unknown sender"]);
+    expect(rowTitles(contactsTable)).toEqual(["Avery", "Morgan"]);
     await user.click(sortButton);
-    expect(rowTitles(contactsTable)).toEqual(["Unknown sender", "Morgan", "Avery"]);
+    expect(rowTitles(contactsTable)).toEqual(["Morgan", "Avery"]);
     expect(sortButton).toHaveAttribute(
       "aria-label",
       "Sort by Messages sent, ascending",

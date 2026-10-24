@@ -329,7 +329,6 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
                 account_id=(
                     source_account_ids[0] if len(source_account_ids) == 1 else None
                 ),
-                contact_id=source_contact_ids[0] if source_contact_ids else None,
                 canonical_identity_id=group["canonical_identity_id"],
                 source_account_ids=source_account_ids,
                 source_account_labels=sorted(group["source_account_labels"]),

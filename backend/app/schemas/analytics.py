@@ -59,10 +59,6 @@ class ContactStatistics(BaseModel):
         default=None,
         description="Single source account ID, or null when combined across accounts.",
     )
-    contact_id: int | None = Field(
-        default=None,
-        description="Representative account-local contact ID, or null when unlinked."
-    )
     canonical_identity_id: int | None = Field(
         default=None,
         description="Canonical platform identity ID when the sender is reliably identified."

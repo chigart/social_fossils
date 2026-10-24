@@ -131,7 +131,6 @@ export type ChatStatistics = {
 export type ContactStatistics = {
   platform: string;
   account_id: number | null;
-  contact_id: number | null;
   canonical_identity_id: number | null;
   source_account_ids: number[];
   source_account_labels: string[];

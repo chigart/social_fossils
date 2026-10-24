@@ -144,11 +144,12 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
 
     by_sender = {contact.platform_user_id: contact for contact in contacts}
     assert set(by_sender) == {"user-alex", "user-sam", "user-unlinked", None}
-    assert by_sender["user-alex"].contact_id == 20
+    assert "contact_id" not in by_sender["user-alex"].model_dump()
+    assert by_sender["user-alex"].source_contact_ids == [20]
     assert by_sender["user-alex"].total_messages_sent == 2
     assert by_sender["user-alex"].ordinary_messages_sent == 2
     assert by_sender["user-sam"].service_events_attributed == 1
-    assert by_sender["user-unlinked"].contact_id is None
+    assert by_sender["user-unlinked"].source_contact_ids == []
     assert by_sender["user-unlinked"].service_events_attributed == 1
     assert by_sender[None].total_messages_sent == 1
 
@@ -233,7 +234,7 @@ def test_instagram_records_are_excluded_from_telegram_analytics(db_session):
     assert by_name["Synthetic Instagram peer"].platform == "instagram"
     assert by_name["Synthetic Instagram peer"].platform_user_id == "instagram-peer"
     assert by_name["Synthetic Instagram peer"].total_messages_sent == 1
-    assert by_name["Synthetic address-book contact"].contact_id == 21
+    assert by_name["Synthetic address-book contact"].source_contact_ids == [21]
     assert by_name["Synthetic address-book contact"].total_messages_sent == 0
     assert balance.contacts == []
     assert get_chat_insights(db_session).chats == []

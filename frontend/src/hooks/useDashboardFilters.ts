@@ -75,6 +75,10 @@ export function useDashboardFilters({
     });
 
   const visibleContacts = (contacts.data ?? [])
+    .filter(
+      (contact) =>
+        contact.display_name?.trim() || contact.platform_user_id?.trim(),
+    )
     .filter((contact) =>
       (contact.display_name ?? "")
         .toLocaleLowerCase()

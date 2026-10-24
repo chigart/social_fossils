@@ -94,7 +94,9 @@ export function ContactsView({
       {contacts.data && contacts.data.length > 0 && visibleContacts.length === 0 && (
         <div className={`${emptyStateClassName} p-4`}>
           <p className={emptyStateTextClassName}>
-            No display names match “{search}”.
+            {search.trim()
+              ? `No display names match “${search}”.`
+              : "No identified contacts are available."}
           </p>
         </div>
       )}
@@ -107,7 +109,6 @@ export function ContactsView({
                 <th className={tableHeaderClassName} scope="col">Platform</th>
                 <th className={tableHeaderClassName} scope="col">Platform user ID</th>
                 <th className={tableHeaderClassName} scope="col">Accounts</th>
-                <th className={tableHeaderClassName} scope="col">Link status</th>
                 <th className={tableHeaderClassName} scope="col">
                   <SortButton
                     label="Messages sent"
@@ -120,59 +121,38 @@ export function ContactsView({
               </tr>
             </thead>
             <tbody>
-              {visibleContacts.map((contact, index) => {
-                const status =
-                  contact.contact_id !== null
-                    ? "Known contact"
-                    : contact.platform_user_id === null
-                      ? "Unknown sender"
-                      : "Unlinked sender";
-
-                return (
-                  <tr
-                    className={tableRowClassName}
-                    key={`${contact.platform}-${contact.canonical_identity_id ?? contact.contact_id ?? contact.account_id ?? "sources"}-${contact.platform_user_id ?? "unknown"}-${index}`}
-                  >
-                    <th className={tableRowTitleClassName} scope="row">
-                      {contact.display_name ||
-                        (contact.platform_user_id
-                          ? "Unnamed contact"
-                          : contact.platform === "telegram"
-                            ? "Unknown sender"
-                            : "Unidentified contact")}
-                    </th>
-                    <td className={tableCellClassName}>{contact.platform}</td>
-                    <td className="max-w-[200px] break-words border-b border-border-muted px-[13px] py-3 align-middle font-mono text-caption text-ink-code last:border-b-0">
-                      {contact.platform_user_id ?? "—"}
-                    </td>
-                    <td className={tableCellClassName}>
-                      <div className="flex flex-wrap gap-1">
-                        {contact.source_account_labels.map((label) => (
-                          <PlatformAccountBadge
-                            key={label}
-                            platform={contact.platform}
-                            accountLabel={label}
-                          />
-                        ))}
-                        {contact.source_account_labels.length === 0 && "—"}
-                      </div>
-                    </td>
-                    <td className={tableCellClassName}>
-                      <span
-                        className={`inline-block whitespace-nowrap rounded px-[7px] py-1 text-label font-semibold ${contact.contact_id === null ? "bg-surface-neutral text-ink-neutral" : "bg-surface-tag text-ink-tag"}`}
-                      >
-                        {status}
-                      </span>
-                    </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(contact.total_messages_sent)}
-                    </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(contact.ordinary_messages_sent)}
-                    </td>
-                  </tr>
-                );
-              })}
+              {visibleContacts.map((contact, index) => (
+                <tr
+                  className={tableRowClassName}
+                  key={`${contact.platform}-${contact.canonical_identity_id ?? contact.source_contact_ids[0] ?? contact.account_id ?? "sources"}-${contact.platform_user_id ?? "unknown"}-${index}`}
+                >
+                  <th className={tableRowTitleClassName} scope="row">
+                    {contact.display_name?.trim() || "Unnamed contact"}
+                  </th>
+                  <td className={tableCellClassName}>{contact.platform}</td>
+                  <td className="max-w-[200px] break-words border-b border-border-muted px-[13px] py-3 align-middle font-mono text-caption text-ink-code last:border-b-0">
+                    {contact.platform_user_id ?? "—"}
+                  </td>
+                  <td className={tableCellClassName}>
+                    <div className="flex flex-wrap gap-1">
+                      {contact.source_account_labels.map((label) => (
+                        <PlatformAccountBadge
+                          key={label}
+                          platform={contact.platform}
+                          accountLabel={label}
+                        />
+                      ))}
+                      {contact.source_account_labels.length === 0 && "—"}
+                    </div>
+                  </td>
+                  <td className={numericTableCellClassName}>
+                    {formatNumber(contact.total_messages_sent)}
+                  </td>
+                  <td className={numericTableCellClassName}>
+                    {formatNumber(contact.ordinary_messages_sent)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
