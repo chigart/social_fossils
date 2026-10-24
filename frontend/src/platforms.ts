@@ -16,7 +16,7 @@ export const PLATFORM_CONFIG = {
 
 export type UploadPlatform = keyof typeof PLATFORM_CONFIG;
 
-const PLATFORM_ACCOUNT_PREFIXES: Record<string, string> = {
+export const PLATFORM_ACCOUNT_PREFIXES: Record<string, string> = {
   facebook: "FB",
   instagram: "IG",
   telegram: "TG",

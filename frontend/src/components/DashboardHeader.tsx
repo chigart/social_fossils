@@ -1,4 +1,5 @@
 import type { KeyboardEvent } from "react";
+import { Button } from "./Button";
 import { dashboardTabs, type DashboardTab } from "./dashboardTabs";
 
 export function DashboardHeader({
@@ -56,10 +57,11 @@ export function DashboardHeader({
           aria-label="Dashboard sections"
         >
           {dashboardTabs.map((tab, index) => (
-            <button
+            <Button
               id={`${tab.id}-tab`}
               key={tab.id}
-              className={`cursor-pointer rounded-md border-0 px-3 py-2 text-ui font-semibold transition-colors focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2 max-sm:px-2 max-sm:text-caption ${selectedTab === tab.id ? "bg-surface-brand text-brand-strong" : "bg-clear text-ink-subtle hover:bg-surface-muted hover:text-brand-strong"}`}
+              active={selectedTab === tab.id}
+              variant="tab"
               type="button"
               role="tab"
               aria-selected={selectedTab === tab.id}
@@ -69,7 +71,7 @@ export function DashboardHeader({
               onKeyDown={(event) => selectByKeyboard(event, index)}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
       </nav>

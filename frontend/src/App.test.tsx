@@ -100,7 +100,7 @@ describe("dashboard", () => {
           account_id: 8,
           account_label: "Synthetic Instagram account",
           platform: "instagram",
-          display_name: "Address-book-only contact",
+          display_name: "Unidentified message participant",
           username: null,
         },
       ],
@@ -149,29 +149,85 @@ describe("dashboard", () => {
     const identityPanel = screen.getByRole("region", {
       name: "Cross-platform identity links",
     });
-    await user.selectOptions(
-      within(identityPanel).getByLabelText("First platform identity"),
-      "1",
+    await user.click(
+      within(identityPanel).getByRole("button", {
+        name: "First platform identity",
+      }),
     );
-    await user.selectOptions(
-      within(identityPanel).getByLabelText("Second platform identity"),
-      "2",
+    expect(
+      within(identityPanel).getByRole("listbox", {
+        name: "First platform identity options",
+      }),
+    ).toBeVisible();
+    await user.click(
+      within(identityPanel).getByRole("option", {
+        name: /TG: telegram-user-1/,
+      }),
     );
     await user.click(
-      within(identityPanel).getByRole("button", { name: "Link identities" }),
+      within(identityPanel).getByRole("button", {
+        name: "Second platform identity",
+      }),
     );
+    await user.click(
+      within(identityPanel).getByRole("option", {
+        name: /IG: instagram-user-1/,
+      }),
+    );
+    const linkButton = within(identityPanel).getByRole("button", {
+      name: "Link identities",
+    });
+    expect(linkButton).toHaveClass(
+      "bg-surface-brand",
+      "text-brand-strong",
+      "hover:brightness-95",
+    );
+    await user.click(linkButton);
 
     expect(api.linkPlatformIdentities).toHaveBeenCalledWith(1, 2);
     expect(
       await within(identityPanel).findByText("Linked person group 3"),
     ).toBeInTheDocument();
     expect(
-      within(identityPanel).getByText("Address-book-only contact"),
-    ).toBeInTheDocument();
+      within(identityPanel).getAllByText("TG:", { exact: false }),
+    ).toHaveLength(2);
+    expect(
+      within(identityPanel).getAllByText("IG:", { exact: false }),
+    ).toHaveLength(2);
+    expect(
+      within(identityPanel).queryByText("Unidentified message participant"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(identityPanel).queryByRole("heading", {
+        name: "Contacts without a platform identity",
+      }),
+    ).not.toBeInTheDocument();
+
+    const linkedGroup = within(identityPanel).getByText(
+      "Linked person group 3",
+    ).parentElement;
+    expect(linkedGroup?.querySelector("ul")).toHaveClass(
+      "flex",
+      "flex-wrap",
+      "items-center",
+    );
+    const unlinkButton = within(identityPanel).getByRole("button", {
+      name: "Unlink TG: telegram-user-1",
+    });
+    expect(unlinkButton).toHaveClass(
+      "bg-border-warning",
+      "text-brand-strong",
+      "hover:brightness-95",
+    );
+    expect(
+      [...unlinkButton.classList].filter((className) => !className.startsWith("bg-")),
+    ).toEqual(
+      [...linkButton.classList].filter((className) => !className.startsWith("bg-")),
+    );
 
     await user.click(
       within(identityPanel).getByRole("button", {
-        name: "Unlink telegram telegram-user-1",
+        name: "Unlink TG: telegram-user-1",
       }),
     );
     expect(api.unlinkPlatformIdentity).toHaveBeenCalledWith(1);
@@ -180,6 +236,255 @@ describe("dashboard", () => {
         name: "No cross-platform links yet",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("filters identity picker options by search and platform", async () => {
+    const user = userEvent.setup();
+    const identities = [
+      {
+        identity_id: 1,
+        platform: "telegram",
+        platform_user_id: "tg-user-1",
+        identity_group_id: null,
+        contacts: [{
+          contact_id: 1,
+          account_id: 1,
+          account_label: "Telegram",
+          platform: "telegram",
+          display_name: "Alex Example",
+          username: "alex_tg",
+        }],
+      },
+      {
+        identity_id: 2,
+        platform: "instagram",
+        platform_user_id: "ig-user-2",
+        identity_group_id: null,
+        contacts: [{
+          contact_id: 2,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Alex Example",
+          username: "alex_ig",
+        }],
+      },
+      {
+        identity_id: 3,
+        platform: "instagram",
+        platform_user_id: "ig-user-3",
+        identity_group_id: null,
+        contacts: [{
+          contact_id: 3,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Blair Example",
+          username: "blair",
+        }],
+      },
+    ];
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    await user.click(screen.getByRole("button", {
+      name: "First platform identity",
+    }));
+    const search = screen.getByRole("searchbox", {
+      name: "First platform identity search",
+    });
+    await user.type(search, "Blair");
+    let options = screen.getByRole("listbox", {
+      name: "First platform identity options",
+    });
+    expect(within(options).getAllByRole("option")).toHaveLength(1);
+    expect(within(options).getByRole("option", { name: /IG: Blair Example/ }))
+      .toBeInTheDocument();
+
+    await user.clear(search);
+    await user.selectOptions(
+      screen.getByRole("combobox", {
+        name: "First platform identity platform filter",
+      }),
+      "telegram",
+    );
+    options = screen.getByRole("listbox", {
+      name: "First platform identity options",
+    });
+    expect(within(options).getAllByRole("option")).toHaveLength(1);
+    expect(within(options).getByRole("option", { name: /TG: Alex Example/ }))
+      .toBeInTheDocument();
+  });
+
+  it("ranks Full Name suggestions by exact and near matches before name-part matches", async () => {
+    const user = userEvent.setup();
+    const pairs = [
+      ["Mira Moon", "Mira Moon"],
+      ["Alex Star", "Alex Stab"],
+      ["Casey Earth", "Casey Ezzth"],
+      ["Rowan Vale", "Rowan Hart"],
+    ];
+    const identities = pairs.flatMap(([telegramName, instagramName], index) => {
+      const telegramId = index * 2 + 1;
+      const instagramId = telegramId + 1;
+      return [
+        {
+          identity_id: telegramId,
+          platform: "telegram",
+          platform_user_id: `telegram-${telegramId}`,
+          identity_group_id: null,
+          contacts: [{
+            contact_id: telegramId,
+            account_id: 1,
+            account_label: "Telegram",
+            platform: "telegram",
+            display_name: telegramName,
+            username: null,
+          }],
+        },
+        {
+          identity_id: instagramId,
+          platform: "instagram",
+          platform_user_id: `instagram-${instagramId}`,
+          identity_group_id: null,
+          contacts: [{
+            contact_id: instagramId,
+            account_id: 2,
+            account_label: "Instagram",
+            platform: "instagram",
+            display_name: instagramName,
+            username: null,
+          }],
+        },
+      ];
+    });
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const suggestions = screen.getByRole("list", {
+      name: "Suggested identity links",
+    });
+    expect(Array.from(suggestions.querySelectorAll("strong"), (item) =>
+      item.textContent?.trim().replace(/\s+/g, " ")
+    )).toEqual([
+      "Full Name match:",
+      "1-symbol Full Name difference:",
+      "2-symbol Full Name difference:",
+      "First or last name match:",
+    ]);
+    const suggestionLinkButton = within(suggestions).getAllByRole("button", {
+      name: "Link identities",
+    })[0];
+    expect(suggestionLinkButton).toHaveClass(
+      "bg-surface-brand",
+      "text-brand-strong",
+      "hover:brightness-95",
+    );
+    await user.click(
+      within(suggestions).getAllByRole("button", {
+        name: "Link identities",
+      })[0],
+    );
+    expect(api.linkPlatformIdentities).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("keeps current links and suggestions in vertically scrollable lists", async () => {
+    const names = [
+      "Ada Moon",
+      "Bert Lake",
+      "Cora Stone",
+      "Dale Reed",
+      "Evan Park",
+      "Faye Hill",
+      "Glen Frost",
+      "Hope Vale",
+      "Iris Cloud",
+      "Jude Field",
+      "Kira Brook",
+      "Liam Shore",
+    ];
+    const suggestedIdentities = names.flatMap((name, index) => {
+      const id = index * 2 + 1;
+      return [
+        {
+          identity_id: id,
+          platform: "telegram",
+          platform_user_id: `telegram-${id}`,
+          identity_group_id: null,
+          contacts: [{
+            contact_id: id,
+            account_id: 1,
+            account_label: "Telegram",
+            platform: "telegram",
+            display_name: name,
+            username: null,
+          }],
+        },
+        {
+          identity_id: id + 1,
+          platform: "instagram",
+          platform_user_id: `instagram-${id + 1}`,
+          identity_group_id: null,
+          contacts: [{
+            contact_id: id + 1,
+            account_id: 2,
+            account_label: "Instagram",
+            platform: "instagram",
+            display_name: name,
+            username: null,
+          }],
+        },
+      ];
+    });
+    const currentIdentities = Array.from({ length: 11 }, (_, index) => {
+      const id = 100 + index * 2;
+      const groupId = 200 + index;
+      return [
+        {
+          identity_id: id,
+          platform: "telegram",
+          platform_user_id: `telegram-${id}`,
+          identity_group_id: groupId,
+          contacts: [],
+        },
+        {
+          identity_id: id + 1,
+          platform: "instagram",
+          platform_user_id: `instagram-${id + 1}`,
+          identity_group_id: groupId,
+          contacts: [],
+        },
+      ];
+    }).flat();
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities: [...suggestedIdentities, ...currentIdentities],
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const currentLinks = screen.getByLabelText("Current identity links");
+    expect(currentLinks).toHaveClass("max-h-[600px]", "overflow-y-auto");
+    expect(within(currentLinks).getAllByText(/^Linked person group/)).toHaveLength(11);
+
+    const suggestions = screen.getByRole("list", {
+      name: "Suggested identity links",
+    });
+    expect(suggestions).toHaveClass("max-h-[600px]", "overflow-y-auto");
+    expect(within(suggestions).getAllByRole("button", {
+      name: "Link identities",
+    })).toHaveLength(12);
   });
 
   it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
@@ -263,7 +568,10 @@ describe("dashboard", () => {
     expect(
       screen.getByRole("heading", { name: "Your communication, in context." }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Combined account data/)).toBeInTheDocument();
+    expect(screen.getByText("Combined account data")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/All imported Telegram exports are included/),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(8);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(

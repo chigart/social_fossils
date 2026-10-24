@@ -45,8 +45,9 @@ The repository already contains:
 Phases 1–4, including combined-owner analytics, Forgotten Contacts, the
 Communication Timeline, and per-file upload-triggered Airflow processing, are
 considered complete. The upload/job API is single-owner and unauthenticated.
-The Instagram importer is the first Phase 5 data-source expansion. Further
-cross-platform identity, analytics, and scaling work remains future scope.
+The Instagram importer is the first Phase 5 data-source expansion.
+Cross-platform identity links are implemented; cross-platform analytics and
+scaling work remain future scope.
 There is no Kubernetes deployment configuration.
 
 Relevant existing code includes `backend/app/models.py`,
@@ -276,8 +277,8 @@ CLI/services remain usable without Airflow.
 
 ### 23. Add explicit cross-platform identity links
 
-- Import Instagram address-book contacts from supported JSON entries with
-  stable, account-local source keys so re-imports do not duplicate contacts.
+- Create Instagram identities only for accounts and participants represented
+  by imported conversations. Do not import address-book-only contacts.
   Contacts without a reliable platform user ID remain account-local and
   cannot be identity-linked.
 - Add explicit identity groups across platforms, with at most one identity
@@ -286,11 +287,15 @@ CLI/services remain usable without Airflow.
 - Let the owner explicitly link and unlink identities through the dashboard.
   Reject conflicts with an existing group or another identity on the same
   platform; require unlinking first instead of silently merging groups.
-- Never infer cross-platform identity from display names, usernames, or
-  contact-book position. Keep cross-platform aggregates deferred to section
-  24.
-- Cover synthetic address-book imports, idempotency, malformed input,
-  migration preservation, conflict handling, unlinking, and provenance.
+- Show owner-reviewed name-match suggestions, ranked by exact Full Name,
+  one-character difference, two-character difference, then first/last-name
+  match. Suggestions never create links automatically. Show approximately ten
+  current links and suggestions at a time in vertically scrollable lists.
+- Never infer cross-platform identity automatically from display names,
+  usernames, or contact-book position. Keep cross-platform aggregates
+  deferred to section 24.
+- Cover import idempotency, malformed input, migration preservation, conflict
+  handling, unlinking, provenance, and dashboard suggestion ordering.
 
 ### 24. Build cross-platform communication analysis
 

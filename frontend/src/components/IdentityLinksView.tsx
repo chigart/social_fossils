@@ -7,17 +7,11 @@ import {
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-  tableCellClassName,
-  tableClassName,
-  tableContainerClassName,
-  tableHeadClassName,
-  tableHeaderClassName,
-  tableRowClassName,
-  tableRowTitleClassName,
 } from "../styles";
 import type { Resource } from "../types";
+import { Button } from "./Button";
 import { LoadingMessage, SectionError } from "./Feedback";
-import { PlatformAccountBadge } from "./PlatformAccountBadge";
+import { IdentityPicker } from "./IdentityPicker";
 import { useIdentityLinks } from "./useIdentityLinks";
 
 export function IdentityLinksView({
@@ -39,10 +33,10 @@ export function IdentityLinksView({
     saving,
     actionError,
     actionMessage,
-    identities,
     identityOptions,
+    canLink,
+    suggestedLinks,
     linkedGroups,
-    unidentifiedContacts,
     historyEvents,
     performLink,
     performUnlink,
@@ -62,9 +56,9 @@ export function IdentityLinksView({
         </div>
       </div>
       <p className="mb-5 text-small leading-[1.5] text-ink-muted">
-        Link only identities you recognize as the same person. Names and
-        usernames are shown for review but are never used to match identities
-        automatically. Conflicting links must be removed before a new link can
+        Link only identities you recognize as the same person. Suggestions are
+        based on Full Name matches, but no identity is linked until you review
+        and confirm it. Conflicting links must be removed before a new link can
         be created.
       </p>
       {identityLinks.loading && identityLinks.data === null && <LoadingMessage />}
@@ -88,54 +82,28 @@ export function IdentityLinksView({
               Link two identities
             </h3>
             <div className="flex flex-wrap items-end gap-3">
-              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-caption font-semibold text-ink-subtle">
-                First platform identity
-                <select
-                  className="rounded-md border border-border bg-surface px-3 py-2 text-small text-ink"
-                  value={firstIdentityId}
-                  onChange={(event) => setFirstIdentityId(event.target.value)}
-                >
-                  <option value="">Select identity</option>
-                  {identityOptions.map(({ identity, label }) => (
-                    <option
-                      key={identity.identity_id}
-                      value={identity.identity_id}
-                    >
-                      {identity.platform}: {label} (
-                      {identity.platform_user_id})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-caption font-semibold text-ink-subtle">
-                Second platform identity
-                <select
-                  className="rounded-md border border-border bg-surface px-3 py-2 text-small text-ink"
-                  value={secondIdentityId}
-                  onChange={(event) => setSecondIdentityId(event.target.value)}
-                >
-                  <option value="">Select identity</option>
-                  {identityOptions.map(({ identity, label }) => (
-                    <option
-                      key={identity.identity_id}
-                      value={identity.identity_id}
-                    >
-                      {identity.platform}: {label} (
-                      {identity.platform_user_id})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                className="rounded-md bg-surface-brand px-4 py-2 text-small font-semibold text-brand-strong disabled:cursor-not-allowed disabled:opacity-50"
+              <IdentityPicker
+                label="First platform identity"
+                value={firstIdentityId}
+                options={identityOptions}
+                onChange={setFirstIdentityId}
+              />
+              <IdentityPicker
+                label="Second platform identity"
+                value={secondIdentityId}
+                options={identityOptions}
+                onChange={setSecondIdentityId}
+              />
+              <Button
+                variant="positive"
                 type="button"
-                disabled={saving || identities.length < 2}
+                disabled={saving || !canLink}
                 onClick={() => void performLink()}
               >
                 Link identities
-              </button>
+              </Button>
             </div>
-            {identities.length < 2 && (
+            {!canLink && (
               <p className="mt-3 text-caption text-ink-muted">
                 Import at least two identifiable platform contacts to create a
                 link.
@@ -161,7 +129,10 @@ export function IdentityLinksView({
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div
+                aria-label="Current identity links"
+                className="max-h-[600px] space-y-3 overflow-y-auto pr-2"
+              >
                 {linkedGroups.map(({ groupId, members }) => (
                   <div
                     className="rounded-lg border border-border-muted bg-surface p-4"
@@ -170,27 +141,27 @@ export function IdentityLinksView({
                     <p className="mb-2 text-label font-semibold text-ink-muted">
                       Linked person group {groupId}
                     </p>
-                    <ul className="space-y-2">
-                      {members.map(({ identity, label }) => (
+                    <ul className="flex flex-wrap items-center gap-3">
+                      {members.map(({ identity, label, platformLabel }) => (
                         <li
-                          className="flex flex-wrap items-center justify-between gap-2"
+                          className="flex flex-wrap items-center gap-2 rounded-md border border-border-muted px-3 py-2"
                           key={identity.identity_id}
                         >
                           <span className="text-small text-ink">
-                            <strong>{identity.platform}</strong>:{" "}
+                            <strong>{platformLabel}</strong>:{" "}
                             {label}{" "}
                             <span className="font-mono text-caption text-ink-muted">
                               ({identity.platform_user_id})
                             </span>
                           </span>
-                          <button
-                            className="rounded-md border border-border px-3 py-1.5 text-caption font-semibold text-ink-subtle disabled:opacity-50"
+                          <Button
+                            variant="danger"
                             type="button"
                             disabled={saving}
                             onClick={() => void performUnlink(identity)}
                           >
-                            Unlink {label}
-                          </button>
+                            Unlink {platformLabel}: {label}
+                          </Button>
                         </li>
                       ))}
                     </ul>
@@ -200,47 +171,50 @@ export function IdentityLinksView({
             )}
           </section>
 
-          <section className="mb-7" aria-labelledby="unidentified-contacts-title">
+          <section className="mb-7" aria-labelledby="suggested-links-title">
             <h3
-              id="unidentified-contacts-title"
+              id="suggested-links-title"
               className="mb-3 text-subheading font-bold text-ink"
             >
-              Contacts without a platform identity
+              Suggested links
             </h3>
-            {unidentifiedContacts.length === 0 ? (
+            {suggestedLinks.length === 0 ? (
               <p className="text-small text-ink-muted">
-                All imported contacts currently have a platform identity.
+                No Full Name matches found among unlinked identities.
               </p>
             ) : (
-              <div className={tableContainerClassName}>
-                <table className={tableClassName}>
-                  <thead className={tableHeadClassName}>
-                    <tr>
-                      <th className={tableHeaderClassName} scope="col">Contact</th>
-                      <th className={tableHeaderClassName} scope="col">Platform</th>
-                      <th className={tableHeaderClassName} scope="col">Source account</th>
-                      <th className={tableHeaderClassName} scope="col">Link status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unidentifiedContacts.map(({ contact, label }) => (
-                      <tr className={tableRowClassName} key={contact.contact_id}>
-                        <th className={tableRowTitleClassName} scope="row">
-                          {label}
-                        </th>
-                        <td className={tableCellClassName}>{contact.platform}</td>
-                        <td className={tableCellClassName}>
-                          <PlatformAccountBadge
-                            platform={contact.platform}
-                            accountLabel={contact.account_label}
-                          />
-                        </td>
-                        <td className={tableCellClassName}>Not linkable: no reliable platform ID</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ul
+                aria-label="Suggested identity links"
+                className="max-h-[600px] space-y-2 overflow-y-auto pr-2"
+              >
+                {suggestedLinks.map((suggestion) => (
+                  <li
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-muted bg-surface p-3"
+                    key={`${suggestion.first.identity_id}-${suggestion.second.identity_id}`}
+                  >
+                    <span className="text-small text-ink">
+                      <strong>{suggestion.reason}:</strong>{" "}
+                      {suggestion.firstPlatformLabel}: {suggestion.firstLabel}{" "}
+                      ({suggestion.first.platform_user_id}) ↔{" "}
+                      {suggestion.secondPlatformLabel}: {suggestion.secondLabel}{" "}
+                      ({suggestion.second.platform_user_id})
+                    </span>
+                    <Button
+                      variant="positive"
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        void performLink(
+                          suggestion.first.identity_id,
+                          suggestion.second.identity_id,
+                        )
+                      }
+                    >
+                      Link identities
+                    </Button>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 
