@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from app import instagram_importer
+from app.routers.analytics_overview import get_contact_statistics
 from app.telegram_importer import import_source_export
 from app.models import (
     CanonicalIdentity,
@@ -64,7 +65,7 @@ def _create_import_tables(engine) -> None:
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, "
                 "platform VARCHAR(50), message_id VARCHAR(100), "
                 "source_message_id VARCHAR(200), source_record_key VARCHAR(64), "
-                "sender_id VARCHAR(100), sender_platform_user_id VARCHAR(100), "
+                "sender_id VARCHAR(100), "
                 "sender_contact_id INTEGER, sender_name VARCHAR(300), "
                 "is_outgoing BOOLEAN, message_date DATETIME, message_type VARCHAR(50), "
                 "text_content TEXT, reply_to_telegram_message_id VARCHAR(100), "
@@ -115,6 +116,7 @@ def _write_archive(path) -> None:
                             "sender_name": "Friend",
                             "timestamp_ms": 1_700_000_000_123,
                             "content": "synthetic private text",
+                            "is_outgoing": False,
                         },
                         {
                             "message_id": "instagram-message-2",
@@ -122,6 +124,11 @@ def _write_archive(path) -> None:
                             "sender_name": "Synthetic sender",
                             "timestamp_ms": 1_700_000_000_456,
                             "content": "synthetic identified message",
+                        },
+                        {
+                            "sender_name": "Synthetic Owner",
+                            "timestamp_ms": 1_700_000_000_789,
+                            "content": "synthetic outgoing message",
                         },
                     ],
                 }
@@ -165,6 +172,16 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
             archive_path,
             session=session,
         )
+        idless_message = session.scalar(
+            select(Message).where(Message.source_message_id.is_(None))
+        )
+        assert idless_message is not None
+        assert idless_message.sender_id == "123"
+        assert idless_message.sender_contact_id is not None
+        idless_message.sender_id = None
+        idless_message.sender_contact_id = None
+        idless_message.message_id = None
+        session.flush()
         second = import_source_export(
             "instagram",
             archive_path,
@@ -172,12 +189,12 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         )
 
         assert first["platform"] == "instagram"
-        assert first["inserted_messages"] == 2
+        assert first["inserted_messages"] == 3
         assert first["inserted_contacts"] == 1
         assert first["total_contacts"] == 1
         assert second["inserted_messages"] == 0
         assert second["inserted_contacts"] == 0
-        assert second["skipped_messages"] == 2
+        assert second["skipped_messages"] == 3
 
         account = session.scalar(select(Account))
         messages = session.scalars(select(Message)).all()
@@ -199,22 +216,31 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         assert account.platform_user_id == "synthetic_owner"
         assert account.username == "synthetic_owner"
         assert account.name == "Synthetic Owner"
-        assert len(messages) == 2
+        assert len(messages) == 3
         assert chat is not None and chat.chat_id == "123"
-        unidentified_message = next(
+        assert contact is not None
+        idless_message = next(
             message for message in messages if message.source_message_id is None
         )
-        assert unidentified_message.platform == "instagram"
-        assert unidentified_message.source_record_key
-        assert unidentified_message.sender_id is None
-        assert unidentified_message.sender_contact_id is None
-        assert unidentified_message.is_outgoing is None
-        assert unidentified_message.raw_payload["content"] == "synthetic private text"
+        assert idless_message.platform == "instagram"
+        assert idless_message.source_record_key
+        assert idless_message.message_id == "1"
+        assert idless_message.sender_id == "123"
+        assert idless_message.sender_contact_id == contact.id
+        assert idless_message.is_outgoing is False
+        assert idless_message.raw_payload["content"] == "synthetic private text"
         assert identified_message is not None
-        assert contact is not None
-        assert identified_message.sender_platform_user_id == "123"
+        assert identified_message.message_id == "2"
+        assert identified_message.sender_id == "123"
         assert identified_message.sender_contact_id == contact.id
         assert identified_message.sender_contact_id == contact.id
+        outgoing_message = session.scalar(
+            select(Message).where(Message.message_id == "3")
+        )
+        assert outgoing_message is not None
+        assert outgoing_message.sender_id == "synthetic_owner"
+        assert outgoing_message.sender_contact_id is None
+        assert outgoing_message.is_outgoing is True
         assert contact.platform == "instagram"
         assert contact.platform_user_id == "123"
         assert contact.username == "example"
@@ -225,6 +251,16 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         assert contact.display_name == "Synthetic thread"
         assert len(import_sessions) == 2
         assert all(item.platform == "instagram" for item in import_sessions)
+
+        contact_statistics = get_contact_statistics(session)
+        peer_statistics = next(
+            row for row in contact_statistics if row.platform_user_id == "123"
+        )
+        assert peer_statistics.display_name == "Synthetic thread"
+        assert peer_statistics.total_messages_sent == 2
+        assert peer_statistics.ordinary_messages_sent == 2
+        assert all(row.total_messages_sent != 3 for row in contact_statistics)
+        assert all(row.platform_user_id is not None for row in contact_statistics)
 
     engine.dispose()
 

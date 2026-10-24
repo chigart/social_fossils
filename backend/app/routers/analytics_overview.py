@@ -154,21 +154,12 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
 )
 def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatistics]:
     owner_account = aliased(Account)
-    sender_platform_user_id = case(
-        (
-            Message.platform == TELEGRAM_PLATFORM_ID,
-            Message.sender_id,
-        ),
-        else_=func.coalesce(
-            Message.sender_platform_user_id,
-            Message.sender_id,
-        ),
-    )
+    sender_id = Message.sender_id
     is_owner = (
         select(owner_account.id)
         .where(
             owner_account.platform == Account.platform,
-            owner_account.platform_user_id == sender_platform_user_id,
+            owner_account.platform_user_id == sender_id,
         )
         .exists()
     )
@@ -180,7 +171,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             Account.name.label("account_name"),
             Contact.id.label("contact_id"),
             CanonicalIdentity.id.label("canonical_identity_id"),
-            sender_platform_user_id.label("platform_user_id"),
+            sender_id.label("platform_user_id"),
             Contact.display_name.label("display_name"),
             func.count(Message.id).label("total_messages_sent"),
             func.count(
@@ -200,10 +191,10 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
                 Contact.platform == Message.platform,
                 or_(
                     Contact.id == Message.sender_contact_id,
-                    Contact.platform_user_id == sender_platform_user_id,
+                    Contact.platform_user_id == sender_id,
                     and_(
                         Message.platform == TELEGRAM_PLATFORM_ID,
-                        Contact.platform_user_id == sender_platform_user_id,
+                        Contact.platform_user_id == sender_id,
                     ),
                 ),
             ),
@@ -217,7 +208,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             Message.platform == Account.platform,
             Message.is_outgoing.is_not(True),
             or_(
-                sender_platform_user_id.is_(None),
+                sender_id.is_(None),
                 ~is_owner,
             ),
         )
@@ -228,14 +219,14 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             CanonicalIdentity.id,
             Account.username,
             Account.name,
-            sender_platform_user_id,
+            sender_id,
             Contact.display_name,
         )
         .order_by(
             Account.platform,
             Chat.account_id,
             Contact.display_name,
-            sender_platform_user_id,
+            sender_id,
         )
     )
     groups: dict[tuple[object, ...], dict[str, object]] = {}

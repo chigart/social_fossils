@@ -211,7 +211,7 @@ def test_instagram_records_are_excluded_from_telegram_analytics(db_session):
     db_session.execute(
         text(
             "INSERT INTO messages "
-            "(id, chat_id, platform, source_record_key, sender_platform_user_id, "
+            "(id, chat_id, platform, source_record_key, sender_id, "
             "sender_contact_id, sender_name, message_type, text_content, raw_payload) "
             "VALUES (20, 20, 'instagram', 'record-key', 'instagram-peer', "
             "20, 'Synthetic Instagram peer', 'message', 'synthetic', '{}')"

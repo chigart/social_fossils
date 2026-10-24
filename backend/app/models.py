@@ -198,7 +198,6 @@ class Message(Base):
     source_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     source_record_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sender_id: Mapped[str | None] = mapped_column(String(100))
-    sender_platform_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sender_contact_id: Mapped[int | None] = mapped_column(
         ForeignKey("contacts.id", ondelete="SET NULL"),
         nullable=True,

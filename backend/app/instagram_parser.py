@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
-MESSAGE_FILE_PATTERN = re.compile(r"message(?:_\d+)?\.json", re.IGNORECASE)
+MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
 MAX_MESSAGE_FILE_BYTES = 100 * 1024 * 1024
 MAX_MESSAGE_DATA_BYTES = 1024 * 1024 * 1024
 USER_FOLDER_PATTERN = re.compile(r"^(?P<username>.+)_(?P<user_id>\d+)$")
@@ -58,7 +58,13 @@ def _message_files(archive: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]
             continue
         files.append((member, thread_path))
 
-    return sorted(files, key=lambda item: item[0].filename)
+    def sort_key(item: tuple[zipfile.ZipInfo, str]) -> tuple[str, int, str]:
+        member, thread_path = item
+        match = MESSAGE_FILE_PATTERN.fullmatch(PurePosixPath(member.filename).name)
+        file_number = int(match.group(1) or 1) if match is not None else 1
+        return thread_path, file_number, member.filename
+
+    return sorted(files, key=sort_key)
 
 
 def normalize_instagram_text(value: str) -> str:
@@ -152,7 +158,7 @@ def _message_payload(
             raw_message.get("message_id", raw_message.get("id"))
         ),
         "source_record_key": _stable_record_key(chat_id, raw_message, occurrence),
-        "sender_platform_user_id": _source_id(
+        "sender_id": _source_id(
             raw_message.get("sender_id", raw_message.get("sender_user_id"))
         ),
         "sender_name": (
@@ -324,9 +330,9 @@ def parse_instagram_archive(
                 )
                 occurrence = occurrences[serialized]
                 occurrences[serialized] += 1
-                chat.messages.append(
-                    _message_payload(chat_id, raw_message, occurrence)
-                )
+                message = _message_payload(chat_id, raw_message, occurrence)
+                message["message_id"] = str(len(chat.messages) + 1)
+                chat.messages.append(message)
 
     account_username = account_details.get("username")
     owner_platform_user_id = account_details.get("user_id") or account_username

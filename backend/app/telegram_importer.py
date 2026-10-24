@@ -168,7 +168,6 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
             f"{TELEGRAM_PLATFORM_ID}:{message_id}".encode("utf-8")
         ).hexdigest(),
         sender_id=sender_telegram_id,
-        sender_platform_user_id=sender_telegram_id,
         sender_contact_id=sender_contact_id,
         sender_name=payload.get("sender_name"),
         is_outgoing=payload.get("is_outgoing"),

@@ -220,14 +220,53 @@ def _insert_message(
     chat: Chat,
     payload: dict[str, Any],
     contact: Contact | None,
+    account: Account,
 ) -> bool:
-    sender_platform_user_id = payload.get("sender_platform_user_id")
-    sender_contact_id = (
-        contact.id
-        if contact is not None
-        and sender_platform_user_id == contact.platform_user_id
+    sender_id = payload.get("sender_id")
+    is_outgoing = payload.get("is_outgoing")
+    sender_name = payload.get("sender_name")
+    normalized_sender_name = (
+        normalize_instagram_text(sender_name).strip().casefold()
+        if isinstance(sender_name, str)
         else None
     )
+    owner_names = {
+        normalize_instagram_text(value).strip().casefold()
+        for value in (account.username, account.name)
+        if value
+    }
+    is_owner = (
+        sender_id is not None and sender_id == account.platform_user_id
+    ) or (
+        normalized_sender_name is not None
+        and normalized_sender_name in owner_names
+    )
+    if is_owner:
+        sender_id = sender_id or account.platform_user_id
+        is_outgoing = True
+    elif (
+        sender_id is None
+        and is_outgoing is not True
+        and chat.chat_type == "personal_chat"
+        and contact is not None
+    ):
+        sender_id = sender_id or contact.platform_user_id
+        if is_outgoing is None:
+            is_outgoing = False
+
+    sender_contact_id = None
+    if is_outgoing is not True:
+        if contact is not None and sender_id == contact.platform_user_id:
+            sender_contact_id = contact.id
+        elif sender_id is not None:
+            sender_contact = _get_or_create_contact(
+                session,
+                account.id,
+                sender_id,
+                sender_name,
+            )
+            if sender_contact is not None:
+                sender_contact_id = sender_contact.id
     source_record_key = payload["source_record_key"]
     source_message_id = payload["source_message_id"]
     duplicate_conditions = [Message.source_record_key == source_record_key]
@@ -249,8 +288,21 @@ def _insert_message(
             existing_message.text_content = normalize_instagram_text(
                 existing_message.text_content
             )
-        if sender_contact_id is not None and existing_message.sender_contact_id is None:
+        if (
+            sender_id is not None
+            and existing_message.sender_id is None
+        ):
+            existing_message.sender_id = sender_id
+        if (
+            sender_contact_id is not None
+            and existing_message.sender_contact_id is None
+        ):
             existing_message.sender_contact_id = sender_contact_id
+        if existing_message.message_id is None:
+            existing_message.message_id = payload["message_id"]
+        if existing_message.is_outgoing is None and is_outgoing is not None:
+            existing_message.is_outgoing = is_outgoing
+        if session.is_modified(existing_message):
             session.flush()
         return False
 
@@ -259,14 +311,13 @@ def _insert_message(
         .values(
             chat_id=chat.id,
             platform=INSTAGRAM_PLATFORM_ID,
-            message_id=None,
+            message_id=payload["message_id"],
             source_message_id=source_message_id,
             source_record_key=source_record_key,
-            sender_id=None,
-            sender_platform_user_id=sender_platform_user_id,
+            sender_id=sender_id,
             sender_contact_id=sender_contact_id,
             sender_name=payload.get("sender_name"),
-            is_outgoing=payload.get("is_outgoing"),
+            is_outgoing=is_outgoing,
             message_date=payload.get("message_date"),
             message_type=payload.get("message_type") or "message",
             text_content=payload.get("text_content"),
@@ -360,6 +411,7 @@ def import_instagram_export(
                     persisted_chat,
                     message,
                     folder_contact,
+                    account,
                 )
                 if message_inserted:
                     inserted_messages += 1

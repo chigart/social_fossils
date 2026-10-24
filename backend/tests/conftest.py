@@ -46,7 +46,7 @@ def db_session():
             "id INTEGER PRIMARY KEY, chat_id INTEGER, "
             "platform VARCHAR(50) DEFAULT 'telegram', "
             "source_message_id VARCHAR(200), source_record_key VARCHAR(64), "
-            "sender_platform_user_id VARCHAR(100), source_reply_id VARCHAR(200), "
+            "source_reply_id VARCHAR(200), "
             "message_id VARCHAR(100), sender_id VARCHAR(100), "
             "sender_contact_id INTEGER, "
             "sender_name VARCHAR(300), is_outgoing BOOLEAN, "

@@ -58,7 +58,7 @@ def test_parse_instagram_archive_preserves_messages_and_generates_stable_keys(tm
 
     first, second, third = chat.messages
     assert first["source_message_id"] == "source-1"
-    assert first["sender_platform_user_id"] == "user-1"
+    assert first["sender_id"] == "user-1"
     assert first["is_outgoing"] is True
     assert first["text_content"] == "hello"
     assert first["raw_payload"]["content"] == "hello"
@@ -71,6 +71,30 @@ def test_parse_instagram_archive_preserves_messages_and_generates_stable_keys(tm
     ] == [
         message["source_record_key"] for message in repeated.chats[0].messages
     ]
+    assert [message["message_id"] for message in chat.messages] == ["1", "2", "3"]
+
+
+def test_parse_instagram_archive_numbers_messages_across_files_in_order(tmp_path):
+    archive_path = tmp_path / "instagram-split.zip"
+    thread_root = "messages/inbox/friend_123"
+    with ZipFile(archive_path, "w") as archive:
+        _write_conversation(
+            archive,
+            f"{thread_root}/message_2.json",
+            [{"content": "third"}],
+        )
+        _write_conversation(
+            archive,
+            f"{thread_root}/message_1.json",
+            [{"content": "first"}, {"content": "second"}],
+        )
+
+    parsed = parse_instagram_archive(archive_path)
+
+    assert [
+        (message["message_id"], message["text_content"])
+        for message in parsed.chats[0].messages
+    ] == [("1", "first"), ("2", "second"), ("3", "third")]
 
 
 def test_parse_instagram_archive_rejects_invalid_or_unsupported_archives(tmp_path):
