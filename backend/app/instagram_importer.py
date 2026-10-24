@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,13 @@ from app.models import (
 from app.platforms import INSTAGRAM_PLATFORM_ID
 
 logger = logging.getLogger(__name__)
+
+
+def _is_placeholder_contact_name(name: str | None) -> bool:
+    return (
+        isinstance(name, str)
+        and normalize_instagram_text(name).strip().casefold() == "instagram user"
+    )
 
 
 def _file_sha256(path: Path) -> str:
@@ -134,6 +141,15 @@ def _get_or_create_contact(
 ) -> Contact | None:
     if not platform_user_id:
         return None
+    if _is_placeholder_contact_name(display_name):
+        existing_contact = session.scalar(
+            select(Contact).where(
+                Contact.account_id == account_id,
+                Contact.platform == INSTAGRAM_PLATFORM_ID,
+                Contact.platform_user_id == platform_user_id,
+            )
+        )
+        return existing_contact
 
     identity_statement = (
         insert(CanonicalIdentity)
@@ -189,6 +205,31 @@ def _get_or_create_contact(
     return contact
 
 
+def _ensure_owner_contact(
+    session: Session,
+    account: Account,
+) -> tuple[Contact, bool]:
+    if account.platform_user_id is None:
+        raise ValueError("Instagram account does not have a platform user ID.")
+    existed = session.scalar(
+        select(Contact.id).where(
+            Contact.account_id == account.id,
+            Contact.platform == INSTAGRAM_PLATFORM_ID,
+            Contact.platform_user_id == account.platform_user_id,
+        )
+    ) is not None
+    contact = _get_or_create_contact(
+        session,
+        account.id,
+        account.platform_user_id,
+        account.name,
+        username=account.username,
+    )
+    if contact is None:
+        raise RuntimeError("Instagram account contact could not be created.")
+    return contact, not existed
+
+
 def _ensure_folder_contact(
     session: Session,
     account_id: int,
@@ -211,7 +252,7 @@ def _ensure_folder_contact(
         username=parsed_chat.correspondent_username,
     )
     if contact is None:
-        raise RuntimeError("Instagram conversation contact could not be created.")
+        return None, False
     return contact, not existed
 
 
@@ -220,6 +261,7 @@ def _insert_message(
     chat: Chat,
     payload: dict[str, Any],
     contact: Contact | None,
+    owner_contact: Contact,
     account: Account,
 ) -> bool:
     sender_id = payload.get("sender_id")
@@ -235,7 +277,7 @@ def _insert_message(
         for value in (account.username, account.name)
         if value
     }
-    is_owner = (
+    is_owner = is_outgoing is True or (
         sender_id is not None and sender_id == account.platform_user_id
     ) or (
         normalized_sender_name is not None
@@ -247,15 +289,29 @@ def _insert_message(
     elif (
         sender_id is None
         and is_outgoing is not True
-        and chat.chat_type == "personal_chat"
         and contact is not None
+        and (
+            chat.chat_type == "personal_chat"
+            or is_outgoing is False
+            or (
+                isinstance(sender_name, str)
+                and any(
+                    normalize_instagram_text(sender_name).strip().casefold()
+                    == normalize_instagram_text(name).strip().casefold()
+                    for name in (contact.username, contact.display_name)
+                    if name
+                )
+            )
+        )
     ):
         sender_id = sender_id or contact.platform_user_id
         if is_outgoing is None:
             is_outgoing = False
 
     sender_contact_id = None
-    if is_outgoing is not True:
+    if is_owner:
+        sender_contact_id = owner_contact.id
+    elif is_outgoing is not True:
         if contact is not None and sender_id == contact.platform_user_id:
             sender_contact_id = contact.id
         elif sender_id is not None:
@@ -268,15 +324,11 @@ def _insert_message(
             if sender_contact is not None:
                 sender_contact_id = sender_contact.id
     source_record_key = payload["source_record_key"]
-    source_message_id = payload["source_message_id"]
-    duplicate_conditions = [Message.source_record_key == source_record_key]
-    if source_message_id is not None:
-        duplicate_conditions.append(Message.source_message_id == source_message_id)
     existing_message = session.scalar(
         select(Message).where(
             Message.chat_id == chat.id,
             Message.platform == INSTAGRAM_PLATFORM_ID,
-            or_(*duplicate_conditions),
+            Message.source_record_key == source_record_key,
         )
     )
     if existing_message is not None:
@@ -312,7 +364,6 @@ def _insert_message(
             chat_id=chat.id,
             platform=INSTAGRAM_PLATFORM_ID,
             message_id=payload["message_id"],
-            source_message_id=source_message_id,
             source_record_key=source_record_key,
             sender_id=sender_id,
             sender_contact_id=sender_contact_id,
@@ -355,11 +406,12 @@ def import_instagram_export(
         for chat in parsed_export.chats
         if chat.correspondent_platform_user_id is not None
     }
+    imported_contact_ids = folder_contacts | {parsed_export.owner_platform_user_id}
     logger.info(
         "Parsed Instagram export: %d conversations, %d messages, %d contacts",
         chat_count,
         parsed_message_count,
-        len(folder_contacts),
+        len(imported_contact_ids),
     )
 
     if session is None:
@@ -391,10 +443,11 @@ def import_instagram_export(
         session.add(import_session)
         session.flush()
 
+        owner_contact, owner_contact_inserted = _ensure_owner_contact(session, account)
         total_messages = 0
         inserted_messages = 0
         skipped_messages = 0
-        inserted_contacts = 0
+        inserted_contacts = int(owner_contact_inserted)
         for chat in parsed_export.chats:
             persisted_chat = _ensure_chat(session, account.id, chat)
             folder_contact, contact_inserted = _ensure_folder_contact(
@@ -406,11 +459,18 @@ def import_instagram_export(
                 inserted_contacts += 1
             for message in chat.messages:
                 total_messages += 1
+                if (
+                    _is_placeholder_contact_name(message.get("sender_name"))
+                    or _is_placeholder_contact_name(chat.title)
+                ):
+                    skipped_messages += 1
+                    continue
                 message_inserted = _insert_message(
                     session,
                     persisted_chat,
                     message,
                     folder_contact,
+                    owner_contact,
                     account,
                 )
                 if message_inserted:
@@ -437,9 +497,9 @@ def import_instagram_export(
             "total_messages": total_messages,
             "inserted_messages": inserted_messages,
             "skipped_messages": skipped_messages,
-            "total_contacts": len(folder_contacts),
+            "total_contacts": len(imported_contact_ids),
             "inserted_contacts": inserted_contacts,
-            "skipped_contacts": len(folder_contacts) - inserted_contacts,
+            "skipped_contacts": len(imported_contact_ids) - inserted_contacts,
             "session_id": import_session.id,
         }
     except Exception as exc:

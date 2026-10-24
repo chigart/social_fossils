@@ -68,7 +68,10 @@ def _message_files(archive: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]
 
 
 def normalize_instagram_text(value: str) -> str:
-    if not any(marker in value for marker in ("Ã", "Ð", "Ñ", "\x80", "\x81", "\x8d")):
+    if not any(
+        marker in value
+        for marker in ("Ã", "Ð", "Ñ", "ð", "\x80", "\x81", "\x8d", "\x9f")
+    ):
         return value
     try:
         decoded = value.encode("latin-1").decode("utf-8")
@@ -81,7 +84,7 @@ def _folder_identity(thread_path: str) -> tuple[str, str | None, str | None]:
     folder_name = thread_path.rsplit("/", 1)[-1]
     match = USER_FOLDER_PATTERN.fullmatch(folder_name)
     if match is None:
-        return thread_path, None, None
+        return thread_path, normalize_instagram_text(folder_name), None
     return (
         match.group("user_id"),
         normalize_instagram_text(match.group("username")),
@@ -154,9 +157,6 @@ def _message_payload(
         is_outgoing = None
 
     return {
-        "source_message_id": _source_id(
-            raw_message.get("message_id", raw_message.get("id"))
-        ),
         "source_record_key": _stable_record_key(chat_id, raw_message, occurrence),
         "sender_id": _source_id(
             raw_message.get("sender_id", raw_message.get("sender_user_id"))

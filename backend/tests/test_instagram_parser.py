@@ -57,14 +57,13 @@ def test_parse_instagram_archive_preserves_messages_and_generates_stable_keys(tm
     assert len(chat.messages) == 3
 
     first, second, third = chat.messages
-    assert first["source_message_id"] == "source-1"
+    assert first["raw_payload"]["message_id"] == "source-1"
     assert first["sender_id"] == "user-1"
     assert first["is_outgoing"] is True
     assert first["text_content"] == "hello"
     assert first["raw_payload"]["content"] == "hello"
     assert first["message_date"].isoformat() == "2023-11-14T22:13:20+00:00"
     assert second["is_outgoing"] is None
-    assert second["source_message_id"] is None
     assert second["source_record_key"] != third["source_record_key"]
     assert [
         message["source_record_key"] for message in chat.messages

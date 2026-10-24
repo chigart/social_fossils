@@ -177,11 +177,6 @@ class Message(Base):
         ),
         UniqueConstraint(
             "chat_id",
-            "source_message_id",
-            name="uq_messages_chat_source_id",
-        ),
-        UniqueConstraint(
-            "chat_id",
             "source_record_key",
             name="uq_messages_chat_source_record_key",
         ),
@@ -195,7 +190,6 @@ class Message(Base):
     )
     platform: Mapped[str] = mapped_column(String(50))
     message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    source_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     source_record_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sender_id: Mapped[str | None] = mapped_column(String(100))
     sender_contact_id: Mapped[int | None] = mapped_column(

@@ -64,14 +64,13 @@ def _create_import_tables(engine) -> None:
                 "CREATE TABLE messages ("
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER, "
                 "platform VARCHAR(50), message_id VARCHAR(100), "
-                "source_message_id VARCHAR(200), source_record_key VARCHAR(64), "
+                "source_record_key VARCHAR(64), "
                 "sender_id VARCHAR(100), "
                 "sender_contact_id INTEGER, sender_name VARCHAR(300), "
                 "is_outgoing BOOLEAN, message_date DATETIME, message_type VARCHAR(50), "
                 "text_content TEXT, reply_to_telegram_message_id VARCHAR(100), "
                 "source_reply_id VARCHAR(200), raw_payload JSON, "
                 "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
-                "UNIQUE(chat_id, source_message_id), "
                 "UNIQUE(chat_id, source_record_key))"
             )
         )
@@ -99,6 +98,7 @@ def _write_archive(path) -> None:
                             "string_map_data": {
                                 "Username": {"value": "synthetic_owner"},
                                 "Name": {"value": "Synthetic Owner"},
+                                "User ID": {"value": "owner-123"},
                             }
                         }
                     ]
@@ -126,6 +126,7 @@ def _write_archive(path) -> None:
                             "content": "synthetic identified message",
                         },
                         {
+                            "sender_id": "owner-123",
                             "sender_name": "Synthetic Owner",
                             "timestamp_ms": 1_700_000_000_789,
                             "content": "synthetic outgoing message",
@@ -145,7 +146,7 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
             platform="instagram",
             name="Synthetic Owner",
             username="synthetic_owner",
-            platform_user_id="synthetic_owner",
+            platform_user_id="owner-123",
         )
         session.add(account)
         session.flush()
@@ -173,7 +174,7 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
             session=session,
         )
         idless_message = session.scalar(
-            select(Message).where(Message.source_message_id.is_(None))
+            select(Message).where(Message.message_id == "1")
         )
         assert idless_message is not None
         assert idless_message.sender_id == "123"
@@ -190,8 +191,8 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
 
         assert first["platform"] == "instagram"
         assert first["inserted_messages"] == 3
-        assert first["inserted_contacts"] == 1
-        assert first["total_contacts"] == 1
+        assert first["inserted_contacts"] == 2
+        assert first["total_contacts"] == 2
         assert second["inserted_messages"] == 0
         assert second["inserted_contacts"] == 0
         assert second["skipped_messages"] == 3
@@ -200,9 +201,7 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         messages = session.scalars(select(Message)).all()
         chat = session.scalar(select(Chat))
         identified_message = session.scalar(
-            select(Message).where(
-                Message.source_message_id == "instagram-message-2"
-            )
+            select(Message).where(Message.message_id == "2")
         )
         contact = session.scalar(
             select(Contact).where(
@@ -213,14 +212,14 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         import_sessions = session.scalars(select(ImportSession)).all()
         assert account is not None
         assert account.platform == "instagram"
-        assert account.platform_user_id == "synthetic_owner"
+        assert account.platform_user_id == "owner-123"
         assert account.username == "synthetic_owner"
         assert account.name == "Synthetic Owner"
         assert len(messages) == 3
         assert chat is not None and chat.chat_id == "123"
         assert contact is not None
         idless_message = next(
-            message for message in messages if message.source_message_id is None
+            message for message in messages if message.message_id == "1"
         )
         assert idless_message.platform == "instagram"
         assert idless_message.source_record_key
@@ -237,16 +236,20 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         outgoing_message = session.scalar(
             select(Message).where(Message.message_id == "3")
         )
+        owner_contact = session.scalar(
+            select(Contact).where(Contact.platform_user_id == "owner-123")
+        )
         assert outgoing_message is not None
-        assert outgoing_message.sender_id == "synthetic_owner"
-        assert outgoing_message.sender_contact_id is None
+        assert owner_contact is not None
+        assert outgoing_message.sender_id == "owner-123"
+        assert outgoing_message.sender_contact_id == owner_contact.id
         assert outgoing_message.is_outgoing is True
         assert contact.platform == "instagram"
         assert contact.platform_user_id == "123"
         assert contact.username == "example"
         assert identity is not None and identity.platform == "instagram"
         contacts = session.scalars(select(Contact)).all()
-        assert len(contacts) == 2
+        assert len(contacts) == 3
         assert preserved_contact in contacts
         assert contact.display_name == "Synthetic thread"
         assert len(import_sessions) == 2

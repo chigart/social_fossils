@@ -146,7 +146,7 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
         select(Message).where(
             Message.chat_id == chat.id,
             Message.platform == TELEGRAM_PLATFORM_ID,
-            Message.source_message_id == str(message_id),
+            Message.message_id == str(message_id),
         )
     )
     if existing_message is not None:
@@ -163,7 +163,6 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
         chat_id=chat.id,
         platform=TELEGRAM_PLATFORM_ID,
         message_id=str(message_id),
-        source_message_id=str(message_id),
         source_record_key=hashlib.sha256(
             f"{TELEGRAM_PLATFORM_ID}:{message_id}".encode("utf-8")
         ).hexdigest(),
