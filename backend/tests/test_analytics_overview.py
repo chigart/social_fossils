@@ -11,10 +11,17 @@ from analytics_test_helpers import (
 
 from app.main import app
 from app.routers.analytics_communication_balance import get_communication_balance
+from app.routers.analytics_chat_insights import get_chat_insights
 from app.routers.analytics_overview import (
     get_chat_statistics,
     get_contact_statistics,
     get_overview,
+)
+from app.routers.analytics_communication_timeline_queries import (
+    build_communication_timeline_statistics,
+)
+from app.routers.analytics_forgotten_contacts import (
+    build_forgotten_contacts_statistics,
 )
 from app.schemas.analytics import (
     ChatStatistics,
@@ -159,6 +166,47 @@ def test_nonstandard_message_type_only_contributes_to_total(db_session):
     assert contact.total_messages_sent == 1
     assert contact.ordinary_messages_sent == 0
     assert contact.service_events_attributed == 0
+
+
+def test_instagram_records_are_excluded_from_telegram_analytics(db_session):
+    db_session.execute(
+        text(
+            "INSERT INTO account "
+            "(id, platform, name, platform_user_id) "
+            "VALUES (2, 'instagram', 'Instagram account', NULL)"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats "
+            "(id, account_id, platform, chat_id, chat_type, title) "
+            "VALUES (20, 2, 'instagram', 'inbox/thread_20', 'personal_chat', 'Thread')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, source_record_key, sender_name, "
+            "message_type, text_content, raw_payload) "
+            "VALUES (20, 20, 'instagram', 'record-key', 'Friend', "
+            "'message', 'synthetic', '{}')"
+        )
+    )
+
+    overview = get_overview(db_session)
+    timeline = build_communication_timeline_statistics(db_session)
+    forgotten = build_forgotten_contacts_statistics(db_session)
+    balance = get_communication_balance(db_session)
+
+    assert overview.total_imported_accounts == 0
+    assert overview.total_chats == 0
+    assert overview.total_messages == 0
+    assert get_chat_statistics(db_session) == []
+    assert get_contact_statistics(db_session) == []
+    assert balance.contacts == []
+    assert get_chat_insights(db_session).chats == []
+    assert timeline.summary.ordinary_message_count == 0
+    assert forgotten.summary.source_account_count == 0
 
 def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_session):
     add_account(

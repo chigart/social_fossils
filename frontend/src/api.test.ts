@@ -133,7 +133,7 @@ describe("analytics API helpers", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(uploadFile(file)).resolves.toEqual(job);
+    await expect(uploadFile(file, "telegram")).resolves.toEqual(job);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [path, options] = fetchMock.mock.calls[0];
@@ -141,6 +141,24 @@ describe("analytics API helpers", () => {
     expect(options.method).toBe("POST");
     expect(options.body).toBeInstanceOf(FormData);
     expect((options.body as FormData).get("file")).toBe(file);
+    expect((options.body as FormData).get("platform")).toBe("telegram");
+  });
+
+  it("includes the selected platform for an Instagram archive", async () => {
+    const file = new File(["synthetic archive"], "instagram.zip", {
+      type: "application/zip",
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 18, filename: "instagram.zip" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await uploadFile(file, "instagram");
+
+    const [, options] = fetchMock.mock.calls[0];
+    expect((options.body as FormData).get("file")).toBe(file);
+    expect((options.body as FormData).get("platform")).toBe("instagram");
   });
 
   it("uses the server error detail for a rejected file", async () => {
@@ -154,7 +172,10 @@ describe("analytics API helpers", () => {
     );
 
     await expect(
-      uploadFile(new File(["synthetic export"], "duplicate.json")),
+      uploadFile(
+        new File(["synthetic export"], "duplicate.json"),
+        "telegram",
+      ),
     ).rejects.toThrow("This file has already been uploaded");
   });
 

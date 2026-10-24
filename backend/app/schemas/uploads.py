@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class UploadJobResponse(BaseModel):
     id: int
     filename: str
+    platform: str
     status: str
     source_account_id: int | None
     import_session_id: int | None

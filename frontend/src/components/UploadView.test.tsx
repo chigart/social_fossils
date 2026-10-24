@@ -10,6 +10,13 @@ vi.mock("../api", () => ({
 }));
 
 describe("UploadView", () => {
+  it("requires an explicit platform before choosing an export", () => {
+    render(<UploadView />);
+
+    expect(screen.getByLabelText("Messaging platform")).toHaveValue("");
+    expect(screen.getByLabelText("Choose export files")).toBeDisabled();
+  });
+
   it("submits each selected file independently and shows its own outcome", async () => {
     const user = userEvent.setup();
     const uploadMock = vi.mocked(uploadFile);
@@ -21,6 +28,7 @@ describe("UploadView", () => {
       return {
         id: 42,
         filename: file.name,
+        platform: "telegram",
         status: "pending",
         source_account_id: null,
         import_session_id: null,
@@ -33,6 +41,10 @@ describe("UploadView", () => {
     });
 
     render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "telegram",
+    );
     const fileInput = screen.getByLabelText("Choose Telegram JSON files");
     const validFile = new File(["synthetic"], "valid.json", {
       type: "application/json",
@@ -57,8 +69,8 @@ describe("UploadView", () => {
       "Invalid Telegram export.",
     );
     expect(uploadMock).toHaveBeenCalledTimes(2);
-    expect(uploadMock).toHaveBeenNthCalledWith(1, validFile);
-    expect(uploadMock).toHaveBeenNthCalledWith(2, invalidFile);
+    expect(uploadMock).toHaveBeenNthCalledWith(1, validFile, "telegram");
+    expect(uploadMock).toHaveBeenNthCalledWith(2, invalidFile, "telegram");
   });
 
   it("offers retry when a job was saved but its pipeline did not start", async () => {
@@ -66,6 +78,7 @@ describe("UploadView", () => {
     vi.mocked(uploadFile).mockResolvedValue({
       id: 73,
       filename: "waiting.json",
+      platform: "telegram",
       status: "pending",
       source_account_id: null,
       import_session_id: null,
@@ -78,6 +91,7 @@ describe("UploadView", () => {
     vi.mocked(retryUploadJob).mockResolvedValue({
       id: 73,
       filename: "waiting.json",
+      platform: "telegram",
       status: "pending",
       source_account_id: null,
       import_session_id: null,
@@ -89,6 +103,10 @@ describe("UploadView", () => {
     });
 
     render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "telegram",
+    );
     await user.upload(
       screen.getByLabelText("Choose Telegram JSON files"),
       new File(["synthetic"], "waiting.json", { type: "application/json" }),
@@ -102,5 +120,38 @@ describe("UploadView", () => {
 
     expect(await screen.findByText(/Pipeline queued · Job #73/)).toBeInTheDocument();
     expect(retryUploadJob).toHaveBeenCalledWith(73);
+  });
+
+  it("uploads Instagram archives with the selected platform", async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadFile).mockResolvedValue({
+      id: 81,
+      filename: "instagram.zip",
+      platform: "instagram",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-81",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+    });
+
+    render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "instagram",
+    );
+    const fileInput = screen.getByLabelText("Choose Instagram ZIP files");
+    const archive = new File(["synthetic"], "instagram.zip", {
+      type: "application/zip",
+    });
+    await user.upload(fileInput, archive);
+    expect(fileInput).toHaveAttribute("accept", ".zip,application/zip");
+    await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+    expect(await screen.findByText("instagram.zip")).toBeInTheDocument();
+    expect(uploadFile).toHaveBeenCalledWith(archive, "instagram");
   });
 });

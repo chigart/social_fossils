@@ -31,7 +31,8 @@ The repository already contains:
 
 - A FastAPI/SQLAlchemy backend and PostgreSQL schema for Telegram accounts,
   contacts, chats, members, messages, and import sessions.
-- A Telegram JSON parser and idempotent command-line importer.
+- A Telegram JSON parser and idempotent command-line importer, plus an
+  Instagram JSON archive importer using the shared upload pipeline.
 - Overview, chat, sender/contact, and communication-balance analytics APIs.
 - A Forgotten Contacts API with inactivity/decline calculations, evidence
   indicators, monthly activity, ranking, and limits, plus a combined-owner
@@ -44,11 +45,12 @@ The repository already contains:
 Phases 1–4, including combined-owner analytics, Forgotten Contacts, the
 Communication Timeline, and per-file upload-triggered Airflow processing, are
 considered complete. The upload/job API is single-owner and unauthenticated.
-There is no additional platform importer or Kubernetes deployment
-configuration. Phase 5 remains a possible future expansion of data sources.
+The Instagram importer is the first Phase 5 data-source expansion. Further
+cross-platform identity, analytics, and scaling work remains future scope.
+There is no Kubernetes deployment configuration.
 
 Relevant existing code includes `backend/app/models.py`,
-`backend/app/importer.py`, `backend/app/routers/analytics.py`,
+`backend/app/telegram_importer.py`, `backend/app/routers/analytics.py`,
 `backend/app/schemas/analytics.py`, `backend/tests/test_analytics.py`,
 `frontend/src/App.tsx`, `frontend/src/api.ts`, and
 `frontend/src/components/`.
@@ -253,14 +255,24 @@ CLI/services remain usable without Airflow.
 
 ### 22. Select and add another messaging platform
 
-- Compare candidates by export availability, format stability, identifier
-  quality, and ability to build representative synthetic tests. Select one
-  platform before implementing an importer.
-- Implement its parser and import service behind the existing reusable
-  processing boundary. Preserve platform source IDs, raw payload, and source
-  account provenance.
-- Add synthetic fixtures, malformed-input validation, idempotency, and
-  importer/pipeline tests. Run it through the same per-file upload workflow.
+- Selected **Instagram** after comparing official export availability.
+  Instagram and Facebook offer Meta-account data exports with a JSON option;
+  WhatsApp chat export is text-oriented, and VK's official archive format was
+  not established as a stable machine-readable message format. Instagram is
+  the selected direct-message source, not a claim that its archive schema or
+  message IDs are stable.
+- Parse the official Instagram ZIP archive in memory and validate conversation
+  JSON. Preserve available platform IDs, raw message payload, and
+  source-account/platform provenance. Do not infer participant identity from
+  display names; keep direction unknown unless explicitly provided.
+- Store a deterministic importer record key for idempotency when a platform
+  message ID is absent, without representing that key as an Instagram ID.
+- Select Telegram or Instagram in the upload workflow; process Telegram JSON
+  and Instagram ZIP exports through the same per-file Airflow pipeline.
+- Keep existing analytics scoped to Telegram. Cross-platform identity linking
+  and analytics remain deferred to sections 23–24.
+- Cover synthetic fixtures, malformed input, repeated imports, migration
+  preservation, workflow dispatch, and Telegram behavior with tests.
 
 ### 23. Add explicit cross-platform identity links
 

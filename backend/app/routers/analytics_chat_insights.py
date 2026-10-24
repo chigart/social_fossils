@@ -8,12 +8,13 @@ from statistics import median
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.analytics_stop_words import STOP_WORDS
 from app.db import get_db
-from app.models import Chat, Message, TelegramAccount
+from app.models import Account, Chat, Message
+from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ChatInsightsResponse,
     ChatInsightsStatistics,
@@ -588,11 +589,11 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             Chat.account_id,
             Chat.title,
             Chat.chat_type,
-            TelegramAccount.username.label("account_username"),
-            TelegramAccount.name.label("account_name"),
+            Account.username.label("account_username"),
+            Account.name.label("account_name"),
             Message.id.label("message_id"),
-            Message.telegram_message_id,
-            Message.sender_telegram_id,
+            Message.message_id.label("telegram_message_id"),
+            Message.sender_id,
             Message.sender_name,
             Message.message_type,
             Message.text_content,
@@ -601,9 +602,19 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             Message.raw_payload,
         )
         .select_from(Chat)
-        .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
-        .outerjoin(Message, Message.chat_id == Chat.id)
-        .where(Chat.chat_type.in_(SUPPORTED_CHAT_TYPES))
+        .join(Account, Account.id == Chat.account_id)
+        .outerjoin(
+            Message,
+            and_(
+                Message.chat_id == Chat.id,
+                Message.platform == TELEGRAM_PLATFORM_ID,
+            ),
+        )
+        .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform == TELEGRAM_PLATFORM_ID,
+            Chat.chat_type.in_(SUPPORTED_CHAT_TYPES),
+        )
         .order_by(Chat.id, Message.message_date, Message.id)
     )
 
@@ -633,23 +644,23 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             if text:
                 chat.with_text_counts[category] += 1
             type_senders = chat.message_type_senders.setdefault(category, {})
-            type_sender = type_senders.get(row.sender_telegram_id)
+            type_sender = type_senders.get(row.sender_id)
             if type_sender is None:
                 type_sender = _MessageTypeSenderCounts(
-                    sender_id=row.sender_telegram_id,
+                    sender_id=row.sender_id,
                     name=(
                         _clean_display_name(row.sender_name)
-                        or row.sender_telegram_id
+                        or row.sender_id
                         or "Unknown sender"
                     ),
                 )
-                type_senders[row.sender_telegram_id] = type_sender
+                type_senders[row.sender_id] = type_sender
             type_sender.count += 1
             chat.messages.append(
                 _ConversationMessage(
                     message_id=row.message_id,
                     telegram_message_id=row.telegram_message_id,
-                    sender_id=row.sender_telegram_id,
+                    sender_id=row.sender_id,
                     sender_name=_clean_display_name(row.sender_name),
                     message_type=message_type,
                     message_date=row.message_date,
@@ -664,23 +675,23 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         if text:
             chat.with_text_counts[category] += 1
         type_senders = chat.message_type_senders.setdefault(category, {})
-        type_sender = type_senders.get(row.sender_telegram_id)
+        type_sender = type_senders.get(row.sender_id)
         if type_sender is None:
             type_sender = _MessageTypeSenderCounts(
-                sender_id=row.sender_telegram_id,
+                sender_id=row.sender_id,
                 name=(
                     _clean_display_name(row.sender_name)
-                    or row.sender_telegram_id
+                    or row.sender_id
                     or "Unknown sender"
                 ),
             )
-            type_senders[row.sender_telegram_id] = type_sender
+            type_senders[row.sender_id] = type_sender
         type_sender.count += 1
         chat.messages.append(
             _ConversationMessage(
                 message_id=row.message_id,
                 telegram_message_id=row.telegram_message_id,
-                sender_id=row.sender_telegram_id,
+                sender_id=row.sender_id,
                 sender_name=_clean_display_name(row.sender_name),
                 message_type=row.message_type,
                 message_date=row.message_date,
@@ -688,7 +699,7 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             )
         )
 
-        sender_id = row.sender_telegram_id
+        sender_id = row.sender_id
         sender = chat.senders.get(sender_id)
         if sender is None:
             sender = _SenderCounts(

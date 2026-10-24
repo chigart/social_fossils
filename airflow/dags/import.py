@@ -10,7 +10,7 @@ from airflow.task.trigger_rule import TriggerRule
 import sys
 sys.path.insert(0, "/app")
 from app.db import SessionLocal
-from app.importer import import_telegram_export
+from app.telegram_importer import import_source_export
 from app.models import UploadJob, ImportSession
 
 logger = logging.getLogger(__name__)
@@ -22,13 +22,13 @@ default_args = {
 }
 
 dag = DAG(
-    "telegram_import",
+    "import",
     default_args=default_args,
-    description="Import Telegram export and update database",
+    description="Import a supported messaging-platform export",
     schedule=None,  # Triggered manually
     catchup=False,
     start_date=datetime(2024, 1, 1),
-    tags=["telegram", "import"],
+    tags=["import"],
 )
 
 
@@ -76,7 +76,7 @@ def perform_import(**context) -> dict:
         session.commit()
 
         # Perform the import
-        result = import_telegram_export(file_path, session=session)
+        result = import_source_export(job.platform, file_path, session=session)
 
         # Link the import session to the upload job
         if result.get("session_id"):

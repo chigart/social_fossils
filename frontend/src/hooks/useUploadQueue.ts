@@ -1,9 +1,15 @@
 import { useRef, useState } from "react";
-import { retryUploadJob, uploadFile, type UploadJob } from "../api";
+import {
+  retryUploadJob,
+  uploadFile,
+  type UploadJob,
+  type UploadPlatform,
+} from "../api";
 
 export type UploadItem = {
   id: number;
   file: File;
+  platform: UploadPlatform;
   status: "queued" | "uploading" | "accepted" | "failed";
   job?: UploadJob;
   error?: string;
@@ -18,12 +24,13 @@ export function useUploadQueue() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const nextId = useRef(0);
 
-  const addFiles = (files: File[]) => {
+  const addFiles = (files: File[], platform: UploadPlatform) => {
     setItems((current) => [
       ...current,
       ...files.map((file) => ({
         id: nextId.current++,
         file,
+        platform,
         status: "queued" as const,
       })),
     ]);
@@ -43,7 +50,7 @@ export function useUploadQueue() {
     await Promise.all(
       queuedItems.map(async (item) => {
         try {
-          const job = await uploadFile(item.file);
+          const job = await uploadFile(item.file, item.platform);
           setItems((current) =>
             current.map((currentItem) =>
               currentItem.id === item.id

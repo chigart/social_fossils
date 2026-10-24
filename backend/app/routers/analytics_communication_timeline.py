@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import CanonicalIdentity
+from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import CommunicationTimelineStatistics
 
 from .analytics_communication_timeline_queries import (
@@ -40,7 +41,7 @@ def get_communication_timeline(
         identity_id = db.scalar(
             select(CanonicalIdentity.id).where(
                 CanonicalIdentity.id == canonical_identity_id,
-                CanonicalIdentity.platform == "telegram",
+                CanonicalIdentity.platform == TELEGRAM_PLATFORM_ID,
             )
         )
         if identity_id is None:

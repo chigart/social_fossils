@@ -4,7 +4,8 @@ from typing import Any
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Chat, Contact, Message, TelegramAccount
+from app.models import Account, Chat, Contact, Message
+from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     CommunicationTimelineMonth,
     CommunicationTimelineStatistics,
@@ -35,8 +36,9 @@ def build_communication_timeline_statistics(
     *,
     canonical_identity_id: int | None = None,
 ) -> CommunicationTimelineStatistics:
-    owner_ids = select(TelegramAccount.telegram_user_id).where(
-        TelegramAccount.telegram_user_id.is_not(None)
+    owner_ids = select(Account.platform_user_id).where(
+        Account.platform == TELEGRAM_PLATFORM_ID,
+        Account.platform_user_id.is_not(None)
     )
     contact_pairs = None
     if canonical_identity_id is not None:
@@ -52,15 +54,18 @@ def build_communication_timeline_statistics(
                 and_(
                     Message.chat_id == Chat.id,
                     or_(
-                        Message.sender_telegram_id == Contact.telegram_user_id,
+                        Message.sender_id == Contact.telegram_user_id,
                         and_(
-                            Message.sender_telegram_id.is_(None),
+                            Message.sender_id.is_(None),
                             Message.sender_contact_id == Contact.id,
                         ),
                     ),
                 ),
             )
             .where(
+                Chat.platform == TELEGRAM_PLATFORM_ID,
+                Contact.platform == TELEGRAM_PLATFORM_ID,
+                Message.platform == TELEGRAM_PLATFORM_ID,
                 Chat.chat_type == "personal_chat",
                 Message.message_type == ORDINARY_MESSAGE_TYPE,
                 Contact.canonical_identity_id == canonical_identity_id,
@@ -77,14 +82,18 @@ def build_communication_timeline_statistics(
     scoped_messages_statement = (
         select(
             Message.id.label("message_id"),
-            Message.sender_telegram_id.label("sender_telegram_id"),
+            Message.sender_id.label("sender_telegram_id"),
             Message.sender_contact_id.label("sender_contact_id"),
             Message.is_outgoing.label("is_outgoing"),
             Message.message_date.label("message_date"),
             Chat.account_id.label("account_id"),
         )
         .join(Chat, Chat.id == Message.chat_id)
-        .where(Message.message_type == ORDINARY_MESSAGE_TYPE)
+        .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Message.platform == TELEGRAM_PLATFORM_ID,
+            Message.message_type == ORDINARY_MESSAGE_TYPE,
+        )
     )
     if canonical_identity_id is not None:
         scoped_messages_statement = scoped_messages_statement.join(
@@ -103,9 +112,11 @@ def build_communication_timeline_statistics(
         )
     else:
         contact_ids = select(Contact.id).where(
+            Contact.platform == TELEGRAM_PLATFORM_ID,
             Contact.canonical_identity_id == canonical_identity_id
         )
         contact_telegram_ids = select(Contact.telegram_user_id).where(
+            Contact.platform == TELEGRAM_PLATFORM_ID,
             Contact.canonical_identity_id == canonical_identity_id
         )
         matching_contact = or_(
@@ -188,10 +199,12 @@ def build_communication_timeline_statistics(
         source_accounts = list(
             db.execute(
                 select(
-                    TelegramAccount.id,
-                    TelegramAccount.username,
-                    TelegramAccount.name,
-                ).order_by(TelegramAccount.id)
+                    Account.id,
+                    Account.username,
+                    Account.name,
+                )
+                .where(Account.platform == TELEGRAM_PLATFORM_ID)
+                .order_by(Account.id)
             )
         )
         source_contact_ids: list[int] = []
@@ -201,13 +214,14 @@ def build_communication_timeline_statistics(
                 select(
                     contact_pairs.c.account_id,
                     contact_pairs.c.contact_id,
-                    TelegramAccount.username,
-                    TelegramAccount.name,
+                    Account.username,
+                    Account.name,
                 )
                 .join(
-                    TelegramAccount,
-                    TelegramAccount.id == contact_pairs.c.account_id,
+                    Account,
+                    Account.id == contact_pairs.c.account_id,
                 )
+                .where(Account.platform == TELEGRAM_PLATFORM_ID)
                 .distinct()
                 .order_by(contact_pairs.c.account_id, contact_pairs.c.contact_id)
             )

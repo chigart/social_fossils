@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -18,8 +19,9 @@ from app.models import (
     Contact,
     ImportSession,
     Message,
-    TelegramAccount,
+    Account,
 )
+from app.platforms import PLATFORM_CONFIGS, TELEGRAM_PLATFORM_ID
 from app.telegram_parser import parse_telegram_export
 
 logger = logging.getLogger(__name__)
@@ -30,12 +32,15 @@ def get_or_create_account(
     owner_telegram_id: str | None,
     account_name: str,
     account_username: str | None = None,
-) -> TelegramAccount:
+) -> Account:
     if owner_telegram_id is None:
         raise ValueError("Missing or invalid Telegram account owner ID in personal_information.user_id")
 
     existing_accounts = session.scalars(
-        select(TelegramAccount).where(TelegramAccount.telegram_user_id == owner_telegram_id)
+        select(Account).where(
+            Account.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform_user_id == owner_telegram_id,
+        )
     ).all()
 
     if len(existing_accounts) > 1:
@@ -48,10 +53,11 @@ def get_or_create_account(
             session.flush()
         return account
 
-    account = TelegramAccount(
+    account = Account(
+        platform=TELEGRAM_PLATFORM_ID,
         name=account_name,
         username=account_username,
-        telegram_user_id=owner_telegram_id,
+        platform_user_id=owner_telegram_id,
     )
     session.add(account)
     session.flush()
@@ -62,7 +68,8 @@ def ensure_chat(session, account_id: int, parsed_chat) -> Chat:
     chat = session.scalar(
         select(Chat).where(
             Chat.account_id == account_id,
-            Chat.telegram_chat_id == parsed_chat.telegram_chat_id,
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Chat.chat_id == parsed_chat.telegram_chat_id,
         )
     )
     if chat is not None:
@@ -70,16 +77,18 @@ def ensure_chat(session, account_id: int, parsed_chat) -> Chat:
 
     stmt = insert(Chat).values(
         account_id=account_id,
-        telegram_chat_id=parsed_chat.telegram_chat_id,
+        platform=TELEGRAM_PLATFORM_ID,
+        chat_id=parsed_chat.telegram_chat_id,
         chat_type=parsed_chat.chat_type or "unknown",
         title=parsed_chat.title,
-    ).on_conflict_do_nothing(index_elements=["account_id", "telegram_chat_id"])
+    ).on_conflict_do_nothing(index_elements=["account_id", "chat_id"])
     session.execute(stmt)
     session.flush()
     return session.scalar(
         select(Chat).where(
             Chat.account_id == account_id,
-            Chat.telegram_chat_id == parsed_chat.telegram_chat_id,
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Chat.chat_id == parsed_chat.telegram_chat_id,
         )
     )
 
@@ -89,7 +98,7 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
         return None
 
     identity_statement = insert(CanonicalIdentity).values(
-        platform="telegram",
+        platform=TELEGRAM_PLATFORM_ID,
         platform_user_id=sender_telegram_id,
     ).on_conflict_do_nothing(
         index_elements=["platform", "platform_user_id"]
@@ -97,7 +106,7 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
     session.execute(identity_statement)
     canonical_identity = session.scalar(
         select(CanonicalIdentity).where(
-            CanonicalIdentity.platform == "telegram",
+            CanonicalIdentity.platform == TELEGRAM_PLATFORM_ID,
             CanonicalIdentity.platform_user_id == sender_telegram_id,
         )
     )
@@ -106,7 +115,9 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
 
     stmt = insert(Contact).values(
         account_id=account_id,
+        platform=TELEGRAM_PLATFORM_ID,
         telegram_user_id=sender_telegram_id,
+        platform_user_id=sender_telegram_id,
         canonical_identity_id=canonical_identity.id,
         display_name=sender_name,
     ).on_conflict_do_nothing(index_elements=["account_id", "telegram_user_id"])
@@ -115,7 +126,8 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
     contact = session.scalar(
         select(Contact).where(
             Contact.account_id == account_id,
-            Contact.telegram_user_id == sender_telegram_id,
+            Contact.platform == TELEGRAM_PLATFORM_ID,
+            Contact.platform_user_id == sender_telegram_id,
         )
     )
     if contact is None:
@@ -134,7 +146,8 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
     existing_message = session.scalar(
         select(Message).where(
             Message.chat_id == chat.id,
-            Message.telegram_message_id == message_id,
+            Message.platform == TELEGRAM_PLATFORM_ID,
+            Message.source_message_id == str(message_id),
         )
     )
     if existing_message is not None:
@@ -149,8 +162,14 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
 
     stmt = insert(Message).values(
         chat_id=chat.id,
-        telegram_message_id=str(message_id),
-        sender_telegram_id=sender_telegram_id,
+        platform=TELEGRAM_PLATFORM_ID,
+        message_id=str(message_id),
+        source_message_id=str(message_id),
+        source_record_key=hashlib.sha256(
+            f"{TELEGRAM_PLATFORM_ID}:{message_id}".encode("utf-8")
+        ).hexdigest(),
+        sender_id=sender_telegram_id,
+        sender_platform_user_id=sender_telegram_id,
         sender_contact_id=sender_contact_id,
         sender_name=payload.get("sender_name"),
         is_outgoing=payload.get("is_outgoing"),
@@ -158,8 +177,9 @@ def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int
         message_type=payload.get("message_type") or "message",
         text_content=payload.get("text_content"),
         reply_to_telegram_message_id=payload.get("reply_to_telegram_message_id"),
+        source_reply_id=payload.get("reply_to_telegram_message_id"),
         raw_payload=payload.get("raw_payload") or {},
-    ).on_conflict_do_nothing(index_elements=["chat_id", "telegram_message_id"]) \
+    ).on_conflict_do_nothing(index_elements=["chat_id", "message_id"]) \
       .returning(Message.id)
     inserted = session.execute(stmt).first()
     return inserted is not None
@@ -200,6 +220,7 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
         file_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()
         import_session = ImportSession(
             account_id=account.id,
+            platform=TELEGRAM_PLATFORM_ID,
             source_filename=str(source_path.name),
             file_sha256=file_digest,
             status="running",
@@ -257,7 +278,7 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
         return {
             "account_id": account.id,
             "account_name": account.name,
-            "owner_telegram_id": account.telegram_user_id,
+            "owner_telegram_id": account.platform_user_id,
             "total_messages": total_messages,
             "inserted_messages": inserted_messages,
             "skipped_messages": skipped_messages,
@@ -271,6 +292,22 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
     finally:
         if should_close:
             session.close()
+
+
+def import_source_export(
+    platform: str,
+    export_path: str | Path,
+    *,
+    session=None,
+) -> dict[str, Any]:
+    platform_config = PLATFORM_CONFIGS.get(platform)
+    if platform_config is None:
+        raise ValueError(f"Unsupported import platform: {platform}")
+
+    module_name, function_name = platform_config.importer.split(":", maxsplit=1)
+    importer_module = importlib.import_module(module_name)
+    importer_function = getattr(importer_module, function_name)
+    return importer_function(export_path, session=session)
 
 
 def main() -> None:

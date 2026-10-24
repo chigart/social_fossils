@@ -21,13 +21,14 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 
 
-class TelegramAccount(Base):
-    __tablename__ = "telegram_accounts"
+class Account(Base):
+    __tablename__ = "account"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    platform: Mapped[str] = mapped_column(String(50))
     name: Mapped[str] = mapped_column(String(200))
     username: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    telegram_user_id: Mapped[str | None] = mapped_column(String(100))
+    platform_user_id: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -63,14 +64,21 @@ class Contact(Base):
             "telegram_user_id",
             name="uq_contacts_account_telegram_id",
         ),
+        UniqueConstraint(
+            "account_id",
+            "platform_user_id",
+            name="uq_contacts_account_platform_id",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(
-        ForeignKey("telegram_accounts.id", ondelete="CASCADE"),
+        ForeignKey("account.id", ondelete="CASCADE"),
         index=True,
     )
-    telegram_user_id: Mapped[str] = mapped_column(String(100))
+    platform: Mapped[str] = mapped_column(String(50))
+    telegram_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    platform_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     canonical_identity_id: Mapped[int | None] = mapped_column(
         ForeignKey("canonical_identities.id", ondelete="SET NULL"),
         nullable=True,
@@ -90,17 +98,18 @@ class Chat(Base):
     __table_args__ = (
         UniqueConstraint(
             "account_id",
-            "telegram_chat_id",
-            name="uq_chats_account_telegram_id",
+            "chat_id",
+            name="uq_chats_account_chat_id",
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(
-        ForeignKey("telegram_accounts.id", ondelete="CASCADE"),
+        ForeignKey("account.id", ondelete="CASCADE"),
         index=True,
     )
-    telegram_chat_id: Mapped[str] = mapped_column(String(100))
+    platform: Mapped[str] = mapped_column(String(50))
+    chat_id: Mapped[str] = mapped_column(String(500))
     chat_type: Mapped[str] = mapped_column(String(50))
     title: Mapped[str | None] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(
@@ -144,8 +153,18 @@ class Message(Base):
     __table_args__ = (
         UniqueConstraint(
             "chat_id",
-            "telegram_message_id",
-            name="uq_messages_chat_telegram_id",
+            "message_id",
+            name="uq_messages_chat_message_id",
+        ),
+        UniqueConstraint(
+            "chat_id",
+            "source_message_id",
+            name="uq_messages_chat_source_id",
+        ),
+        UniqueConstraint(
+            "chat_id",
+            "source_record_key",
+            name="uq_messages_chat_source_record_key",
         ),
         Index("ix_messages_chat_date", "chat_id", "message_date"),
         Index("ix_messages_sender", "sender_contact_id"),
@@ -155,8 +174,12 @@ class Message(Base):
     chat_id: Mapped[int] = mapped_column(
         ForeignKey("chats.id", ondelete="CASCADE"),
     )
-    telegram_message_id: Mapped[str] = mapped_column(String(100))
-    sender_telegram_id: Mapped[str | None] = mapped_column(String(100))
+    platform: Mapped[str] = mapped_column(String(50))
+    message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_message_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    source_record_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sender_id: Mapped[str | None] = mapped_column(String(100))
+    sender_platform_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sender_contact_id: Mapped[int | None] = mapped_column(
         ForeignKey("contacts.id", ondelete="SET NULL"),
         nullable=True,
@@ -175,6 +198,7 @@ class Message(Base):
     reply_to_telegram_message_id: Mapped[str | None] = mapped_column(
         String(100),
     )
+    source_reply_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         default=dict,
@@ -203,9 +227,10 @@ class ImportSession(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     account_id: Mapped[int] = mapped_column(
-        ForeignKey("telegram_accounts.id", ondelete="CASCADE"),
+        ForeignKey("account.id", ondelete="CASCADE"),
         index=True,
     )
+    platform: Mapped[str] = mapped_column(String(50))
     source_filename: Mapped[str] = mapped_column(String(500))
     file_sha256: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(
@@ -258,6 +283,7 @@ class UploadJob(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     filename: Mapped[str] = mapped_column(String(500))
+    platform: Mapped[str] = mapped_column(String(50))
     file_sha256: Mapped[str] = mapped_column(String(64))
     file_size: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(
@@ -266,7 +292,7 @@ class UploadJob(Base):
         server_default=text("'pending'"),
     )
     source_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("telegram_accounts.id", ondelete="SET NULL"),
+        ForeignKey("account.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

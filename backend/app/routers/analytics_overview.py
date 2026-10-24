@@ -4,7 +4,8 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CanonicalIdentity, Chat, Contact, Message, TelegramAccount
+from app.models import Account, CanonicalIdentity, Chat, Contact, Message
+from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ChatStatistics,
     ContactStatistics,
@@ -24,7 +25,9 @@ router = APIRouter()
     response_model=OverviewStatistics,
     summary="Get communication overview",
     description=(
-        "Counts all account, chat, and message rows. Ordinary messages are rows "
+        "Counts account, chat, and message rows from Telegram imports only. "
+        "Instagram records are excluded until cross-platform analysis is "
+        "defined. Ordinary messages are rows "
         "with message_type='message'; service events are rows with "
         "message_type='service'. Other stored types contribute only to total "
         "messages. Timestamp bounds ignore messages with a null date."
@@ -33,8 +36,14 @@ router = APIRouter()
 def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
     result = db.execute(
         select(
-            select(func.count(TelegramAccount.id)).scalar_subquery().label("total_imported_accounts"),
-            select(func.count(Chat.id)).scalar_subquery().label("total_chats"),
+            select(func.count(Account.id))
+            .where(Account.platform == TELEGRAM_PLATFORM_ID)
+            .scalar_subquery()
+            .label("total_imported_accounts"),
+            select(func.count(Chat.id))
+            .where(Chat.platform == TELEGRAM_PLATFORM_ID)
+            .scalar_subquery()
+            .label("total_chats"),
             func.count(Message.id).label("total_messages"),
             func.count(
                 case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
@@ -44,7 +53,9 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
             ).label("total_service_messages"),
             func.min(Message.message_date).label("earliest_message_timestamp"),
             func.max(Message.message_date).label("latest_message_timestamp"),
-        ).select_from(Message)
+        )
+        .select_from(Message)
+        .where(Message.platform == TELEGRAM_PLATFORM_ID)
     ).one()
 
     return OverviewStatistics(**result._mapping)
@@ -66,9 +77,9 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
         select(
             Chat.id.label("chat_id"),
             Chat.account_id,
-            TelegramAccount.username.label("account_username"),
-            TelegramAccount.name.label("account_name"),
-            Chat.telegram_chat_id,
+            Account.username.label("account_username"),
+            Account.name.label("account_name"),
+            Chat.chat_id.label("telegram_chat_id"),
             Chat.title,
             Chat.chat_type,
             func.count(Message.id).label("total_messages"),
@@ -80,21 +91,31 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
             ).label("service_messages"),
             func.min(Message.message_date).label("earliest_message_timestamp"),
             func.max(Message.message_date).label("latest_message_timestamp"),
-            func.count(func.distinct(Message.sender_telegram_id)).label(
+            func.count(func.distinct(Message.sender_id)).label(
                 "distinct_identified_senders"
             ),
         )
         .select_from(Chat)
-        .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
-        .outerjoin(Message, Message.chat_id == Chat.id)
+        .join(Account, Account.id == Chat.account_id)
+        .outerjoin(
+            Message,
+            and_(
+                Message.chat_id == Chat.id,
+                Message.platform == TELEGRAM_PLATFORM_ID,
+            ),
+        )
         .group_by(
             Chat.id,
             Chat.account_id,
-            TelegramAccount.username,
-            TelegramAccount.name,
-            Chat.telegram_chat_id,
+            Account.username,
+            Account.name,
+            Chat.chat_id,
             Chat.title,
             Chat.chat_type,
+        )
+        .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform == TELEGRAM_PLATFORM_ID,
         )
         .order_by(Chat.id)
     )
@@ -131,17 +152,18 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
     ),
 )
 def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatistics]:
-    owner_ids = select(TelegramAccount.telegram_user_id).where(
-        TelegramAccount.telegram_user_id.is_not(None)
+    owner_ids = select(Account.platform_user_id).where(
+        Account.platform == TELEGRAM_PLATFORM_ID,
+        Account.platform_user_id.is_not(None)
     )
     statement = (
         select(
             Chat.account_id.label("account_id"),
-            TelegramAccount.username.label("account_username"),
-            TelegramAccount.name.label("account_name"),
+            Account.username.label("account_username"),
+            Account.name.label("account_name"),
             Contact.id.label("contact_id"),
             CanonicalIdentity.id.label("canonical_identity_id"),
-            Message.sender_telegram_id.label("telegram_user_id"),
+            Message.sender_id.label("telegram_user_id"),
             Contact.display_name.label("display_name"),
             func.count(Message.id).label("total_messages_sent"),
             func.count(
@@ -153,12 +175,13 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         )
         .select_from(Message)
         .join(Chat, Message.chat_id == Chat.id)
-        .join(TelegramAccount, Chat.account_id == TelegramAccount.id)
+        .join(Account, Chat.account_id == Account.id)
         .outerjoin(
             Contact,
             and_(
                 Contact.account_id == Chat.account_id,
-                Contact.telegram_user_id == Message.sender_telegram_id,
+                Contact.platform == TELEGRAM_PLATFORM_ID,
+                Contact.telegram_user_id == Message.sender_id,
             ),
         )
         .outerjoin(
@@ -166,22 +189,25 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             CanonicalIdentity.id == Contact.canonical_identity_id,
         )
         .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform == TELEGRAM_PLATFORM_ID,
+            Message.platform == TELEGRAM_PLATFORM_ID,
             Message.is_outgoing.is_not(True),
             or_(
-                Message.sender_telegram_id.is_(None),
-                Message.sender_telegram_id.not_in(owner_ids),
+                Message.sender_id.is_(None),
+                Message.sender_id.not_in(owner_ids),
             ),
         )
         .group_by(
             Chat.account_id,
             Contact.id,
             CanonicalIdentity.id,
-            TelegramAccount.username,
-            TelegramAccount.name,
-            Message.sender_telegram_id,
+            Account.username,
+            Account.name,
+            Message.sender_id,
             Contact.display_name,
         )
-        .order_by(Chat.account_id, Contact.display_name, Message.sender_telegram_id)
+        .order_by(Chat.account_id, Contact.display_name, Message.sender_id)
     )
     groups: dict[tuple[object, ...], dict[str, object]] = {}
     for row in db.execute(statement):

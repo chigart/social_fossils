@@ -12,7 +12,7 @@ def test_trigger_dag_run_sends_required_airflow_3_fields():
     logical_date = datetime(2026, 10, 22, 12, 0)
 
     result = client.trigger_dag_run(
-        "telegram_import",
+        "import",
         {"job_id": 12},
         dag_run_id="upload_job_12",
         logical_date=logical_date,
@@ -21,7 +21,7 @@ def test_trigger_dag_run_sends_required_airflow_3_fields():
     assert result == {"dag_run_id": "upload_job_12"}
     client._authorized_request.assert_called_once_with(
         "POST",
-        "/api/v2/dags/telegram_import/dagRuns",
+        "/api/v2/dags/import/dagRuns",
         json={
             "dag_run_id": "upload_job_12",
             "logical_date": "2026-10-22T12:00:00+00:00",
@@ -39,7 +39,7 @@ def test_trigger_dag_run_preserves_timezone_aware_logical_date():
     logical_date = datetime(2026, 10, 22, 12, 0, tzinfo=timezone.utc)
 
     client.trigger_dag_run(
-        "telegram_import",
+        "import",
         {"job_id": 12},
         dag_run_id="upload_job_12",
         logical_date=logical_date,

@@ -37,6 +37,7 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
         try:
             uploaded = client.post(
                 "/api/uploads/upload",
+                data={"platform": "telegram"},
                 files={"file": ("export.json", b'{"synthetic": true}', "application/json")},
             )
             assert uploaded.status_code == 202
@@ -55,6 +56,7 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
 
             duplicate = client.post(
                 "/api/uploads/upload",
+                data={"platform": "telegram"},
                 files={"file": ("another-name.json", b'{"synthetic": true}', "application/json")},
             )
             assert duplicate.status_code == 409
@@ -62,6 +64,11 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
             assert len(list((tmp_path / "staging").iterdir())) == 1
 
             assert client.post("/api/auth/login", json={}).status_code == 404
+            missing_platform = client.post(
+                "/api/uploads/upload",
+                files={"file": ("export.json", b'{"another": true}', "application/json")},
+            )
+            assert missing_platform.status_code == 422
         finally:
             app.dependency_overrides.pop(get_db, None)
             session.close()
@@ -71,6 +78,61 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
 def test_upload_job_schema_has_no_app_user():
     assert "users" not in Base.metadata.tables
     assert "user_id" not in UploadJob.__table__.columns
+    assert UploadJob.__table__.c.platform.default is None
+    assert UploadJob.__table__.c.platform.server_default is None
+
+
+def test_instagram_upload_records_platform_and_requires_zip_archive(tmp_path, monkeypatch):
+    engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'instagram-uploads.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    UploadJob.__table__.create(engine)
+    session = Session(engine)
+    monkeypatch.setattr(
+        upload.settings,
+        "upload_staging_dir",
+        str(tmp_path / "staging"),
+    )
+    monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
+
+    def override_get_db():
+        yield session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            response = client.post(
+                "/api/uploads/upload",
+                data={"platform": "instagram"},
+                files={
+                    "file": (
+                        "instagram.zip",
+                        b"synthetic archive",
+                        "application/zip",
+                    )
+                },
+            )
+            assert response.status_code == 202
+            assert response.json()["platform"] == "instagram"
+
+            invalid = client.post(
+                "/api/uploads/upload",
+                data={"platform": "instagram"},
+                files={
+                    "file": (
+                        "instagram.json",
+                        b"synthetic export",
+                        "application/json",
+                    )
+                },
+            )
+            assert invalid.status_code == 400
+            assert ".zip" in invalid.json()["detail"]
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+            session.close()
+            engine.dispose()
 
 
 def test_pending_upload_without_airflow_run_can_be_retried(tmp_path, monkeypatch):
@@ -83,6 +145,7 @@ def test_pending_upload_without_airflow_run_can_be_retried(tmp_path, monkeypatch
     monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
     job = UploadJob(
         filename="export.json",
+        platform="telegram",
         file_sha256="a" * 64,
         file_size=1,
         status="pending",

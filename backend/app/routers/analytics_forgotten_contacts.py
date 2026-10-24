@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import TelegramAccount
+from app.models import Account
+from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ForgottenContact,
     ForgottenContactEvidenceStatus,
@@ -59,7 +60,14 @@ def build_forgotten_contacts_statistics(
     if not 1 <= limit <= FORGOTTEN_MAX_LIMIT:
         raise ValueError(f"limit must be between 1 and {FORGOTTEN_MAX_LIMIT}.")
 
-    source_account_count = int(db.scalar(select(func.count(TelegramAccount.id))) or 0)
+    source_account_count = int(
+        db.scalar(
+            select(func.count(Account.id)).where(
+                Account.platform == TELEGRAM_PLATFORM_ID
+            )
+        )
+        or 0
+    )
     if source_account_count == 0:
         return ForgottenContactsStatistics(
             summary=ForgottenContactsSummary(
@@ -75,8 +83,9 @@ def build_forgotten_contacts_statistics(
 
     current_time = _as_utc(as_of or datetime.now(timezone.utc))
     recent_start = current_time - timedelta(days=FORGOTTEN_RECENT_WINDOW_DAYS)
-    owner_ids = select(TelegramAccount.telegram_user_id).where(
-        TelegramAccount.telegram_user_id.is_not(None)
+    owner_ids = select(Account.platform_user_id).where(
+        Account.platform == TELEGRAM_PLATFORM_ID,
+        Account.platform_user_id.is_not(None)
     )
 
     eligible_pairs, aggregate_statement, monthly_statement = (
@@ -118,10 +127,10 @@ def build_forgotten_contacts_statistics(
             eligible_pairs.c.identity_source_account_id,
             eligible_pairs.c.account_id,
             eligible_pairs.c.contact_id,
-            TelegramAccount.username.label("account_username"),
-            TelegramAccount.name.label("account_name"),
+            Account.username.label("account_username"),
+            Account.name.label("account_name"),
         ).distinct()
-        .join(TelegramAccount, TelegramAccount.id == eligible_pairs.c.account_id)
+        .join(Account, Account.id == eligible_pairs.c.account_id)
     )
     source_ids: dict[
         tuple[int, int | None], tuple[set[int], set[int], set[str]]

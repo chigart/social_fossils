@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { PLATFORM_CONFIG, type UploadPlatform } from "../platforms";
 import { useUploadQueue } from "../hooks/useUploadQueue";
 import {
   sectionClassName,
@@ -6,7 +8,11 @@ import {
   sectionTitleClassName,
 } from "../styles";
 
+const isUploadPlatform = (value: string): value is UploadPlatform =>
+  Object.prototype.hasOwnProperty.call(PLATFORM_CONFIG, value);
+
 export function UploadView() {
+  const [platform, setPlatform] = useState<UploadPlatform | "">("");
   const {
     items,
     isSubmitting,
@@ -16,6 +22,7 @@ export function UploadView() {
     removeFile,
     retryPipeline,
   } = useUploadQueue();
+  const platformConfig = platform ? PLATFORM_CONFIG[platform] : undefined;
 
   return (
     <section
@@ -25,7 +32,11 @@ export function UploadView() {
     >
       <div className={sectionHeaderClassName}>
         <div>
-          <p className={sectionEyebrowClassName}>TELEGRAM EXPORTS</p>
+          <p className={sectionEyebrowClassName}>
+            {platformConfig
+              ? `${platformConfig.label.toUpperCase()} EXPORTS`
+              : "EXPORTS"}
+          </p>
           <h2 id="uploads-title" className={sectionTitleClassName}>
             Import files
           </h2>
@@ -33,23 +44,50 @@ export function UploadView() {
       </div>
 
       <p className="mb-4 text-small leading-[1.5] text-ink-muted">
-        Select one or more Telegram JSON exports. Each file is uploaded and
-        processed as its own pipeline, so a problem with one file will not stop
-        the others.
+        {platformConfig?.instructions ??
+          "Select a messaging platform to choose an export file."}{" "}
+        Each file is uploaded and processed as its own pipeline, so a problem
+        with one file will not stop the others.
       </p>
 
       <div className="flex flex-wrap items-center gap-3">
+        <label className="flex min-h-[40px] items-center gap-2 text-small font-semibold text-ink">
+          Messaging platform
+          <select
+            className="min-h-[40px] rounded-md border border-border-input bg-surface px-3 py-2"
+            aria-label="Messaging platform"
+            value={platform}
+            disabled={isSubmitting}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (isUploadPlatform(value)) {
+                setPlatform(value);
+              }
+            }}
+          >
+            <option value="">Select a platform</option>
+            {Object.entries(PLATFORM_CONFIG).map(([value, config]) => (
+              <option key={value} value={value}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="inline-flex min-h-[40px] cursor-pointer items-center rounded-md border border-border-input bg-surface px-4 py-2 text-small font-semibold text-ink hover:bg-surface-muted focus-within:outline-3 focus-within:outline-focus focus-within:outline-offset-2">
           Choose files
           <input
             className="sr-only"
             type="file"
-            accept=".json,application/json"
+            accept={platformConfig?.acceptedFileType ?? ""}
             multiple
-            aria-label="Choose Telegram JSON files"
-            disabled={isSubmitting}
+            aria-label={
+              platformConfig?.fileInputLabel ?? "Choose export files"
+            }
+            disabled={isSubmitting || !platform}
             onChange={(event) => {
-              addFiles(Array.from(event.currentTarget.files ?? []));
+              if (platform) {
+                addFiles(Array.from(event.currentTarget.files ?? []), platform);
+              }
               event.currentTarget.value = "";
             }}
           />

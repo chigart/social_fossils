@@ -3,7 +3,8 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.selectable import CTE, Select
 
-from app.models import CanonicalIdentity, Chat, Contact, Message, TelegramAccount
+from app.models import Account, CanonicalIdentity, Chat, Contact, Message
+from app.platforms import TELEGRAM_PLATFORM_ID
 
 from .analytics_constants import ORDINARY_MESSAGE_TYPE
 
@@ -27,16 +28,19 @@ def build_forgotten_contact_queries(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            Message.sender_telegram_id.label("peer_telegram_user_id"),
+            Message.sender_id.label("peer_telegram_user_id"),
         )
         .join(Message, Message.chat_id == Chat.id)
-        .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
+        .join(Account, Account.id == Chat.account_id)
         .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform == TELEGRAM_PLATFORM_ID,
+            Message.platform == TELEGRAM_PLATFORM_ID,
             Chat.chat_type == "personal_chat",
-            TelegramAccount.telegram_user_id.is_not(None),
+            Account.platform_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
-            Message.sender_telegram_id.is_not(None),
-            Message.sender_telegram_id.not_in(owner_ids),
+            Message.sender_id.is_not(None),
+            Message.sender_id.not_in(owner_ids),
         )
         .distinct()
     )
@@ -63,13 +67,18 @@ def build_forgotten_contact_queries(
             Contact.telegram_user_id.label("contact_telegram_user_id"),
             Contact.display_name.label("display_name"),
         )
-        .join(TelegramAccount, TelegramAccount.id == Chat.account_id)
+        .join(Account, Account.id == Chat.account_id)
+        .where(
+            Chat.platform == TELEGRAM_PLATFORM_ID,
+            Account.platform == TELEGRAM_PLATFORM_ID,
+        )
         .join(peers, peers.c.chat_id == Chat.id)
         .join(single_peer_chats, single_peer_chats.c.chat_id == Chat.id)
         .join(
             Contact,
             and_(
                 Contact.account_id == Chat.account_id,
+                Contact.platform == TELEGRAM_PLATFORM_ID,
                 Contact.telegram_user_id == peers.c.peer_telegram_user_id,
             ),
         )
@@ -81,9 +90,9 @@ def build_forgotten_contact_queries(
     )
 
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = Message.sender_telegram_id.in_(owner_ids)
+    owner_direction = Message.sender_id.in_(owner_ids)
     contact_direction = and_(
-        Message.sender_telegram_id == eligible_pairs.c.contact_telegram_user_id,
+        Message.sender_id == eligible_pairs.c.contact_telegram_user_id,
         Message.is_outgoing.is_(False),
     )
     known_direction = or_(owner_direction, contact_direction)
@@ -211,6 +220,7 @@ def build_forgotten_contact_queries(
         )
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
+        .where(Message.platform == TELEGRAM_PLATFORM_ID)
         .group_by(
             eligible_pairs.c.identity_group_id,
             eligible_pairs.c.identity_source_account_id,
@@ -249,7 +259,11 @@ def build_forgotten_contact_queries(
         )
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
-        .where(Message.message_date.is_not(None), dated_message)
+        .where(
+            Message.platform == TELEGRAM_PLATFORM_ID,
+            Message.message_date.is_not(None),
+            dated_message,
+        )
         .group_by(
             eligible_pairs.c.identity_group_id,
             eligible_pairs.c.identity_source_account_id,

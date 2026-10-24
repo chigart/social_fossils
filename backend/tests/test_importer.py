@@ -5,8 +5,8 @@ from types import SimpleNamespace
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app import importer
-from app.models import CanonicalIdentity, Contact
+from app import telegram_importer as importer
+from app.models import Account, CanonicalIdentity, Contact
 
 
 class FakeSession:
@@ -40,7 +40,7 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
         account_username="example_user",
         chats=[parsed_chat],
     )
-    account = SimpleNamespace(id=1, name="Example", telegram_user_id="user123")
+    account = SimpleNamespace(id=1, name="Example", platform_user_id="user123")
     session = FakeSession()
 
     monkeypatch.setattr(importer, "parse_telegram_export", lambda _payload: parsed_export)
@@ -98,7 +98,7 @@ def test_get_or_create_contact_reuses_canonical_identity_across_accounts():
 
 def test_get_or_create_account_persists_username_and_updates_existing_value():
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    importer.TelegramAccount.__table__.create(engine)
+    Account.__table__.create(engine)
 
     with Session(engine) as session:
         first = importer.get_or_create_account(

@@ -15,8 +15,8 @@ def add_account(
 ):
     db_session.execute(
         text(
-            "INSERT INTO telegram_accounts "
-            "(id, name, username, telegram_user_id) "
+            "INSERT INTO account "
+            "(id, name, username, platform_user_id) "
             "VALUES (:id, :name, :username, :user_id)"
         ),
         {
@@ -38,7 +38,7 @@ def add_chat(
 ):
     db_session.execute(
         text(
-            "INSERT INTO chats (id, account_id, telegram_chat_id, title, chat_type) "
+            "INSERT INTO chats (id, account_id, chat_id, title, chat_type) "
             "VALUES (:id, :account_id, :telegram_id, :title, :chat_type)"
         ),
         {
@@ -113,17 +113,17 @@ def add_message(
     db_session.execute(
         text(
             "INSERT INTO messages "
-            "(id, chat_id, telegram_message_id, message_type, sender_telegram_id, "
+            "(id, chat_id, message_id, message_type, sender_id, "
             "message_date, is_outgoing, sender_contact_id, text_content, "
             "reply_to_telegram_message_id, raw_payload) "
-            "VALUES (:id, :chat_id, :telegram_message_id, :message_type, "
+            "VALUES (:id, :chat_id, :message_id, :message_type, "
             ":sender_id, :message_date, :is_outgoing, :contact_id, :text_content, "
             ":reply_to_telegram_message_id, :raw_payload)"
         ),
         {
             "id": message_id,
             "chat_id": chat_id,
-            "telegram_message_id": telegram_message_id or str(message_id),
+            "message_id": telegram_message_id or str(message_id),
             "message_type": message_type,
             "sender_id": sender_id,
             "message_date": message_date,

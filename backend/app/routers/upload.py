@@ -9,6 +9,7 @@ from app.airflow_client import get_airflow_client
 from app.config import settings
 from app.db import get_db
 from app.models import UploadJob
+from app.platforms import PLATFORM_CONFIGS
 from app.schemas.uploads import UploadJobResponse
 
 logger = logging.getLogger(__name__)
@@ -87,10 +88,27 @@ async def _save_uploaded_file(file: UploadFile) -> tuple[str, int]:
 @router.post("/upload", response_model=UploadJobResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_file(
     file: UploadFile = File(...),
+    platform: str = Form(...),
     source_account_id: int | None = Form(None),
     session: Session = Depends(get_db),
 ):
     try:
+        filename = file.filename or ""
+        platform_config = PLATFORM_CONFIGS.get(platform)
+        if platform_config is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Unsupported upload platform: {platform}",
+            )
+        if Path(filename).suffix.lower() not in platform_config.file_extensions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"{platform_config.label} uploads must use one of these "
+                    f"file types: {', '.join(platform_config.file_extensions)}."
+                ),
+            )
+
         file_sha256, file_size = await _save_uploaded_file(file)
 
         # Check for duplicate upload
@@ -109,6 +127,7 @@ async def upload_file(
         # Create upload job
         job = UploadJob(
             filename=file.filename or "unknown",
+            platform=platform,
             file_sha256=file_sha256,
             file_size=file_size,
             status="pending",

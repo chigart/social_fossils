@@ -1,3 +1,5 @@
+import type { UploadPlatform } from "./platforms";
+
 export type OverviewStatistics = {
   total_imported_accounts: number;
   total_chats: number;
@@ -302,9 +304,12 @@ export type CommunicationTimelineStatistics = {
   months: CommunicationTimelineMonth[];
 };
 
+export type { UploadPlatform } from "./platforms";
+
 export type UploadJob = {
   id: number;
   filename: string;
+  platform: UploadPlatform;
   status: "pending" | "processing" | "completed" | "failed";
   source_account_id: number | null;
   import_session_id: number | null;
@@ -335,9 +340,13 @@ async function getJson<T>(path: string): Promise<T> {
   }
 }
 
-export async function uploadFile(file: File): Promise<UploadJob> {
+export async function uploadFile(
+  file: File,
+  platform: UploadPlatform,
+): Promise<UploadJob> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("platform", platform);
 
   let response: Response;
   try {
