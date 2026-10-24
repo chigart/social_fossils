@@ -229,12 +229,12 @@ describe("dashboard", () => {
     const chatRegion = screen.getByRole("region", { name: "Chats" });
     expect(
       within(chatRegion).getByRole("row", {
-        name: /First account chat.*@anton/,
+        name: /First account chat.*TG@anton/,
       }),
     ).toBeInTheDocument();
     expect(
       within(chatRegion).getByRole("row", {
-        name: /Second account chat.*Anton Malkov/,
+        name: /Second account chat.*TG Anton Malkov/,
       }),
     ).toBeInTheDocument();
 
@@ -246,7 +246,7 @@ describe("dashboard", () => {
       name: /Avery/,
     });
     expect(combinedContactRows).toHaveLength(1);
-    expect(combinedContactRows[0]).toHaveTextContent("@anton, Anton Malkov");
+    expect(combinedContactRows[0]).toHaveTextContent(/TG@antonTG Anton Malkov/);
     expect(combinedContactRows[0]).toHaveTextContent("24");
     await selectDashboardTab("Overview");
     const sourceAccountsCard = within(
@@ -308,7 +308,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: "Chats" })).getAllByText(
-        "@anton",
+        /TG@anton/,
       ),
     ).toHaveLength(chats.length);
 
@@ -319,9 +319,13 @@ describe("dashboard", () => {
         .getByRole("columnheader", { name: "Accounts" }),
     ).toBeInTheDocument();
     expect(
+      within(screen.getByRole("region", { name: "Contacts & senders" }))
+        .queryByRole("columnheader", { name: "Service events" }),
+    ).not.toBeInTheDocument();
+    expect(
       within(screen.getByRole("region", { name: "Contacts & senders" })).getByRole(
         "row",
-        { name: /Avery.*@anton/ },
+        { name: /Avery.*TG@anton/ },
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Unlinked sender")).toBeInTheDocument();
@@ -344,6 +348,52 @@ describe("dashboard", () => {
         "Statistics are aggregated from imported data. Message contents are not shown.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("prefixes contact account labels with their platform abbreviations", async () => {
+    api.getContacts.mockResolvedValue(
+      [
+        ["instagram", "@antonmalkov", "Instagram peer"],
+        ["facebook", "@facebookowner", "Facebook peer"],
+        ["telegram", "@telegramowner", "Telegram peer"],
+        ["vk", "@vkowner", "VK peer"],
+      ].map(([platform, accountLabel, displayName], index) => ({
+        ...contacts[0],
+        platform,
+        account_id: index + 1,
+        contact_id: index + 1,
+        canonical_identity_id: null,
+        source_account_ids: [index + 1],
+        source_account_labels: [accountLabel],
+        source_contact_ids: [index + 1],
+        platform_user_id: `peer-${index + 1}`,
+        display_name: displayName,
+      })),
+    );
+
+    await renderLoadedDashboard();
+    await selectDashboardTab("Contacts");
+
+    const contactsRegion = screen.getByRole("region", {
+      name: "Contacts & senders",
+    });
+    const platformBadges = [
+      ["IG@antonmalkov", "bg-platform-instagram-background"],
+      ["FB@facebookowner", "bg-platform-facebook-background"],
+      ["TG@telegramowner", "bg-platform-telegram-background"],
+      ["VK@vkowner", "bg-platform-vk-background"],
+    ] as const;
+    for (const [label, backgroundClass] of platformBadges) {
+      expect(
+        within(contactsRegion).getByRole("row", { name: new RegExp(label) }),
+      ).toBeInTheDocument();
+      expect(within(contactsRegion).getByText(label)).toHaveClass(
+        "inline-block",
+        backgroundClass,
+        "text-label",
+        "font-semibold",
+      );
+    }
   });
 
   it("shows only conversation handoffs that occurred at least three times", async () => {
@@ -1203,7 +1253,7 @@ describe("dashboard", () => {
     expect(
       within(region).getByText("Combined owner history", { selector: "strong" }),
     ).toBeInTheDocument();
-    expect(within(region).getByText(/@anton/)).toBeInTheDocument();
+    expect(within(region).getByText(/TG@anton/)).toBeInTheDocument();
 
     await user.selectOptions(
       within(region).getByRole("combobox", { name: "Timeline scope" }),

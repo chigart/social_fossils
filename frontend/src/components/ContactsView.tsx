@@ -21,6 +21,7 @@ import {
   tableRowTitleClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
 
 export function ContactsView({
@@ -116,7 +117,6 @@ export function ContactsView({
                   />
                 </th>
                 <th className={tableHeaderClassName} scope="col">Ordinary</th>
-                <th className={tableHeaderClassName} scope="col">Service events</th>
               </tr>
             </thead>
             <tbody>
@@ -146,7 +146,16 @@ export function ContactsView({
                       {contact.platform_user_id ?? "—"}
                     </td>
                     <td className={tableCellClassName}>
-                      {contact.source_account_labels.join(", ") || "—"}
+                      <div className="flex flex-wrap gap-1">
+                        {contact.source_account_labels.map((label) => (
+                          <PlatformAccountBadge
+                            key={label}
+                            platform={contact.platform}
+                            accountLabel={label}
+                          />
+                        ))}
+                        {contact.source_account_labels.length === 0 && "—"}
+                      </div>
                     </td>
                     <td className={tableCellClassName}>
                       <span
@@ -160,9 +169,6 @@ export function ContactsView({
                     </td>
                     <td className={numericTableCellClassName}>
                       {formatNumber(contact.ordinary_messages_sent)}
-                    </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(contact.service_events_attributed)}
                     </td>
                   </tr>
                 );

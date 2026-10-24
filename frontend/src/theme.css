@@ -13,6 +13,14 @@
   --color-surface-warning: #fff8f7;
   --color-surface-warning-hover: #fff1ef;
   --color-surface-neutral: #f0f2f2;
+  --color-platform-facebook-background: #e7efff;
+  --color-platform-facebook-foreground: #234a9b;
+  --color-platform-instagram-background: #fbe8f1;
+  --color-platform-instagram-foreground: #9a245c;
+  --color-platform-telegram-background: #e2f3fb;
+  --color-platform-telegram-foreground: #176184;
+  --color-platform-vk-background: #e9edff;
+  --color-platform-vk-foreground: #344b9b;
 
   --color-ink: #1e2933;
   --color-ink-muted: #68757c;

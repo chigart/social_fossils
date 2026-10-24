@@ -15,6 +15,7 @@ import {
 } from "../styles";
 import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
 export type TimelineContactOption = {
   canonicalIdentityId: number;
@@ -310,8 +311,18 @@ export function CommunicationTimelineView({
             {" · "}
             {formatNumber(data.summary.source_account_count)} source{" "}
             {data.summary.source_account_count === 1 ? "account" : "accounts"}
-            {data.summary.source_account_labels.length > 0 &&
-              ` · ${data.summary.source_account_labels.join(", ")}`}
+            {data.summary.source_account_labels.length > 0 && (
+              <>
+                {" · "}
+                {data.summary.source_account_labels.map((label) => (
+                  <PlatformAccountBadge
+                    key={label}
+                    platform="telegram"
+                    accountLabel={label}
+                  />
+                ))}
+              </>
+            )}
           </p>
 
           {months.length === 0 ? (

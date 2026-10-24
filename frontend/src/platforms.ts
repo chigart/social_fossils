@@ -15,3 +15,25 @@ export const PLATFORM_CONFIG = {
 } as const;
 
 export type UploadPlatform = keyof typeof PLATFORM_CONFIG;
+
+const PLATFORM_ACCOUNT_PREFIXES: Record<string, string> = {
+  facebook: "FB",
+  instagram: "IG",
+  telegram: "TG",
+  vk: "VK",
+};
+
+export function formatPlatformAccountLabel(
+  platform: string,
+  accountLabel: string,
+): string {
+  const prefix =
+    PLATFORM_ACCOUNT_PREFIXES[platform.toLowerCase()] ??
+    platform.slice(0, 2).toUpperCase();
+  return `${prefix}${accountLabel.startsWith("@") ? "" : " "}${accountLabel}`;
+}
+
+export function platformAccountBadgeClassName(platform: string): string {
+  const normalizedPlatform = platform.toLowerCase();
+  return `bg-platform-${normalizedPlatform}-background text-platform-${normalizedPlatform}-foreground`;
+}

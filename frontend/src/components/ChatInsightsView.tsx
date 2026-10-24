@@ -12,6 +12,7 @@ import {
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { useChatInsights } from "./useChatInsights";
 
 export function ChatInsightsView({
@@ -83,7 +84,11 @@ export function ChatInsightsView({
                       {chat.title || "Untitled chat"}
                     </span>
                     <span className="block truncate text-caption text-ink-muted">
-                      {chat.chat_type} · {chat.source_account_label}
+                      {chat.chat_type} ·{" "}
+                      <PlatformAccountBadge
+                        platform="telegram"
+                        accountLabel={chat.source_account_label}
+                      />
                     </span>
                   </span>
                   <span className="shrink-0 text-caption">

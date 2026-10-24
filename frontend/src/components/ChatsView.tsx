@@ -21,6 +21,7 @@ import {
   numericTableCellClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
 
 type ChatSort = {
@@ -132,7 +133,10 @@ export function ChatsView({
                     </span>
                   </td>
                   <td className={tableCellClassName}>
-                    {chat.source_account_label}
+                    <PlatformAccountBadge
+                      platform="telegram"
+                      accountLabel={chat.source_account_label}
+                    />
                   </td>
                   <td className={numericTableCellClassName}>
                     {formatNumber(chat.total_messages)}

@@ -17,6 +17,7 @@ import {
 } from "../styles";
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { useIdentityLinks } from "./useIdentityLinks";
 
 export function IdentityLinksView({
@@ -228,7 +229,12 @@ export function IdentityLinksView({
                           {label}
                         </th>
                         <td className={tableCellClassName}>{contact.platform}</td>
-                        <td className={tableCellClassName}>{contact.account_label}</td>
+                        <td className={tableCellClassName}>
+                          <PlatformAccountBadge
+                            platform={contact.platform}
+                            accountLabel={contact.account_label}
+                          />
+                        </td>
                         <td className={tableCellClassName}>Not linkable: no reliable platform ID</td>
                       </tr>
                     ))}

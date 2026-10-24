@@ -26,5 +26,7 @@
 
 ## TODO
 1. AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
-2. Split all ingestion into DAG tasks.
-3. Fix timeline in insights tab.
+2. Fix timeline in insights tab.
+3. Fix parallel import heavy files.
+4. Add Facebook, VK
+5. Web App with encryption
