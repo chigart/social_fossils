@@ -44,11 +44,6 @@ class CanonicalIdentity(Base):
             "platform_user_id",
             name="uq_canonical_identities_platform_user",
         ),
-        UniqueConstraint(
-            "identity_group_id",
-            "platform",
-            name="uq_canonical_identities_group_platform",
-        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

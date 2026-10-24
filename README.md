@@ -30,4 +30,3 @@
 3. Fix parallel import heavy files.
 4. Add Facebook, VK
 5. Web App with encryption
-6. Hide Instagram Unidentified contact and Link status column in Contacts

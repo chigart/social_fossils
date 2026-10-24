@@ -135,3 +135,63 @@ def test_identity_links_reject_conflicts_and_preserve_link_history(tmp_path):
             app.dependency_overrides.pop(get_db, None)
             session.close()
             engine.dispose()
+
+
+def test_identity_links_allow_any_number_of_same_platform_accounts(tmp_path):
+    engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'multi-account-identity-links.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    _create_identity_tables(engine)
+    session = Session(engine)
+    identities = [
+        CanonicalIdentity(platform="telegram", platform_user_id="telegram-1"),
+        CanonicalIdentity(platform="telegram", platform_user_id="telegram-2"),
+        CanonicalIdentity(platform="instagram", platform_user_id="instagram-1"),
+        CanonicalIdentity(platform="instagram", platform_user_id="instagram-2"),
+        CanonicalIdentity(platform="discord", platform_user_id="discord-1"),
+    ]
+    session.add_all(identities)
+    session.commit()
+    identity_ids = [identity.id for identity in identities]
+
+    def override_get_db():
+        yield session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            links = [
+                (identity_ids[0], identity_ids[1]),
+                (identity_ids[0], identity_ids[2]),
+                (identity_ids[1], identity_ids[3]),
+                (identity_ids[2], identity_ids[4]),
+            ]
+            responses = [
+                client.post(
+                    "/api/identity-links",
+                    json={
+                        "first_identity_id": first_id,
+                        "second_identity_id": second_id,
+                    },
+                )
+                for first_id, second_id in links
+            ]
+
+            assert [response.status_code for response in responses] == [201] * 4
+            group_ids = {
+                response.json()["identity_group_id"] for response in responses
+            }
+            assert len(group_ids) == 1
+            grouped_id = group_ids.pop()
+            linked_identities = client.get("/api/identity-links").json()[
+                "identities"
+            ]
+            assert {
+                identity["identity_id"]: identity["identity_group_id"]
+                for identity in linked_identities
+            } == {identity_id: grouped_id for identity_id in identity_ids}
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+            session.close()
+            engine.dispose()

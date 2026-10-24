@@ -127,12 +127,6 @@ def link_identities(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Platform identity not found.",
         )
-    if first.platform == second.platform:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Cross-platform links require identities from different platforms.",
-        )
-
     if (
         first.identity_group_id is not None
         and first.identity_group_id == second.identity_group_id
@@ -156,19 +150,6 @@ def link_identities(
         db.add(group)
         db.flush()
         group_id = group.id
-
-    existing_platform_identity = db.scalar(
-        select(CanonicalIdentity.id).where(
-            CanonicalIdentity.identity_group_id == group_id,
-            CanonicalIdentity.platform.in_((first.platform, second.platform)),
-            CanonicalIdentity.id.not_in((first.id, second.id)),
-        )
-    )
-    if existing_platform_identity is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This person already has an identity on one of these platforms.",
-        )
 
     first_was_grouped = first.identity_group_id is not None
     first.identity_group_id = group_id

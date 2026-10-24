@@ -49,17 +49,17 @@ export function IdentityLinksView({
     >
       <div className={sectionHeaderClassName}>
         <div>
-          <p className={sectionEyebrowClassName}>OWNER-VERIFIED IDENTITY</p>
+          <p className={sectionEyebrowClassName}>OWNER-VERIFIED IDENTITIES</p>
           <h2 id="identity-links-title" className={sectionTitleClassName}>
-            Cross-platform identity links
+            Identity links
           </h2>
         </div>
       </div>
       <p className="mb-5 text-small leading-[1.5] text-ink-muted">
-        Link only identities you recognize as the same person. Suggestions are
-        based on Full Name matches, but no identity is linked until you review
-        and confirm it. Conflicting links must be removed before a new link can
-        be created.
+        Group any number of accounts that belong to the same person, including
+        multiple accounts on one platform. Suggestions are based on Full Name
+        matches, but no identity is linked until you review and confirm it.
+        Conflicting links must be removed before accounts can be linked.
       </p>
       {identityLinks.loading && identityLinks.data === null && <LoadingMessage />}
       {identityLinks.error && (
@@ -79,7 +79,7 @@ export function IdentityLinksView({
         <>
           <section className="mb-7 rounded-lg border border-border-muted bg-surface p-4">
             <h3 className="mb-3 text-subheading font-bold text-ink">
-              Link two identities
+              Link or extend an identity group
             </h3>
             <div className="flex flex-wrap items-end gap-3">
               <IdentityPicker

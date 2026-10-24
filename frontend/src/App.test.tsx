@@ -147,7 +147,7 @@ describe("dashboard", () => {
     await selectDashboardTab("Identity links");
 
     const identityPanel = screen.getByRole("region", {
-      name: "Cross-platform identity links",
+      name: "Identity links",
     });
     await user.click(
       within(identityPanel).getByRole("button", {
@@ -236,6 +236,38 @@ describe("dashboard", () => {
         name: "No cross-platform links yet",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("shows every account in a multi-platform identity group", async () => {
+    const identities = [
+      ["telegram", "telegram-1"],
+      ["telegram", "telegram-2"],
+      ["instagram", "instagram-1"],
+      ["instagram", "instagram-2"],
+      ["discord", "discord-1"],
+    ].map(([platform, platformUserId], index) => ({
+      identity_id: index + 1,
+      platform,
+      platform_user_id: platformUserId,
+      identity_group_id: 7,
+      contacts: [],
+    }));
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const linkedGroup = screen.getByText("Linked person group 7").parentElement;
+    expect(linkedGroup?.querySelectorAll("li")).toHaveLength(5);
+    expect(
+      within(linkedGroup as HTMLElement).getAllByRole("button", {
+        name: /^Unlink/,
+      }),
+    ).toHaveLength(5);
   });
 
   it("filters identity picker options by search and platform", async () => {
