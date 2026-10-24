@@ -1,8 +1,4 @@
-import { useState } from "react";
-import type {
-  IdentityLinksResponse,
-  PlatformIdentity,
-} from "../api";
+import type { IdentityLinksResponse } from "../api";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -21,15 +17,7 @@ import {
 } from "../styles";
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
-
-function identityLabel(identity: PlatformIdentity | undefined): string {
-  if (!identity) return "Unknown identity";
-  const contact = identity.contacts.find((item) => item.display_name) ??
-    identity.contacts.find((item) => item.username);
-  return contact?.display_name ??
-    contact?.username ??
-    `${identity.platform} ${identity.platform_user_id}`;
-}
+import { useIdentityLinks } from "./useIdentityLinks";
 
 export function IdentityLinksView({
   identityLinks,
@@ -42,60 +30,22 @@ export function IdentityLinksView({
   onLink: (firstIdentityId: number, secondIdentityId: number) => Promise<void>;
   onUnlink: (identityId: number) => Promise<void>;
 }) {
-  const [firstIdentityId, setFirstIdentityId] = useState("");
-  const [secondIdentityId, setSecondIdentityId] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-  const identities = identityLinks.data?.identities ?? [];
-  const identityById = new Map(
-    identities.map((identity) => [identity.identity_id, identity]),
-  );
-  const groups = new Map<number, PlatformIdentity[]>();
-  for (const identity of identities) {
-    if (identity.identity_group_id === null) continue;
-    const group = groups.get(identity.identity_group_id) ?? [];
-    group.push(identity);
-    groups.set(identity.identity_group_id, group);
-  }
-
-  const performLink = async () => {
-    const first = Number(firstIdentityId);
-    const second = Number(secondIdentityId);
-    if (!Number.isInteger(first) || !Number.isInteger(second) || first === second) {
-      setActionError("Choose two different platform identities.");
-      return;
-    }
-    setSaving(true);
-    setActionError(null);
-    setActionMessage(null);
-    try {
-      await onLink(first, second);
-      setActionMessage("The platform identities are linked.");
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : "Unable to link identities.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const performUnlink = async (identity: PlatformIdentity) => {
-    setSaving(true);
-    setActionError(null);
-    setActionMessage(null);
-    try {
-      await onUnlink(identity.identity_id);
-      setActionMessage(`${identityLabel(identity)} was unlinked.`);
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : "Unable to unlink identity.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+  const {
+    firstIdentityId,
+    setFirstIdentityId,
+    secondIdentityId,
+    setSecondIdentityId,
+    saving,
+    actionError,
+    actionMessage,
+    identities,
+    identityOptions,
+    linkedGroups,
+    unidentifiedContacts,
+    historyEvents,
+    performLink,
+    performUnlink,
+  } = useIdentityLinks(identityLinks, onLink, onUnlink);
 
   return (
     <section
@@ -145,12 +95,12 @@ export function IdentityLinksView({
                   onChange={(event) => setFirstIdentityId(event.target.value)}
                 >
                   <option value="">Select identity</option>
-                  {identities.map((identity) => (
+                  {identityOptions.map(({ identity, label }) => (
                     <option
                       key={identity.identity_id}
                       value={identity.identity_id}
                     >
-                      {identity.platform}: {identityLabel(identity)} (
+                      {identity.platform}: {label} (
                       {identity.platform_user_id})
                     </option>
                   ))}
@@ -164,12 +114,12 @@ export function IdentityLinksView({
                   onChange={(event) => setSecondIdentityId(event.target.value)}
                 >
                   <option value="">Select identity</option>
-                  {identities.map((identity) => (
+                  {identityOptions.map(({ identity, label }) => (
                     <option
                       key={identity.identity_id}
                       value={identity.identity_id}
                     >
-                      {identity.platform}: {identityLabel(identity)} (
+                      {identity.platform}: {label} (
                       {identity.platform_user_id})
                     </option>
                   ))}
@@ -199,7 +149,7 @@ export function IdentityLinksView({
             >
               Current links
             </h3>
-            {groups.size === 0 ? (
+            {linkedGroups.length === 0 ? (
               <div className={`${emptyStateClassName} p-4`}>
                 <h4 className={emptyStateTitleClassName}>
                   No cross-platform links yet
@@ -211,7 +161,7 @@ export function IdentityLinksView({
               </div>
             ) : (
               <div className="space-y-3">
-                {[...groups.entries()].map(([groupId, members]) => (
+                {linkedGroups.map(({ groupId, members }) => (
                   <div
                     className="rounded-lg border border-border-muted bg-surface p-4"
                     key={groupId}
@@ -220,14 +170,14 @@ export function IdentityLinksView({
                       Linked person group {groupId}
                     </p>
                     <ul className="space-y-2">
-                      {members.map((identity) => (
+                      {members.map(({ identity, label }) => (
                         <li
                           className="flex flex-wrap items-center justify-between gap-2"
                           key={identity.identity_id}
                         >
                           <span className="text-small text-ink">
                             <strong>{identity.platform}</strong>:{" "}
-                            {identityLabel(identity)}{" "}
+                            {label}{" "}
                             <span className="font-mono text-caption text-ink-muted">
                               ({identity.platform_user_id})
                             </span>
@@ -238,7 +188,7 @@ export function IdentityLinksView({
                             disabled={saving}
                             onClick={() => void performUnlink(identity)}
                           >
-                            Unlink {identityLabel(identity)}
+                            Unlink {label}
                           </button>
                         </li>
                       ))}
@@ -256,7 +206,7 @@ export function IdentityLinksView({
             >
               Contacts without a platform identity
             </h3>
-            {identityLinks.data.contacts_without_identity.length === 0 ? (
+            {unidentifiedContacts.length === 0 ? (
               <p className="text-small text-ink-muted">
                 All imported contacts currently have a platform identity.
               </p>
@@ -272,10 +222,10 @@ export function IdentityLinksView({
                     </tr>
                   </thead>
                   <tbody>
-                    {identityLinks.data.contacts_without_identity.map((contact) => (
+                    {unidentifiedContacts.map(({ contact, label }) => (
                       <tr className={tableRowClassName} key={contact.contact_id}>
                         <th className={tableRowTitleClassName} scope="row">
-                          {contact.display_name || contact.username || "Unnamed contact"}
+                          {label}
                         </th>
                         <td className={tableCellClassName}>{contact.platform}</td>
                         <td className={tableCellClassName}>{contact.account_label}</td>
@@ -295,23 +245,18 @@ export function IdentityLinksView({
             >
               Link history
             </h3>
-            {identityLinks.data.events.length === 0 ? (
+            {historyEvents.length === 0 ? (
               <p className="text-small text-ink-muted">
                 Explicit link and unlink actions will be recorded here.
               </p>
             ) : (
               <ul className="space-y-2">
-                {identityLinks.data.events.map((event) => (
+                {historyEvents.map((event) => (
                   <li
                     className="text-small text-ink-muted"
                     key={event.id}
                   >
-                    {event.action === "linked" ? "Linked" : "Unlinked"}{" "}
-                    {identityLabel(identityById.get(event.identity_id))}
-                    {event.peer_identity_id !== null &&
-                      ` and ${identityLabel(identityById.get(event.peer_identity_id))}`}
-                    {" · "}
-                    {event.source} · {new Date(event.occurred_at).toLocaleString()}
+                    {event.description}
                   </li>
                 ))}
               </ul>

@@ -12,7 +12,7 @@ import {
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
-import { useChatInsightsView } from "./useChatInsightsView";
+import { useChatInsights } from "./useChatInsights";
 
 export function ChatInsightsView({
   insights,
@@ -33,7 +33,7 @@ export function ChatInsightsView({
     onChatSearchChange,
     matchingChats,
     selectedChat,
-  } = useChatInsightsView(insights, selectedChatId);
+  } = useChatInsights(insights, selectedChatId);
 
   return (
     <section

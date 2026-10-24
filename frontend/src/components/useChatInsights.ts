@@ -7,7 +7,7 @@ import {
   sortChatInsightsChats,
 } from "./chatInsightsUtils";
 
-export function useChatInsightsView(
+export function useChatInsights(
   insights: Resource<ChatInsightsResponse>,
   selectedChatId: number | null,
 ) {
