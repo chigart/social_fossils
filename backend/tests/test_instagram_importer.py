@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app import instagram_importer
 from app.routers.analytics_overview import get_contact_statistics
-from app.telegram_importer import import_source_export
+from app.telegram_importer import import_source_export, import_telegram_export
 from app.models import (
     CanonicalIdentity,
     Chat,
@@ -71,6 +71,7 @@ def _create_import_tables(engine) -> None:
                 "text_content TEXT, reply_to_telegram_message_id VARCHAR(100), "
                 "source_reply_id VARCHAR(200), raw_payload JSON, "
                 "created_at DATETIME DEFAULT CURRENT_TIMESTAMP, "
+                "UNIQUE(chat_id, message_id), "
                 "UNIQUE(chat_id, source_record_key))"
             )
         )
@@ -87,7 +88,40 @@ def _create_import_tables(engine) -> None:
         )
 
 
-def _write_archive(path) -> None:
+def _write_archive(path, message_count: int | None = None) -> None:
+    messages = [
+        {
+            "sender_name": "Friend",
+            "timestamp_ms": 1_700_000_000_123,
+            "content": "synthetic private text",
+            "is_outgoing": False,
+        },
+        {
+            "message_id": "instagram-message-2",
+            "sender_id": "123",
+            "sender_name": "Synthetic sender",
+            "timestamp_ms": 1_700_000_000_456,
+            "content": "synthetic identified message",
+        },
+        {
+            "sender_id": "owner-123",
+            "sender_name": "Synthetic Owner",
+            "timestamp_ms": 1_700_000_000_789,
+            "content": "synthetic outgoing message",
+        },
+    ]
+    if message_count is not None:
+        messages = [
+            {
+                "sender_name": "Synthetic Owner" if index % 2 == 0 else "Friend",
+                "sender_id": "owner-123" if index % 2 == 0 else "123",
+                "timestamp_ms": 1_700_000_000_000 + index,
+                "content": f"synthetic message {index}",
+                "is_outgoing": index % 2 == 0,
+            }
+            for index in range(message_count)
+        ]
+
     with ZipFile(path, "w") as archive:
         archive.writestr(
             "your_instagram_activity/personal_information/personal_information.json",
@@ -111,27 +145,7 @@ def _write_archive(path) -> None:
                 {
                     "title": "Synthetic thread",
                     "participants": [{"name": "Owner"}, {"name": "Friend"}],
-                    "messages": [
-                        {
-                            "sender_name": "Friend",
-                            "timestamp_ms": 1_700_000_000_123,
-                            "content": "synthetic private text",
-                            "is_outgoing": False,
-                        },
-                        {
-                            "message_id": "instagram-message-2",
-                            "sender_id": "123",
-                            "sender_name": "Synthetic sender",
-                            "timestamp_ms": 1_700_000_000_456,
-                            "content": "synthetic identified message",
-                        },
-                        {
-                            "sender_id": "owner-123",
-                            "sender_name": "Synthetic Owner",
-                            "timestamp_ms": 1_700_000_000_789,
-                            "content": "synthetic outgoing message",
-                        },
-                    ],
+                    "messages": messages,
                 }
             ),
         )
@@ -268,6 +282,121 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
     engine.dispose()
 
 
+def test_instagram_import_batches_messages_and_remains_idempotent(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'instagram-large.db'}")
+    _create_import_tables(engine)
+    archive_path = tmp_path / "instagram-large.zip"
+    _write_archive(archive_path, message_count=103)
+
+    with Session(engine) as session:
+        first = instagram_importer.import_instagram_export(
+            archive_path,
+            session=session,
+        )
+        second = instagram_importer.import_instagram_export(
+            archive_path,
+            session=session,
+        )
+
+        assert first["total_messages"] == 103
+        assert first["inserted_messages"] == 103
+        assert first["skipped_messages"] == 0
+        assert second["total_messages"] == 103
+        assert second["inserted_messages"] == 0
+        assert second["skipped_messages"] == 103
+        assert len(session.scalars(select(Message)).all()) == 103
+        import_sessions = session.scalars(
+            select(ImportSession).order_by(ImportSession.id)
+        ).all()
+        assert [
+            (
+                item.status,
+                item.total_messages,
+                item.inserted_messages,
+                item.skipped_messages,
+            )
+            for item in import_sessions
+        ] == [
+            ("completed", 103, 103, 0),
+            ("completed", 103, 0, 103),
+        ]
+
+    engine.dispose()
+
+
+def test_telegram_import_batches_messages_and_remains_idempotent(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'telegram-large.db'}")
+    _create_import_tables(engine)
+    export_path = tmp_path / "telegram-large.json"
+    export_path.write_text(
+        json.dumps(
+            {
+                "personal_information": {
+                    "user_id": 1000,
+                    "first_name": "Synthetic Owner",
+                },
+                "contacts": {"list": []},
+                "chats": {
+                    "list": [
+                        {
+                            "id": 1,
+                            "type": "personal_chat",
+                            "name": "Synthetic conversation",
+                            "messages": [
+                                {
+                                    "id": index + 1,
+                                    "type": "message",
+                                    "date_unixtime": str(1_700_000_000 + index),
+                                    "from": (
+                                        "Synthetic Owner"
+                                        if index % 2 == 0
+                                        else "Synthetic Peer"
+                                    ),
+                                    "from_id": (
+                                        "user1000" if index % 2 == 0 else "user2000"
+                                    ),
+                                    "text": f"synthetic message {index}",
+                                }
+                                for index in range(103)
+                            ],
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with Session(engine) as session:
+        first = import_telegram_export(export_path, session=session)
+        second = import_telegram_export(export_path, session=session)
+
+        assert first["total_messages"] == 103
+        assert first["inserted_messages"] == 103
+        assert first["skipped_messages"] == 0
+        assert second["total_messages"] == 103
+        assert second["inserted_messages"] == 0
+        assert second["skipped_messages"] == 103
+        assert len(session.scalars(select(Message)).all()) == 103
+        import_sessions = session.scalars(
+            select(ImportSession).order_by(ImportSession.id)
+        ).all()
+        assert [
+            (
+                item.status,
+                item.total_messages,
+                item.inserted_messages,
+                item.skipped_messages,
+            )
+            for item in import_sessions
+        ] == [
+            ("completed", 103, 103, 0),
+            ("completed", 103, 0, 103),
+        ]
+
+    engine.dispose()
+
+
 def test_instagram_import_rolls_back_on_database_failure(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'rollback.db'}")
     _create_import_tables(engine)
@@ -277,7 +406,7 @@ def test_instagram_import_rolls_back_on_database_failure(tmp_path, monkeypatch):
     def fail_insert(*_args):
         raise RuntimeError("synthetic database failure")
 
-    monkeypatch.setattr(instagram_importer, "_insert_message", fail_insert)
+    monkeypatch.setattr(instagram_importer, "_insert_message_batch", fail_insert)
     with Session(engine) as session:
         try:
             instagram_importer.import_instagram_export(

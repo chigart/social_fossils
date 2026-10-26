@@ -308,13 +308,35 @@ CLI/services remain usable without Airflow.
 
 ### 25. Scale imports and derived analytics based on measurements
 
-- Profile representative synthetic large imports and analytics before adding
-  streaming/chunked parsing, bulk operations, checkpoints, or precomputed
-  results.
-- Define refresh/invalidation behavior for imports and identity changes before
-  materializing results.
-- Preserve transaction safety, import-session counts, uniqueness, safe retries,
-  and full re-import semantics for any incremental ingestion.
+- Added an opt-in synthetic benchmark runner at
+  `backend/scripts/benchmark_scaling.py`. Run it from `backend` with
+  `python scripts/benchmark_scaling.py --messages 1000,5000`; add `--profile`
+  for cumulative cProfile output. It measures parsing, fresh and repeated
+  Telegram/Instagram imports, and all current derived analytics, including
+  elapsed time, throughput, and peak traced Python memory.
+- The benchmark uses only generated synthetic exports and an isolated SQLite
+  database. Timings include `tracemalloc` overhead and are not PostgreSQL
+  latency estimates.
+- On Python 3.14.4, a single 1,000/5,000-message-per-platform run measured
+  Telegram fresh imports at 4.17/19.82 seconds before and 0.91/4.37 seconds
+  after batching; Instagram fresh imports measured 1.83/9.82 seconds before
+  and 0.96/4.78 seconds after. Repeated Telegram imports improved from
+  0.51/2.65 seconds to 0.06/0.19 seconds, and repeated Instagram imports from
+  0.97/4.91 seconds to 0.23/1.05 seconds.
+- Profiling found repeated per-message database work in both importers. Message
+  writes now use batches of 50; Telegram reuses resolved contacts and checks
+  existing IDs in batches, while Instagram fetches matching source records in
+  batches and preserves existing-message backfill behavior.
+- Profiling also found per-character emoji scanning in chat insights. A
+  compiled candidate search reduced the synthetic 2,000/10,000-message chat
+  insights measurements from 0.38/1.86 seconds to 0.36/1.74 seconds. Other
+  measured SQL analytics remained below 0.20 seconds at 10,000 combined
+  synthetic messages, so no precomputed analytics or invalidation scheme was
+  justified.
+- Import parsing still materializes the export; streaming/chunked parsing,
+  checkpoints, and materialized results remain deferred. Measure against
+  PostgreSQL before making production-database performance claims or pursuing
+  further changes.
 
 **Phase 5 exit criteria:** at least one additional importer runs through the
 same reusable upload pipeline; cross-platform links are explicit and auditable;

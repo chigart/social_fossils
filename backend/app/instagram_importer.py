@@ -27,6 +27,7 @@ from app.models import (
 from app.platforms import INSTAGRAM_PLATFORM_ID
 
 logger = logging.getLogger(__name__)
+MESSAGE_INSERT_BATCH_SIZE = 50
 
 
 def _is_placeholder_contact_name(name: str | None) -> bool:
@@ -256,14 +257,14 @@ def _ensure_folder_contact(
     return contact, not existed
 
 
-def _insert_message(
+def _message_values(
     session: Session,
     chat: Chat,
     payload: dict[str, Any],
     contact: Contact | None,
     owner_contact: Contact,
     account: Account,
-) -> bool:
+) -> dict[str, Any]:
     sender_id = payload.get("sender_id")
     is_outgoing = payload.get("is_outgoing")
     sender_name = payload.get("sender_name")
@@ -323,63 +324,133 @@ def _insert_message(
             )
             if sender_contact is not None:
                 sender_contact_id = sender_contact.id
-    source_record_key = payload["source_record_key"]
-    existing_message = session.scalar(
-        select(Message).where(
-            Message.chat_id == chat.id,
-            Message.platform == INSTAGRAM_PLATFORM_ID,
-            Message.source_record_key == source_record_key,
-        )
-    )
-    if existing_message is not None:
-        if existing_message.sender_name is not None:
-            existing_message.sender_name = normalize_instagram_text(
-                existing_message.sender_name
-            )
-        if existing_message.text_content is not None:
-            existing_message.text_content = normalize_instagram_text(
-                existing_message.text_content
-            )
-        if (
-            sender_id is not None
-            and existing_message.sender_id is None
-        ):
-            existing_message.sender_id = sender_id
-        if (
-            sender_contact_id is not None
-            and existing_message.sender_contact_id is None
-        ):
-            existing_message.sender_contact_id = sender_contact_id
-        if existing_message.message_id is None:
-            existing_message.message_id = payload["message_id"]
-        if existing_message.is_outgoing is None and is_outgoing is not None:
-            existing_message.is_outgoing = is_outgoing
-        if session.is_modified(existing_message):
-            session.flush()
-        return False
+    return {
+        "chat_id": chat.id,
+        "platform": INSTAGRAM_PLATFORM_ID,
+        "message_id": payload["message_id"],
+        "source_record_key": payload["source_record_key"],
+        "sender_id": sender_id,
+        "sender_contact_id": sender_contact_id,
+        "sender_name": payload.get("sender_name"),
+        "is_outgoing": is_outgoing,
+        "message_date": payload.get("message_date"),
+        "message_type": payload.get("message_type") or "message",
+        "text_content": payload.get("text_content"),
+        "reply_to_telegram_message_id": None,
+        "source_reply_id": payload.get("source_reply_id"),
+        "raw_payload": payload.get("raw_payload") or {},
+    }
 
+
+def _update_existing_message(
+    session: Session,
+    existing_message: Message,
+    values: dict[str, Any],
+) -> None:
+    if existing_message.sender_name is not None:
+        existing_message.sender_name = normalize_instagram_text(
+            existing_message.sender_name
+        )
+    if existing_message.text_content is not None:
+        existing_message.text_content = normalize_instagram_text(
+            existing_message.text_content
+        )
+    if values["sender_id"] is not None and existing_message.sender_id is None:
+        existing_message.sender_id = values["sender_id"]
+    if (
+        values["sender_contact_id"] is not None
+        and existing_message.sender_contact_id is None
+    ):
+        existing_message.sender_contact_id = values["sender_contact_id"]
+    if existing_message.message_id is None:
+        existing_message.message_id = values["message_id"]
+    if existing_message.is_outgoing is None and values["is_outgoing"] is not None:
+        existing_message.is_outgoing = values["is_outgoing"]
+    if session.is_modified(existing_message):
+        session.flush()
+
+
+def _existing_messages(
+    session: Session,
+    chat: Chat,
+    payloads: list[dict[str, Any]],
+) -> dict[str, Message]:
+    source_keys = [
+        payload["source_record_key"]
+        for payload in payloads
+        if isinstance(payload.get("source_record_key"), str)
+    ]
+    if not source_keys:
+        return {}
+    statement = select(Message).where(
+        Message.chat_id == chat.id,
+        Message.platform == INSTAGRAM_PLATFORM_ID,
+        Message.source_record_key.in_(source_keys),
+    )
+    return {
+        message.source_record_key: message
+        for message in session.scalars(statement)
+        if message.source_record_key is not None
+    }
+
+
+def _insert_message_batch(session: Session, values: list[dict[str, Any]]) -> int:
     statement = (
         insert(Message)
-        .values(
-            chat_id=chat.id,
-            platform=INSTAGRAM_PLATFORM_ID,
-            message_id=payload["message_id"],
-            source_record_key=source_record_key,
-            sender_id=sender_id,
-            sender_contact_id=sender_contact_id,
-            sender_name=payload.get("sender_name"),
-            is_outgoing=is_outgoing,
-            message_date=payload.get("message_date"),
-            message_type=payload.get("message_type") or "message",
-            text_content=payload.get("text_content"),
-            reply_to_telegram_message_id=None,
-            source_reply_id=payload.get("source_reply_id"),
-            raw_payload=payload.get("raw_payload") or {},
-        )
+        .values(values)
         .on_conflict_do_nothing()
         .returning(Message.id)
     )
-    return session.execute(statement).first() is not None
+    return len(session.execute(statement).scalars().all())
+
+
+def _insert_messages_for_chat(
+    session: Session,
+    chat: Chat,
+    messages: list[dict[str, Any]],
+    contact: Contact | None,
+    owner_contact: Contact,
+    account: Account,
+) -> tuple[int, int]:
+    inserted_count = 0
+    skipped_count = 0
+    for start in range(0, len(messages), MESSAGE_INSERT_BATCH_SIZE):
+        batch = messages[start : start + MESSAGE_INSERT_BATCH_SIZE]
+        eligible_messages = [
+            message
+            for message in batch
+            if not _is_placeholder_contact_name(message.get("sender_name"))
+            and not _is_placeholder_contact_name(chat.title)
+        ]
+        skipped_count += len(batch) - len(eligible_messages)
+        existing_messages = _existing_messages(
+            session,
+            chat,
+            eligible_messages,
+        )
+        pending_values: list[dict[str, Any]] = []
+        for message in eligible_messages:
+            values = _message_values(
+                session,
+                chat,
+                message,
+                contact,
+                owner_contact,
+                account,
+            )
+            existing_message = existing_messages.get(values["source_record_key"])
+            if existing_message is not None:
+                _update_existing_message(session, existing_message, values)
+                skipped_count += 1
+            else:
+                pending_values.append(values)
+
+        if pending_values:
+            inserted = _insert_message_batch(session, pending_values)
+            inserted_count += inserted
+            skipped_count += len(pending_values) - inserted
+
+    return inserted_count, skipped_count
 
 
 def import_instagram_export(
@@ -457,26 +528,17 @@ def import_instagram_export(
             )
             if contact_inserted:
                 inserted_contacts += 1
-            for message in chat.messages:
-                total_messages += 1
-                if (
-                    _is_placeholder_contact_name(message.get("sender_name"))
-                    or _is_placeholder_contact_name(chat.title)
-                ):
-                    skipped_messages += 1
-                    continue
-                message_inserted = _insert_message(
-                    session,
-                    persisted_chat,
-                    message,
-                    folder_contact,
-                    owner_contact,
-                    account,
-                )
-                if message_inserted:
-                    inserted_messages += 1
-                else:
-                    skipped_messages += 1
+            total_messages += len(chat.messages)
+            chat_inserted, chat_skipped = _insert_messages_for_chat(
+                session,
+                persisted_chat,
+                chat.messages,
+                folder_contact,
+                owner_contact,
+                account,
+            )
+            inserted_messages += chat_inserted
+            skipped_messages += chat_skipped
 
         import_session.total_messages = total_messages
         import_session.inserted_messages = inserted_messages

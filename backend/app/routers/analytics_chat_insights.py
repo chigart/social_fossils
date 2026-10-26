@@ -37,6 +37,9 @@ ORDINARY_MESSAGE_TYPE = "message"
 RANKING_LIMIT = 10
 CONVERSATION_GAP = timedelta(hours=12)
 WORD_PATTERN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
+EMOJI_START_PATTERN = re.compile(
+    r"[#*0-9\u2300-\u23ff\u2600-\u27bf\U0001F000-\U0001FAFF]"
+)
 
 
 @dataclass
@@ -167,14 +170,16 @@ def _emoji_end(text: str, start: int) -> int | None:
 def extract_emojis(text: str) -> list[str]:
     """Return emoji grapheme sequences without requiring a language-specific package."""
     emojis: list[str] = []
-    index = 0
-    while index < len(text):
-        end = _emoji_end(text, index)
-        if end is None:
-            index += 1
+    consumed_through = 0
+    for candidate in EMOJI_START_PATTERN.finditer(text):
+        start = candidate.start()
+        if start < consumed_through:
             continue
-        emojis.append(text[index:end])
-        index = end
+        end = _emoji_end(text, start)
+        if end is None:
+            continue
+        emojis.append(text[start:end])
+        consumed_through = end
     return emojis
 
 
