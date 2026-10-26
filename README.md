@@ -30,3 +30,6 @@
 3. Fix parallel import heavy files.
 4. Add Facebook, VK
 5. Web App with encryption
+6. Order links suggestions by FullName length
+7. Instagram group chats analytics
+8. Show file upload progress in UI
