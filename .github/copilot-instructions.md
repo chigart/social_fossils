@@ -5,7 +5,7 @@
 Social Fossils analyzes personal messaging history to understand communication
 patterns, relationships, and changes in social interactions over time.
 
-The first data source is a Telegram JSON export.
+INDEX.md describes the overall structure.
 
 ## Technology stack
 
@@ -18,8 +18,6 @@ The first data source is a Telegram JSON export.
 ### Data pipelines and orchestration
 - Apache Airflow: workflow orchestration and scheduling of data processing
   pipelines.
-- Keep ingestion and data processing logic independent of Airflow so it can
-  be tested and executed without an Airflow scheduler.
 
 ### Infrastructure
 - Docker: application containerization.
@@ -28,17 +26,16 @@ The first data source is a Telegram JSON export.
 ### Development environment
 - VS Code running locally on the host.
 - The application must run locally using `docker compose up --build`.
-- Do not require VS Code Dev Containers.
 
 Do not introduce additional frameworks, services, or dependencies unless they
 solve a concrete problem and are justified.
 Airflow is part of the default local Compose workflow for upload-triggered
-processing. Do not introduce Kubernetes or production deployment components.
+processing.
 
 ## Architecture
 
 - Keep HTTP/API concerns in the FastAPI application.
-- Keep Telegram parsing and import logic separate from API route handlers.
+- Keep parsing and import logic separate from API route handlers.
 - Keep database access consistent with the existing SQLAlchemy setup.
 - Keep frontend code separate from backend code.
 - Use the existing PostgreSQL database and SQLAlchemy models.
@@ -61,38 +58,6 @@ working. Treat them as the source of truth.
   uniqueness and data integrity.
 - Use SQLAlchemy sessions and explicit transaction boundaries.
 - Handle transaction rollback and failure reporting correctly.
-
-## Telegram importer
-
-The initial input file is `data/result.json`.
-
-The export contains `personal_information`, `contacts`, and `chats` sections.
-
-### Identity and relationships
-
-- Read the account owner's ID from `personal_information.user_id`.
-- Normalize user IDs consistently. The owner's numeric ID may appear in
-  message records as a string prefixed with `user`.
-- Do not confuse user IDs, chat IDs, and message IDs.
-- Use the existing database uniqueness constraints for chats, contacts,
-  and messages.
-- Do not invent identifiers or infer identity from display names.
-- Telegram address-book contacts may lack Telegram user IDs. Do not link
-  them to sender records without reliable identifying information.
-
-### Messages
-
-- Support both ordinary messages and service messages.
-- Preserve service events rather than silently discarding them.
-- Distinguish service events from ordinary user-written messages in analytics.
-- Support Telegram's `text` field as either a string or a list of entities.
-- Preserve the original message object in `raw_payload`.
-- Use `date_unixtime` as the preferred timestamp source.
-- Store timestamps in UTC when they can be interpreted reliably.
-- Do not guess timezones for ambiguous timestamps.
-- Determine outgoing status by comparing the normalized sender ID with the
-  account owner's ID, not by comparing names.
-- Use `NULL` when outgoing status cannot be determined.
 
 ### Idempotency and import sessions
 
@@ -153,7 +118,7 @@ The export contains `personal_information`, `contacts`, and `chats` sections.
 
 - Treat Telegram exports and message contents as private personal data.
 - Do not commit real Telegram exports or other personal messaging data.
-- Keep `data/result.json` out of version control.
+- Keep `data/` out of version control.
 - Do not expose personal message content in logs, test fixtures, or examples.
 - Use synthetic data in committed tests.
 

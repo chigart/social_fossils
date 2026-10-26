@@ -33,5 +33,4 @@
 6. MED: Order links suggestions by FullName length
 7. LOW: Instagram group chats analytics
 8. MED: Show file upload progress in UI
-9. HIGH: Add INDEX.md
-10. MED: Fix lagging search
+9. MED: Fix lagging search
