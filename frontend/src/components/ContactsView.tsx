@@ -116,7 +116,6 @@ export function ContactsView({
                     onClick={onSort}
                   />
                 </th>
-                <th className={tableHeaderClassName} scope="col">Ordinary</th>
               </tr>
             </thead>
             <tbody>
@@ -137,9 +136,6 @@ export function ContactsView({
                   </td>
                   <td className={numericTableCellClassName}>
                     {formatNumber(contact.total_messages_sent)}
-                  </td>
-                  <td className={numericTableCellClassName}>
-                    {formatNumber(contact.ordinary_messages_sent)}
                   </td>
                 </tr>
               ))}

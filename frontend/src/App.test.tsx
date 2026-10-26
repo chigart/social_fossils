@@ -353,13 +353,17 @@ describe("dashboard", () => {
       .toBeInTheDocument();
   });
 
-  it("ranks Full Name suggestions by exact and near matches before name-part matches", async () => {
+  it("orders suggestions by match rank, then name length", async () => {
     const user = userEvent.setup();
     const pairs = [
       ["Mira Moon", "Mira Moon"],
+      ["Grace Moonrise", "Grace Moonrise"],
       ["Alex Star", "Alex Stab"],
+      ["Alexandria Starling", "Alexandria Starlinh"],
       ["Casey Earth", "Casey Ezzth"],
+      ["Quentin Earth", "Quentin Ezzth"],
       ["Rowan Vale", "Rowan Hart"],
+      ["Theodore Smith", "Theodore Jones"],
     ];
     const identities = pairs.flatMap(([telegramName, instagramName], index) => {
       const telegramId = index * 2 + 1;
@@ -410,10 +414,23 @@ describe("dashboard", () => {
       item.textContent?.trim().replace(/\s+/g, " ")
     )).toEqual([
       "Full Name match:",
+      "Full Name match:",
+      "1-symbol Full Name difference:",
       "1-symbol Full Name difference:",
       "2-symbol Full Name difference:",
+      "2-symbol Full Name difference:",
+      "First or last name match:",
       "First or last name match:",
     ]);
+    const suggestionItems = within(suggestions).getAllByRole("listitem");
+    expect(suggestionItems[0]).toHaveTextContent("Grace Moonrise");
+    expect(suggestionItems[1]).toHaveTextContent("Mira Moon");
+    expect(suggestionItems[2]).toHaveTextContent("Alexandria Starling");
+    expect(suggestionItems[3]).toHaveTextContent("Alex Star");
+    expect(suggestionItems[4]).toHaveTextContent("Quentin Earth");
+    expect(suggestionItems[5]).toHaveTextContent("Casey Earth");
+    expect(suggestionItems[6]).toHaveTextContent("Theodore Smith");
+    expect(suggestionItems[7]).toHaveTextContent("Rowan Vale");
     const suggestionLinkButton = within(suggestions).getAllByRole("button", {
       name: "Link identities",
     })[0];
@@ -427,7 +444,7 @@ describe("dashboard", () => {
         name: "Link identities",
       })[0],
     );
-    expect(api.linkPlatformIdentities).toHaveBeenCalledWith(1, 2);
+    expect(api.linkPlatformIdentities).toHaveBeenCalledWith(3, 4);
   });
 
   it("keeps current links and suggestions in vertically scrollable lists", async () => {

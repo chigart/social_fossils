@@ -140,12 +140,17 @@ export function useIdentityLinks(
               candidate.platform.slice(0, 2).toUpperCase(),
             reason: match.reason,
             rank: match.rank,
+            sortLength: Math.max(
+              Array.from(fullName).length,
+              Array.from(candidateName).length,
+            ),
             sortName: `${normalizedName(fullName)} ${normalizedName(candidateName)}`,
           }]
         : [];
     });
   }).sort((first, second) =>
     first.rank - second.rank ||
+    second.sortLength - first.sortLength ||
     first.sortName.localeCompare(second.sortName) ||
     first.first.identity_id - second.first.identity_id ||
     first.second.identity_id - second.second.identity_id,
