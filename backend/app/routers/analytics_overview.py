@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session, aliased
 
 from app.db import get_db
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
-from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ChatStatistics,
     ContactStatistics,
@@ -25,9 +24,8 @@ router = APIRouter()
     response_model=OverviewStatistics,
     summary="Get communication overview",
     description=(
-        "Counts account, chat, and message rows from Telegram imports only. "
-        "Instagram records are excluded until cross-platform analysis is "
-        "defined. Ordinary messages are rows "
+        "Counts normalized account, chat, and message rows across imported "
+        "platforms. Ordinary messages are rows "
         "with message_type='message'; service events are rows with "
         "message_type='service'. Other stored types contribute only to total "
         "messages. Timestamp bounds ignore messages with a null date."
@@ -37,11 +35,9 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
     result = db.execute(
         select(
             select(func.count(Account.id))
-            .where(Account.platform == TELEGRAM_PLATFORM_ID)
             .scalar_subquery()
             .label("total_imported_accounts"),
             select(func.count(Chat.id))
-            .where(Chat.platform == TELEGRAM_PLATFORM_ID)
             .scalar_subquery()
             .label("total_chats"),
             func.count(Message.id).label("total_messages"),
@@ -55,7 +51,6 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
             func.max(Message.message_date).label("latest_message_timestamp"),
         )
         .select_from(Message)
-        .where(Message.platform == TELEGRAM_PLATFORM_ID)
     ).one()
 
     return OverviewStatistics(**result._mapping)
@@ -69,7 +64,7 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
         "Returns every chat, including chats with no messages. Counts include "
         "all stored message types; ordinary and service counts use the exact "
         "'message' and 'service' values. Distinct senders count non-null "
-        "sender Telegram IDs as normalized and stored by the importer."
+        "platform-scoped sender IDs as normalized and stored by the importer."
     ),
 )
 def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
@@ -77,9 +72,10 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
         select(
             Chat.id.label("chat_id"),
             Chat.account_id,
+            Chat.platform,
             Account.username.label("account_username"),
             Account.name.label("account_name"),
-            Chat.chat_id.label("telegram_chat_id"),
+            Chat.chat_id.label("platform_chat_id"),
             Chat.title,
             Chat.chat_type,
             func.count(Message.id).label("total_messages"),
@@ -101,7 +97,7 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
             Message,
             and_(
                 Message.chat_id == Chat.id,
-                Message.platform == TELEGRAM_PLATFORM_ID,
+                Message.platform == Chat.platform,
             ),
         )
         .group_by(
@@ -114,8 +110,7 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
             Chat.chat_type,
         )
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
         )
         .order_by(Chat.id)
     )
@@ -142,14 +137,12 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
     response_model=list[ContactStatistics],
     summary="Get communication statistics by sender/contact",
     description=(
-        "Lists imported contacts and incoming senders for each platform. "
-        "Within a platform, matching canonical identities are combined across "
-        "source accounts; different platforms remain separate until explicit "
-        "identity linking is used by future analytics. Unknown senders remain "
-        "account-local. Contacts without messages are included with zero "
-        "counts. Outgoing messages are excluded when direction or owner IDs "
-        "identify them. Counts include all message types, with ordinary and "
-        "service counts reported separately."
+        "Combines contacts across source accounts and explicitly linked "
+        "platform identities. Unlinked identities remain separate and "
+        "unidentified senders remain account-local. Contacts without messages "
+        "are included with zero counts. Incoming counts require reliable "
+        "incoming direction; ordinary and service counts are reported "
+        "separately."
     ),
 )
 def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatistics]:
@@ -158,7 +151,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
     is_owner = (
         select(owner_account.id)
         .where(
-            owner_account.platform == Account.platform,
+            owner_account.platform == Message.platform,
             owner_account.platform_user_id == sender_id,
         )
         .exists()
@@ -171,6 +164,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             Account.name.label("account_name"),
             Contact.id.label("contact_id"),
             CanonicalIdentity.id.label("canonical_identity_id"),
+            CanonicalIdentity.identity_group_id.label("identity_group_id"),
             sender_id.label("platform_user_id"),
             Contact.display_name.label("display_name"),
             func.count(Message.id).label("total_messages_sent"),
@@ -191,9 +185,9 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
                 Contact.platform == Message.platform,
                 or_(
                     Contact.id == Message.sender_contact_id,
-                    Contact.platform_user_id == sender_id,
                     and_(
-                        Message.platform == TELEGRAM_PLATFORM_ID,
+                        Message.sender_contact_id.is_(None),
+                        sender_id.is_not(None),
                         Contact.platform_user_id == sender_id,
                     ),
                 ),
@@ -206,7 +200,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         .where(
             Chat.platform == Account.platform,
             Message.platform == Account.platform,
-            Message.is_outgoing.is_not(True),
+            Message.is_outgoing.is_(False),
             or_(
                 sender_id.is_(None),
                 ~is_owner,
@@ -217,6 +211,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             Account.platform,
             Contact.id,
             CanonicalIdentity.id,
+            CanonicalIdentity.identity_group_id,
             Account.username,
             Account.name,
             sender_id,
@@ -230,41 +225,89 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         )
     )
     groups: dict[tuple[object, ...], dict[str, object]] = {}
-    for row in db.execute(statement):
-        if row.canonical_identity_id is not None:
-            key = ("canonical", row.platform, row.canonical_identity_id)
-        elif row.contact_id is not None:
-            key = ("contact", row.platform, row.contact_id)
-        else:
-            key = (
-                "source",
-                row.platform,
-                row.account_id,
-                row.platform_user_id,
-            )
+
+    def contact_key(
+        platform: str,
+        account_id: int,
+        contact_id: int | None,
+        identity_id: int | None,
+        identity_group_id: int | None,
+        platform_user_id: str | None,
+    ) -> tuple[object, ...]:
+        if identity_group_id is not None:
+            return ("group", identity_group_id)
+        if identity_id is not None:
+            return ("identity", identity_id)
+        if contact_id is not None:
+            return ("contact", contact_id)
+        return ("source", platform, account_id, platform_user_id)
+
+    def add_source(
+        key: tuple[object, ...],
+        *,
+        platform: str,
+        account_id: int,
+        account_label: str,
+        contact_id: int | None,
+        identity_id: int | None,
+        identity_group_id: int | None,
+        platform_user_id: str | None,
+        display_name: str | None,
+    ) -> dict[str, object]:
         group = groups.setdefault(
             key,
             {
-                "platform": row.platform,
-                "canonical_identity_id": row.canonical_identity_id,
-                "platform_user_id": row.platform_user_id,
+                "platforms": set(),
+                "identity_ids": set(),
+                "identity_group_id": identity_group_id,
+                "platform_user_ids": set(),
                 "display_names": set(),
                 "source_account_ids": set(),
                 "source_account_labels": set(),
+                "source_accounts": set(),
                 "source_contact_ids": set(),
                 "total_messages_sent": 0,
                 "ordinary_messages_sent": 0,
                 "service_events_attributed": 0,
             },
         )
-        group["source_account_ids"].add(row.account_id)
-        group["source_account_labels"].add(
+        group["platforms"].add(platform)
+        if identity_id is not None:
+            group["identity_ids"].add(identity_id)
+        if platform_user_id is not None:
+            group["platform_user_ids"].add(platform_user_id)
+        if display_name:
+            group["display_names"].add(display_name)
+        group["source_account_ids"].add(account_id)
+        group["source_account_labels"].add(account_label)
+        group["source_accounts"].add((platform, account_label))
+        if contact_id is not None:
+            group["source_contact_ids"].add(contact_id)
+        return group
+
+    for row in db.execute(statement):
+        account_label = (
             f"@{row.account_username}" if row.account_username else row.account_name
         )
-        if row.contact_id is not None:
-            group["source_contact_ids"].add(row.contact_id)
-        if row.display_name:
-            group["display_names"].add(row.display_name)
+        key = contact_key(
+            row.platform,
+            row.account_id,
+            row.contact_id,
+            row.canonical_identity_id,
+            row.identity_group_id,
+            row.platform_user_id,
+        )
+        group = add_source(
+            key,
+            platform=row.platform,
+            account_id=row.account_id,
+            account_label=account_label,
+            contact_id=row.contact_id,
+            identity_id=row.canonical_identity_id,
+            identity_group_id=row.identity_group_id,
+            platform_user_id=row.platform_user_id,
+            display_name=row.display_name,
+        )
         group["total_messages_sent"] += int(row.total_messages_sent)
         group["ordinary_messages_sent"] += int(row.ordinary_messages_sent)
         group["service_events_attributed"] += int(row.service_events_attributed)
@@ -277,9 +320,13 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
     ):
         owner_ids_by_platform.setdefault(platform, set()).add(user_id)
 
-    for contact, account in db.execute(
-        select(Contact, Account)
+    for contact, account, identity_group_id in db.execute(
+        select(Contact, Account, CanonicalIdentity.identity_group_id)
         .join(Account, Account.id == Contact.account_id)
+        .outerjoin(
+            CanonicalIdentity,
+            CanonicalIdentity.id == Contact.canonical_identity_id,
+        )
         .where(Contact.platform == Account.platform)
     ):
         if contact.platform_user_id in owner_ids_by_platform.get(
@@ -287,36 +334,25 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             set(),
         ):
             continue
-        if contact.canonical_identity_id is not None:
-            key = (
-                "canonical",
-                contact.platform,
-                contact.canonical_identity_id,
-            )
-        else:
-            key = ("contact", contact.platform, contact.id)
-        group = groups.setdefault(
+        key = contact_key(
+            contact.platform,
+            account.id,
+            contact.id,
+            contact.canonical_identity_id,
+            identity_group_id,
+            contact.platform_user_id,
+        )
+        add_source(
             key,
-            {
-                "platform": contact.platform,
-                "canonical_identity_id": contact.canonical_identity_id,
-                "platform_user_id": contact.platform_user_id,
-                "display_names": set(),
-                "source_account_ids": set(),
-                "source_account_labels": set(),
-                "source_contact_ids": set(),
-                "total_messages_sent": 0,
-                "ordinary_messages_sent": 0,
-                "service_events_attributed": 0,
-            },
+            platform=contact.platform,
+            account_id=account.id,
+            account_label=f"@{account.username}" if account.username else account.name,
+            contact_id=contact.id,
+            identity_id=contact.canonical_identity_id,
+            identity_group_id=identity_group_id,
+            platform_user_id=contact.platform_user_id,
+            display_name=contact.display_name,
         )
-        group["source_account_ids"].add(account.id)
-        group["source_account_labels"].add(
-            f"@{account.username}" if account.username else account.name
-        )
-        group["source_contact_ids"].add(contact.id)
-        if contact.display_name:
-            group["display_names"].add(contact.display_name)
 
     contacts = []
     for group in groups.values():
@@ -325,15 +361,22 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         display_names = sorted(group["display_names"], key=str.casefold)
         contacts.append(
             ContactStatistics(
-                platform=group["platform"],
+                platforms=sorted(group["platforms"]),
                 account_id=(
                     source_account_ids[0] if len(source_account_ids) == 1 else None
                 ),
-                canonical_identity_id=group["canonical_identity_id"],
+                identity_group_id=group["identity_group_id"],
+                canonical_identity_id=min(group["identity_ids"])
+                if group["identity_ids"]
+                else None,
                 source_account_ids=source_account_ids,
                 source_account_labels=sorted(group["source_account_labels"]),
+                source_accounts=[
+                    {"platform": platform, "label": label}
+                    for platform, label in sorted(group["source_accounts"])
+                ],
                 source_contact_ids=source_contact_ids,
-                platform_user_id=group["platform_user_id"],
+                platform_user_ids=sorted(group["platform_user_ids"]),
                 display_name=display_names[0] if display_names else None,
                 total_messages_sent=group["total_messages_sent"],
                 ordinary_messages_sent=group["ordinary_messages_sent"],
@@ -343,8 +386,8 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
     contacts.sort(
         key=lambda contact: (
             (contact.display_name or "").casefold(),
-            contact.platform,
-            contact.platform_user_id or "",
+            contact.platforms,
+            contact.platform_user_ids,
             contact.source_account_ids,
         )
     )

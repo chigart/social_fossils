@@ -22,6 +22,7 @@ def test_stop_words_exclude_personal_pronouns_but_keep_meaningful_words():
     }
 
     assert personal_pronouns <= STOP_WORDS
+    assert "message" in STOP_WORDS
     assert not meaningful_words & STOP_WORDS
     assert {item.word for item in _rank_words(Counter(personal_pronouns | meaningful_words))} == (
         meaningful_words
@@ -49,7 +50,7 @@ def test_popular_words_exclude_common_english_and_russian_words(db_session):
         "user100",
         text_content=(
             "не НЕ и я в а что это на ты с the AND is not for on by we "
-            "important thing важный нечто"
+            "important thing важный нечто message MESSAGE"
         ),
     )
 
@@ -60,6 +61,7 @@ def test_popular_words_exclude_common_english_and_russian_words(db_session):
     excluded_words = {
         "не", "и", "я", "в", "а", "что", "это", "на", "ты", "с",
         "the", "and", "is", "not", "for", "on", "by", "we",
+        "message",
     }
     assert {item.word for item in chat.popular_words}.isdisjoint(excluded_words)
     assert {item.word for item in sender.popular_words}.isdisjoint(excluded_words)
@@ -72,7 +74,7 @@ def test_popular_words_exclude_common_english_and_russian_words(db_session):
     assert chat.ordinary_message_count == 1
     assert chat.text_length == len(
         "не НЕ и я в а что это на ты с the AND is not for on by we "
-        "important thing важный нечто"
+        "important thing важный нечто message MESSAGE"
     )
 
 
@@ -176,7 +178,7 @@ def test_chat_insights_include_requested_chat_types_and_exclude_service_messages
     assert direct.popular_words[0].word == "hello"
     assert direct.popular_words[0].count == 3
     assert direct.popular_emojis[0].emoji == "❤️"
-    assert {sender.sender_telegram_id: sender.message_count for sender in direct.senders} == {
+    assert {sender.sender_id: sender.message_count for sender in direct.senders} == {
         "user100": 2
     }
     assert direct.reaction_count == 5
@@ -184,7 +186,7 @@ def test_chat_insights_include_requested_chat_types_and_exclude_service_messages
         ("💔", 4),
         ("👍", 1),
     ]
-    assert direct.reactors[0].reactor_telegram_id == "user200"
+    assert direct.reactors[0].reactor_id == "user200"
     assert direct.reactors[0].reaction_count == 2
     assert direct.reactors[0].popular_emojis[0].emoji == "👍"
     pair = direct.reactor_author_pairs[0]
@@ -316,7 +318,7 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
     assert chat.conversation_activity.sender_switch_percentage == 100
     assert chat.conversation_activity.longest_turn_taking_streak == 3
     assert {
-        (sender.sender_telegram_id, sender.count)
+        (sender.sender_id, sender.count)
         for sender in chat.conversation_activity.opening_senders
     } == {("user-owner", 1), ("user200", 1)}
     assert chat.conversation_activity.attributed_handoff_count == 1
@@ -378,7 +380,7 @@ def test_message_type_breakdown_ranks_five_senders_and_omits_plain_text_senders(
     photo = next(item for item in chat.message_type_breakdown if item.category == "Photo")
     text = next(item for item in chat.message_type_breakdown if item.category == "Text")
 
-    assert [(sender.sender_telegram_id, sender.count) for sender in photo.senders] == [
+    assert [(sender.sender_id, sender.count) for sender in photo.senders] == [
         ("user1", 6),
         ("user2", 5),
         ("user3", 4),
@@ -409,5 +411,5 @@ def test_conversation_metrics_keep_undated_and_unknown_senders_unattributed(db_s
     assert activity.session_count == 1
     assert activity.messages_without_timestamp_count == 1
     assert activity.sender_transition_count == 0
-    assert activity.opening_senders[0].sender_telegram_id is None
+    assert activity.opening_senders[0].sender_id is None
     assert activity.opening_senders[0].display_name == "Unknown sender"

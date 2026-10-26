@@ -19,7 +19,6 @@ function renderTimeline(
         {
           canonicalIdentityId: 1,
           displayName: "Avery",
-          platformUserId: "12345",
         },
       ]}
       selectedContactId={null}

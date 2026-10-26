@@ -21,7 +21,7 @@ export type EmojiFrequency = {
 };
 
 export type ChatInsightSender = {
-  sender_telegram_id: string | null;
+  sender_id: string | null;
   display_name: string;
   message_count: number;
   text_length: number;
@@ -30,16 +30,16 @@ export type ChatInsightSender = {
 };
 
 export type ReactionReactor = {
-  reactor_telegram_id: string;
+  reactor_id: string;
   display_name: string;
   reaction_count: number;
   popular_emojis: EmojiFrequency[];
 };
 
 export type ReactionAuthorPair = {
-  reactor_telegram_id: string;
+  reactor_id: string;
   reactor_name: string;
-  author_telegram_id: string;
+  author_id: string;
   author_name: string;
   observed_reaction_count: number;
   messages_with_observed_reaction_count: number;
@@ -61,7 +61,7 @@ export type ReplyTempoStatistics = {
 };
 
 export type ConversationParticipantCount = {
-  sender_telegram_id: string | null;
+  sender_id: string | null;
   display_name: string;
   count: number;
 };
@@ -92,6 +92,7 @@ export type ConversationActivityStatistics = {
 export type ChatInsightsStatistics = {
   chat_id: number;
   account_id: number;
+  platform: string;
   source_account_label: string;
   title: string | null;
   chat_type: string;
@@ -116,8 +117,9 @@ export type ChatInsightsResponse = {
 export type ChatStatistics = {
   chat_id: number;
   account_id: number;
+  platform: string;
   source_account_label: string;
-  telegram_chat_id: string;
+  platform_chat_id: string;
   title: string | null;
   chat_type: string;
   total_messages: number;
@@ -129,13 +131,15 @@ export type ChatStatistics = {
 };
 
 export type ContactStatistics = {
-  platform: string;
+  platforms: string[];
   account_id: number | null;
+  identity_group_id: number | null;
   canonical_identity_id: number | null;
   source_account_ids: number[];
   source_account_labels: string[];
+  source_accounts: { platform: string; label: string }[];
   source_contact_ids: number[];
-  platform_user_id: string | null;
+  platform_user_ids: string[];
   display_name: string | null;
   total_messages_sent: number;
   ordinary_messages_sent: number;
@@ -201,10 +205,12 @@ export type CommunicationBalanceContact = {
   account_id: number | null;
   contact_id: number;
   canonical_identity_id: number | null;
+  identity_group_id: number | null;
+  platforms: string[];
   source_account_ids: number[];
   source_account_labels: string[];
   source_contact_ids: number[];
-  platform_user_id: string;
+  platform_user_ids: string[];
   display_name: string | null;
   owner_message_count: number;
   contact_message_count: number;
@@ -269,10 +275,12 @@ export type ForgottenContact = {
   account_id: number | null;
   contact_id: number;
   canonical_identity_id: number | null;
+  identity_group_id: number | null;
+  platforms: string[];
   source_account_ids: number[];
   source_account_labels: string[];
   source_contact_ids: number[];
-  platform_user_id: string;
+  platform_user_ids: string[];
   display_name: string | null;
   first_message_at: string | null;
   last_message_at: string | null;
@@ -331,6 +339,7 @@ export type CommunicationTimelineMonth = {
 export type CommunicationTimelineSummary = {
   scope: "owner" | "contact";
   canonical_identity_id: number | null;
+  identity_group_id: number | null;
   source_account_count: number;
   source_account_ids: number[];
   source_account_labels: string[];

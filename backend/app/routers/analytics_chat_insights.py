@@ -8,13 +8,12 @@ from statistics import median
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.analytics_stop_words import STOP_WORDS
 from app.db import get_db
 from app.models import Account, Chat, Message
-from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ChatInsightsResponse,
     ChatInsightsStatistics,
@@ -71,7 +70,7 @@ class _PairCounts:
 @dataclass
 class _ConversationMessage:
     message_id: int
-    telegram_message_id: str
+    source_message_id: str | None
     sender_id: str | None
     sender_name: str | None
     message_type: str
@@ -90,6 +89,7 @@ class _MessageTypeSenderCounts:
 class _ChatCounts:
     chat_id: int
     account_id: int
+    platform: str
     source_account_label: str
     title: str | None
     chat_type: str
@@ -302,8 +302,10 @@ def _build_reply_tempo(messages: list[_ConversationMessage]) -> ReplyTempoStatis
         for message in messages
         if message.message_type == ORDINARY_MESSAGE_TYPE
     ]
-    by_telegram_id = {
-        message.telegram_message_id: message for message in messages
+    by_source_id = {
+        message.source_message_id: message
+        for message in messages
+        if message.source_message_id is not None
     }
     reply_reference_count = 0
     response_times: list[float] = []
@@ -312,7 +314,7 @@ def _build_reply_tempo(messages: list[_ConversationMessage]) -> ReplyTempoStatis
         if reply.reply_to_message_id is None:
             continue
         reply_reference_count += 1
-        original = by_telegram_id.get(reply.reply_to_message_id)
+        original = by_source_id.get(reply.reply_to_message_id)
         if (
             original is None
             or original.message_type != ORDINARY_MESSAGE_TYPE
@@ -415,7 +417,7 @@ def _build_conversation_activity(
     ) -> list[ConversationParticipantCount]:
         return [
             ConversationParticipantCount(
-                sender_telegram_id=sender_id,
+                sender_id=sender_id,
                 display_name=(
                     names.get(sender_id, sender_id)
                     if sender_id is not None
@@ -466,7 +468,7 @@ def _build_conversation_activity(
 def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
     senders = [
         ChatInsightSender(
-            sender_telegram_id=sender.sender_id,
+            sender_id=sender.sender_id,
             display_name=sender.name or (
                 sender.sender_id if sender.sender_id is not None else "Unknown sender"
             ),
@@ -481,7 +483,7 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
 
     reactors = [
         ReactionReactor(
-            reactor_telegram_id=reactor.sender_id,
+            reactor_id=reactor.sender_id,
             display_name=reactor.name or reactor.sender_id,
             reaction_count=reactor.reaction_count,
             popular_emojis=_rank_emojis(reactor.emojis),
@@ -496,9 +498,9 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
         observed_message_count = len(pair.message_ids)
         pairs.append(
             ReactionAuthorPair(
-                reactor_telegram_id=pair.reactor_id,
+                reactor_id=pair.reactor_id,
                 reactor_name=pair.reactor_name or pair.reactor_id,
-                author_telegram_id=pair.author_id,
+                author_id=pair.author_id,
                 author_name=pair.author_name or pair.author_id,
                 observed_reaction_count=pair.reaction_count,
                 messages_with_observed_reaction_count=observed_message_count,
@@ -523,6 +525,7 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
     return ChatInsightsStatistics(
         chat_id=counts.chat_id,
         account_id=counts.account_id,
+        platform=counts.platform,
         source_account_label=counts.source_account_label,
         title=counts.title,
         chat_type=counts.chat_type,
@@ -542,7 +545,7 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
                 with_text_count=counts.with_text_counts[category],
                 senders=[
                     ConversationParticipantCount(
-                        sender_telegram_id=sender.sender_id,
+                        sender_id=sender.sender_id,
                         display_name=sender.name,
                         count=sender.count,
                     )
@@ -572,12 +575,13 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
     response_model=ChatInsightsResponse,
     summary="Get text and reaction analytics for private chats and groups",
     description=(
-        "Returns per-chat message, text, word, emoji, and reaction statistics "
-        "for personal chats, private groups, and private supergroups. Reaction "
+        "Returns per-chat normalized message, text, word, emoji, and reaction "
+        "statistics across supported platforms for personal chats, private "
+        "groups, and private supergroups. Reaction "
         "totals use each message's full reaction count. Per-reactor and "
-        "reactor-to-author statistics use only Telegram's recent reactor list "
-        "and therefore represent observed coverage, not complete totals. Reply "
-        "tempo requires an in-chat reply reference, two identified senders, and "
+        "reactor-to-author statistics use only reaction records present in the "
+        "source payload and may not represent complete totals. Reply tempo "
+        "requires an in-chat reply reference, two identified senders, and "
         "reliable non-negative timestamps. Conversation sessions use a 12-hour "
         "gap between dated ordinary messages."
     ),
@@ -587,18 +591,22 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         select(
             Chat.id.label("chat_id"),
             Chat.account_id,
+            Chat.platform,
             Chat.title,
             Chat.chat_type,
             Account.username.label("account_username"),
             Account.name.label("account_name"),
             Message.id.label("message_id"),
-            Message.message_id.label("telegram_message_id"),
+            Message.message_id.label("source_message_id"),
             Message.sender_id,
             Message.sender_name,
             Message.message_type,
             Message.text_content,
             Message.message_date,
-            Message.reply_to_telegram_message_id,
+            func.coalesce(
+                Message.source_reply_id,
+                Message.reply_to_telegram_message_id,
+            ).label("source_reply_id"),
             Message.raw_payload,
         )
         .select_from(Chat)
@@ -607,12 +615,11 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             Message,
             and_(
                 Message.chat_id == Chat.id,
-                Message.platform == TELEGRAM_PLATFORM_ID,
+                Message.platform == Chat.platform,
             ),
         )
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
             Chat.chat_type.in_(SUPPORTED_CHAT_TYPES),
         )
         .order_by(Chat.id, Message.message_date, Message.id)
@@ -628,6 +635,7 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             chat = _ChatCounts(
                 chat_id=row.chat_id,
                 account_id=row.account_id,
+                platform=row.platform,
                 source_account_label=account_label,
                 title=row.title,
                 chat_type=row.chat_type,
@@ -659,12 +667,12 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
             chat.messages.append(
                 _ConversationMessage(
                     message_id=row.message_id,
-                    telegram_message_id=row.telegram_message_id,
+                    source_message_id=row.source_message_id,
                     sender_id=row.sender_id,
                     sender_name=_clean_display_name(row.sender_name),
                     message_type=message_type,
                     message_date=row.message_date,
-                    reply_to_message_id=row.reply_to_telegram_message_id,
+                    reply_to_message_id=row.source_reply_id,
                 )
             )
             continue
@@ -690,12 +698,12 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         chat.messages.append(
             _ConversationMessage(
                 message_id=row.message_id,
-                telegram_message_id=row.telegram_message_id,
+                source_message_id=row.source_message_id,
                 sender_id=row.sender_id,
                 sender_name=_clean_display_name(row.sender_name),
                 message_type=row.message_type,
                 message_date=row.message_date,
-                reply_to_message_id=row.reply_to_telegram_message_id,
+                reply_to_message_id=row.source_reply_id,
             )
         )
 

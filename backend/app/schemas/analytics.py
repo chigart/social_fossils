@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class OverviewStatistics(BaseModel):
     total_imported_accounts: int = Field(
-        description="Number of Telegram account rows in the database."
+        description="Number of imported source-account rows in the database."
     )
     total_chats: int = Field(description="Number of chat rows across all accounts.")
     total_messages: int = Field(
@@ -29,12 +29,13 @@ class OverviewStatistics(BaseModel):
 class ChatStatistics(BaseModel):
     chat_id: int = Field(description="Internal database chat ID.")
     account_id: int = Field(
-        description="Source Telegram account ID for this chat."
+        description="Source account ID for this chat."
     )
+    platform: str = Field(description="Messaging platform for this chat.")
     source_account_label: str = Field(
-        description="Telegram username, or the imported account name when no username exists."
+        description="Source-account username, or imported account name when no username exists."
     )
-    telegram_chat_id: str = Field(description="Chat ID from the Telegram export.")
+    platform_chat_id: str = Field(description="Chat ID from the source platform.")
     title: str | None
     chat_type: str
     total_messages: int = Field(
@@ -49,19 +50,30 @@ class ChatStatistics(BaseModel):
     earliest_message_timestamp: datetime | None
     latest_message_timestamp: datetime | None
     distinct_identified_senders: int = Field(
-        description="Count of distinct non-null stored sender Telegram IDs."
+        description="Count of distinct non-null platform-scoped sender IDs."
     )
 
 
+class ContactAccountSource(BaseModel):
+    platform: str
+    label: str
+
+
 class ContactStatistics(BaseModel):
-    platform: str = Field(description="Messaging platform for this contact group.")
+    platforms: list[str] = Field(
+        description="Platforms represented by this identity group."
+    )
     account_id: int | None = Field(
         default=None,
         description="Single source account ID, or null when combined across accounts.",
     )
+    identity_group_id: int | None = Field(
+        default=None,
+        description="Explicit cross-platform identity group, when linked.",
+    )
     canonical_identity_id: int | None = Field(
         default=None,
-        description="Canonical platform identity ID when the sender is reliably identified."
+        description="A platform identity ID for this group, when available."
     )
     source_account_ids: list[int] = Field(
         default_factory=list,
@@ -69,17 +81,21 @@ class ContactStatistics(BaseModel):
     )
     source_account_labels: list[str] = Field(
         default_factory=list,
-        description="Telegram usernames or account names for contributing sources."
+        description="Usernames or account names for contributing sources."
+    )
+    source_accounts: list[ContactAccountSource] = Field(
+        default_factory=list,
+        description="Platform and label for each contributing source account."
     )
     source_contact_ids: list[int] = Field(
         default_factory=list,
         description="Account-local contact rows contributing to this group."
     )
-    platform_user_id: str | None = Field(
-        description="Stored platform user ID, or null when the source did not identify the sender."
+    platform_user_ids: list[str] = Field(
+        description="Known platform user IDs represented by this contact group."
     )
     display_name: str | None = Field(
-        description="Contact display name when the Telegram ID resolves to a contact."
+        description="Contact display name when a source identity resolves to a contact."
     )
     total_messages_sent: int = Field(
         description="Incoming message rows attributed to this sender, all types."
@@ -130,18 +146,27 @@ class ForgottenContact(BaseModel):
     )
     contact_id: int = Field(description="Stable account-local contact ID.")
     canonical_identity_id: int | None = Field(
-        description="Canonical identity shared by matching Telegram contacts."
+        description="Representative platform identity ID, when available."
+    )
+    identity_group_id: int | None = Field(
+        default=None,
+        description="Explicit cross-platform identity group, when linked.",
+    )
+    platforms: list[str] = Field(
+        description="Platforms represented by this identity group."
     )
     source_account_ids: list[int] = Field(
         description="Source accounts contributing messages to this contact."
     )
     source_account_labels: list[str] = Field(
-        description="Telegram usernames or account names for contributing sources."
+        description="Source-account usernames or account names for contributing sources."
     )
     source_contact_ids: list[int] = Field(
         description="Account-local contact rows contributing to this contact."
     )
-    platform_user_id: str = Field(description="Matched platform user ID.")
+    platform_user_ids: list[str] = Field(
+        description="Known platform user IDs represented by this contact group."
+    )
     display_name: str | None
     first_message_at: datetime | None
     last_message_at: datetime | None
@@ -211,18 +236,27 @@ class CommunicationBalanceContact(BaseModel):
     )
     contact_id: int = Field(description="Stable account-local contact ID.")
     canonical_identity_id: int | None = Field(
-        description="Canonical identity shared by matching Telegram contacts."
+        description="Representative platform identity ID, when available."
+    )
+    identity_group_id: int | None = Field(
+        default=None,
+        description="Explicit cross-platform identity group, when linked.",
+    )
+    platforms: list[str] = Field(
+        description="Platforms represented by this identity group."
     )
     source_account_ids: list[int] = Field(
         description="Source accounts contributing messages to this contact."
     )
     source_account_labels: list[str] = Field(
-        description="Telegram usernames or account names for contributing sources."
+        description="Source-account usernames or account names for contributing sources."
     )
     source_contact_ids: list[int] = Field(
         description="Account-local contact rows contributing to this contact."
     )
-    platform_user_id: str = Field(description="Matched platform user ID.")
+    platform_user_ids: list[str] = Field(
+        description="Known platform user IDs represented by this contact group."
+    )
     display_name: str | None = Field(description="Contact display name, when available.")
     owner_message_count: int = Field(
         description="Ordinary messages sent by the owner with known direction."
@@ -332,6 +366,10 @@ class CommunicationTimelineMonth(BaseModel):
 
 class CommunicationTimelineSummary(BaseModel):
     scope: Literal["owner", "contact"]
+    identity_group_id: int | None = Field(
+        default=None,
+        description="Explicit identity group selected for contact scope, when linked.",
+    )
     canonical_identity_id: int | None = Field(
         description="Selected canonical identity for contact scope; null for owner scope."
     )
@@ -342,7 +380,7 @@ class CommunicationTimelineSummary(BaseModel):
         description="Internal IDs of source accounts represented by this scope."
     )
     source_account_labels: list[str] = Field(
-        description="Telegram usernames, or imported account names when unavailable."
+        description="Source-account usernames, or imported account names when unavailable."
     )
     source_contact_ids: list[int] = Field(
         description="Account-local contact rows mapped to the selected identity."
@@ -392,7 +430,7 @@ class EmojiFrequency(BaseModel):
 
 
 class ChatInsightSender(BaseModel):
-    sender_telegram_id: str | None
+    sender_id: str | None
     display_name: str
     message_count: int
     text_length: int = Field(
@@ -403,18 +441,18 @@ class ChatInsightSender(BaseModel):
 
 
 class ReactionReactor(BaseModel):
-    reactor_telegram_id: str
+    reactor_id: str
     display_name: str
     reaction_count: int = Field(
-        description="Observed reaction entries in Telegram's recent reactor lists."
+        description="Observed reaction entries in the source payload's reactor lists."
     )
     popular_emojis: list[EmojiFrequency]
 
 
 class ReactionAuthorPair(BaseModel):
-    reactor_telegram_id: str
+    reactor_id: str
     reactor_name: str
-    author_telegram_id: str
+    author_id: str
     author_name: str
     observed_reaction_count: int = Field(
         description="Observed reaction entries on this author's messages."
@@ -432,7 +470,7 @@ class ReactionAuthorPair(BaseModel):
 
 class ReplyTempoStatistics(BaseModel):
     reply_reference_count: int = Field(
-        description="Ordinary messages that reference another Telegram message."
+        description="Ordinary messages that reference another message in this chat."
     )
     measured_reply_count: int = Field(
         description="References resolved to a dated ordinary message by a different identified sender."
@@ -443,7 +481,7 @@ class ReplyTempoStatistics(BaseModel):
 
 
 class ConversationParticipantCount(BaseModel):
-    sender_telegram_id: str | None
+    sender_id: str | None
     display_name: str
     count: int
 
@@ -495,6 +533,7 @@ class ConversationActivityStatistics(BaseModel):
 class ChatInsightsStatistics(BaseModel):
     chat_id: int
     account_id: int
+    platform: str
     source_account_label: str
     title: str | None
     chat_type: str
@@ -506,11 +545,11 @@ class ChatInsightsStatistics(BaseModel):
     popular_emojis: list[EmojiFrequency]
     senders: list[ChatInsightSender]
     reaction_count: int = Field(
-        description="Sum of Telegram's full per-message emoji reaction counts."
+        description="Sum of full per-message emoji reaction counts available in source payloads."
     )
     reaction_emojis: list[EmojiFrequency]
     reactors: list[ReactionReactor] = Field(
-        description="Per-reactor statistics observed in Telegram's recent lists."
+        description="Per-reactor statistics observed in source payloads."
     )
     reactor_author_pairs: list[ReactionAuthorPair] = Field(
         description="Observed reactor-to-author coverage, not exhaustive when recent lists are incomplete."

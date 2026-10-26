@@ -257,13 +257,13 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
 
         contact_statistics = get_contact_statistics(session)
         peer_statistics = next(
-            row for row in contact_statistics if row.platform_user_id == "123"
+            row for row in contact_statistics if "123" in row.platform_user_ids
         )
+        assert peer_statistics.platforms == ["instagram"]
         assert peer_statistics.display_name == "Synthetic thread"
-        assert peer_statistics.total_messages_sent == 2
-        assert peer_statistics.ordinary_messages_sent == 2
+        assert peer_statistics.total_messages_sent == 1
+        assert peer_statistics.ordinary_messages_sent == 1
         assert all(row.total_messages_sent != 3 for row in contact_statistics)
-        assert all(row.platform_user_id is not None for row in contact_statistics)
 
     engine.dispose()
 

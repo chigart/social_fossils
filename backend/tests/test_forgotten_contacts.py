@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import text
+
 from analytics_test_helpers import (
     FORGOTTEN_AS_OF,
     HISTORICAL_ACTIVITY_DATES,
@@ -386,6 +388,93 @@ def test_forgotten_contacts_combines_owner_aliases_and_canonical_contacts(db_ses
     assert result.contacts[0].account_id is None
     assert result.summary.source_account_count == 2
     assert result.summary.scope == "combined_owner"
+
+
+def test_forgotten_contacts_combine_explicitly_linked_platform_identities(
+    db_session,
+):
+    add_account(db_session, 1, "tg-owner", username="owner-tg")
+    telegram_chat_id, telegram_peer_id = add_forgotten_candidate(
+        db_session,
+        40,
+        peer_id="tg-peer",
+    )
+    telegram_identity_id = db_session.scalar(
+        text(
+            "SELECT id FROM canonical_identities "
+            "WHERE platform = 'telegram' AND platform_user_id = 'tg-peer'"
+        )
+    )
+    add_exchanges(
+        db_session,
+        40,
+        telegram_chat_id,
+        telegram_peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+        owner_id="tg-owner",
+    )
+
+    db_session.execute(
+        text(
+            "INSERT INTO account (id, platform, name, platform_user_id) "
+            "VALUES (2, 'instagram', 'Instagram account', 'ig-owner')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats (id, account_id, platform, chat_id, chat_type) "
+            "VALUES (200, 2, 'instagram', 'ig-chat', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO canonical_identities "
+            "(id, platform, platform_user_id, identity_group_id) "
+            "VALUES (200, 'instagram', 'ig-peer', 90)"
+        )
+    )
+    db_session.execute(
+        text("UPDATE canonical_identities SET identity_group_id = 90 WHERE id = :id"),
+        {"id": telegram_identity_id},
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, canonical_identity_id, display_name) "
+            "VALUES (200, 2, 'instagram', 'ig-peer', 200, 'Linked peer')"
+        )
+    )
+    recent_date = FORGOTTEN_AS_OF - timedelta(days=2)
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_contact_id, "
+            "is_outgoing, message_date, message_type, text_content, raw_payload) "
+            "VALUES "
+            "(900001, 200, 'instagram', '900001', 'ig-owner', NULL, TRUE, "
+            ":message_date, 'message', 'owner', '{}'), "
+            "(900002, 200, 'instagram', '900002', 'ig-peer', 200, FALSE, "
+            ":message_date, 'message', 'peer', '{}')"
+        ),
+        {"message_date": recent_date},
+    )
+
+    result = build_forgotten_contacts_statistics(
+        db_session,
+        as_of=FORGOTTEN_AS_OF,
+    )
+
+    assert len(result.contacts) == 1
+    contact = result.contacts[0]
+    assert contact.identity_group_id == 90
+    assert contact.platforms == ["instagram", "telegram"]
+    assert contact.platform_user_ids == ["ig-peer", "tg-peer"]
+    assert contact.source_account_ids == [1, 2]
+    assert contact.source_contact_ids == [40, 200]
+    assert contact.historical_message_count == 50
+    assert contact.total_message_count == 52
+    assert contact.recent_message_count == 2
+
 
 def test_forgotten_contacts_empty_database_and_account_without_private_chats(
     db_session,

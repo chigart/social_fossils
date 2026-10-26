@@ -46,7 +46,7 @@ export function OverviewView({
             <div className="mb-[14px] flex flex-wrap gap-x-3 gap-y-[7px] rounded-lg border border-border-brand bg-surface-green px-[14px] py-3 text-small text-ink-green">
               <strong>No imported data yet.</strong>
               <span className="text-ink-green-muted">
-                Import a Telegram export to see your communication statistics.
+                Import messaging exports to see your communication statistics.
               </span>
             </div>
           )}

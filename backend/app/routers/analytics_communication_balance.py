@@ -2,11 +2,10 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.db import get_db
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
-from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     CommunicationBalanceClassification,
     CommunicationBalanceContact,
@@ -48,8 +47,9 @@ def classify_communication_balance(
     response_model=CommunicationBalanceStatistics,
     summary="Get communication balance by contact",
     description=(
-        "Compares normalized text volume in eligible one-to-one Telegram "
-        "personal chats. Text length is the number of Unicode code points "
+        "Compares normalized text volume in eligible one-to-one personal chats "
+        "across source accounts. Explicitly linked identities are combined; "
+        "unlinked identities remain separate. Text length is the number of Unicode code points "
         "in stored text_content (PostgreSQL character length): spaces, "
         "punctuation, and emoji code points count; UTF-8 bytes, metadata, "
         "service events, empty text, and media-only content do not. "
@@ -76,27 +76,31 @@ def get_communication_balance(
         description="Sort by display name, owner text share ascending, or known-direction message count descending.",
     ),
 ) -> CommunicationBalanceStatistics:
-    owner_ids = select(Account.platform_user_id).where(
-        Account.platform == TELEGRAM_PLATFORM_ID,
-        Account.platform_user_id.is_not(None)
+    owner_account = aliased(Account)
+    owner_sender = (
+        select(owner_account.id)
+        .where(
+            owner_account.platform == Message.platform,
+            owner_account.platform_user_id == Message.sender_id,
+        )
+        .exists()
     )
     peers = (
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            Message.sender_id.label("peer_telegram_user_id"),
+            Message.sender_id.label("peer_platform_user_id"),
         )
         .join(Message, Message.chat_id == Chat.id)
         .join(Account, Account.id == Chat.account_id)
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
-            Message.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
+            Message.platform == Chat.platform,
             Chat.chat_type == "personal_chat",
             Account.platform_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
             Message.sender_id.is_not(None),
-            Message.sender_id.not_in(owner_ids),
+            ~owner_sender,
         )
         .distinct()
         .cte("private_chat_peers")
@@ -111,22 +115,42 @@ def get_communication_balance(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            func.coalesce(CanonicalIdentity.id, -Contact.id).label(
-                "identity_group_id"
-            ),
+            CanonicalIdentity.identity_group_id.label("identity_group_id"),
             case(
-                (CanonicalIdentity.id.is_(None), Chat.account_id),
+                (
+                    CanonicalIdentity.identity_group_id.is_(None),
+                    CanonicalIdentity.id,
+                ),
+                else_=None,
+            ).label("canonical_identity_id"),
+            case(
+                (
+                    and_(
+                        CanonicalIdentity.identity_group_id.is_(None),
+                        CanonicalIdentity.id.is_(None),
+                    ),
+                    Contact.id,
+                ),
+                else_=None,
+            ).label("identity_contact_id"),
+            case(
+                (
+                    and_(
+                        CanonicalIdentity.identity_group_id.is_(None),
+                        CanonicalIdentity.id.is_(None),
+                    ),
+                    Chat.account_id,
+                ),
                 else_=None,
             ).label("identity_source_account_id"),
-            CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
+            Contact.platform.label("platform"),
             Contact.platform_user_id.label("contact_platform_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(Account, Account.id == Chat.account_id)
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
         )
         .join(peers, peers.c.chat_id == Chat.id)
         .join(single_peer_chats, single_peer_chats.c.chat_id == Chat.id)
@@ -134,8 +158,8 @@ def get_communication_balance(
             Contact,
             and_(
                 Contact.account_id == Chat.account_id,
-                Contact.platform == TELEGRAM_PLATFORM_ID,
-                Contact.platform_user_id == peers.c.peer_telegram_user_id,
+                Contact.platform == Chat.platform,
+                Contact.platform_user_id == peers.c.peer_platform_user_id,
             ),
         )
         .outerjoin(
@@ -146,8 +170,16 @@ def get_communication_balance(
     )
 
     is_ordinary = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = Message.sender_id.in_(owner_ids)
+    owner_direction = (
+        select(owner_account.id)
+        .where(
+            owner_account.platform == Message.platform,
+            owner_account.platform_user_id == Message.sender_id,
+        )
+        .exists()
+    )
     contact_direction = and_(
+        Message.platform == eligible_pairs.c.platform,
         Message.sender_id == eligible_pairs.c.contact_platform_user_id,
         Message.is_outgoing.is_(False),
     )
@@ -161,12 +193,13 @@ def get_communication_balance(
     statement = (
         select(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             func.min(eligible_pairs.c.contact_id).label("contact_id"),
             func.min(eligible_pairs.c.canonical_identity_id).label(
                 "canonical_identity_id"
             ),
-            eligible_pairs.c.contact_platform_user_id.label("platform_user_id"),
             func.min(eligible_pairs.c.display_name).label("display_name"),
             func.coalesce(
                 func.sum(
@@ -245,11 +278,12 @@ def get_communication_balance(
         )
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
-        .where(Message.platform == TELEGRAM_PLATFORM_ID)
+        .where(Message.platform == eligible_pairs.c.platform)
         .group_by(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
-            eligible_pairs.c.contact_platform_user_id,
         )
         .having(func.count(case((is_ordinary, Message.id))) > 0)
     )
@@ -257,27 +291,35 @@ def get_communication_balance(
     source_rows = db.execute(
         select(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             eligible_pairs.c.account_id,
             eligible_pairs.c.contact_id,
+            eligible_pairs.c.platform,
+            eligible_pairs.c.contact_platform_user_id,
             Account.username.label("account_username"),
             Account.name.label("account_name"),
         ).distinct()
         .join(Account, Account.id == eligible_pairs.c.account_id)
     )
-    source_ids: dict[
-        tuple[int, int | None], tuple[set[int], set[int], set[str]]
-    ] = {}
+    source_ids: dict[tuple[int | None, int | None, int | None, int | None], tuple[set[int], set[int], set[str], set[str], set[str], set[int]]] = {}
     for source_row in source_rows:
         key = (
             source_row.identity_group_id,
+            source_row.canonical_identity_id,
+            source_row.identity_contact_id,
             source_row.identity_source_account_id,
         )
-        accounts, contact_ids, account_labels = source_ids.setdefault(
-            key, (set(), set(), set())
+        accounts, contact_ids, account_labels, platforms, user_ids, identity_ids = source_ids.setdefault(
+            key, (set(), set(), set(), set(), set(), set())
         )
         accounts.add(source_row.account_id)
         contact_ids.add(source_row.contact_id)
+        platforms.add(source_row.platform)
+        user_ids.add(source_row.contact_platform_user_id)
+        if source_row.canonical_identity_id is not None:
+            identity_ids.add(source_row.canonical_identity_id)
         account_labels.add(
             f"@{source_row.account_username}"
             if source_row.account_username
@@ -297,8 +339,20 @@ def get_communication_balance(
         )
         owner_message_count = int(row.owner_message_count)
         contact_message_count = int(row.contact_message_count)
-        source_account_ids, source_contact_ids, source_account_labels = source_ids[
-            (row.identity_group_id, row.identity_source_account_id)
+        (
+            source_account_ids,
+            source_contact_ids,
+            source_account_labels,
+            platforms,
+            platform_user_ids,
+            identity_ids,
+        ) = source_ids[
+            (
+                row.identity_group_id,
+                row.canonical_identity_id,
+                row.identity_contact_id,
+                row.identity_source_account_id,
+            )
         ]
         contacts.append(
             CommunicationBalanceContact(
@@ -308,11 +362,13 @@ def get_communication_balance(
                     else None
                 ),
                 contact_id=row.contact_id,
-                canonical_identity_id=row.canonical_identity_id,
+                canonical_identity_id=min(identity_ids) if identity_ids else None,
+                identity_group_id=row.identity_group_id,
+                platforms=sorted(platforms),
                 source_account_ids=sorted(source_account_ids),
                 source_account_labels=sorted(source_account_labels),
                 source_contact_ids=sorted(source_contact_ids),
-                platform_user_id=row.platform_user_id,
+                platform_user_ids=sorted(platform_user_ids),
                 display_name=row.display_name,
                 owner_message_count=owner_message_count,
                 contact_message_count=contact_message_count,

@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import CanonicalIdentity
-from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import CommunicationTimelineStatistics
 
 from .analytics_communication_timeline_queries import (
@@ -21,8 +20,9 @@ router = APIRouter()
     description=(
         "Returns ordinary-message counts in UTC calendar months across the "
         "combined imported owner history. Pass canonical_identity_id to limit "
-        "the timeline to that Telegram identity in one-to-one personal chats. "
-        "Owner aliases are identified by stored Telegram user IDs. Contact "
+        "the timeline to that identity in one-to-one personal chats; explicitly "
+        "linked platform identities share one timeline. Owner aliases are "
+        "identified by platform-scoped stored user IDs. Contact "
         "direction requires a non-owner sender with is_outgoing=false; when "
         "a selected canonical identity is requested, the sender must also "
         "match that identity's account-local contact mapping. Other direction "
@@ -41,13 +41,12 @@ def get_communication_timeline(
         identity_id = db.scalar(
             select(CanonicalIdentity.id).where(
                 CanonicalIdentity.id == canonical_identity_id,
-                CanonicalIdentity.platform == TELEGRAM_PLATFORM_ID,
             )
         )
         if identity_id is None:
             raise HTTPException(
                 status_code=404,
-                detail="Telegram canonical identity not found.",
+                detail="Canonical identity not found.",
             )
     return build_communication_timeline_statistics(
         db,

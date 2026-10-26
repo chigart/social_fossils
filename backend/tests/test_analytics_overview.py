@@ -83,8 +83,9 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
     assert ChatStatistics.model_validate(chats[0]).model_dump() == {
         "chat_id": 10,
         "account_id": 1,
+        "platform": "telegram",
         "source_account_label": "@anton",
-        "telegram_chat_id": "telegram-chat-10",
+        "platform_chat_id": "telegram-chat-10",
         "title": "No messages",
         "chat_type": "private",
         "total_messages": 0,
@@ -110,12 +111,12 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     first_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
     second_date = datetime(2025, 1, 2, tzinfo=timezone.utc)
     latest_date = datetime(2025, 1, 5, tzinfo=timezone.utc)
-    add_message(db_session, 1, 10, "message", "user-alex", first_date, sender_contact_id=20)
-    add_message(db_session, 2, 10, "service", "user-sam", sender_contact_id=21)
-    add_message(db_session, 3, 10, "message", None, second_date)
+    add_message(db_session, 1, 10, "message", "user-alex", first_date, is_outgoing=False, sender_contact_id=20)
+    add_message(db_session, 2, 10, "service", "user-sam", is_outgoing=False, sender_contact_id=21)
+    add_message(db_session, 3, 10, "message", None, second_date, is_outgoing=False)
     add_message(db_session, 4, 10, "message", "user-owner", is_outgoing=True)
-    add_message(db_session, 5, 10, "service", "user-unlinked", latest_date)
-    add_message(db_session, 6, 11, "message", "user-alex", second_date)
+    add_message(db_session, 5, 10, "service", "user-unlinked", latest_date, is_outgoing=False)
+    add_message(db_session, 6, 11, "message", "user-alex", second_date, is_outgoing=False)
 
     overview = OverviewStatistics.model_validate(get_overview(db_session))
     chats = [ChatStatistics.model_validate(chat) for chat in get_chat_statistics(db_session)]
@@ -133,7 +134,7 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     assert overview.latest_message_timestamp == latest_date
 
     by_chat_id = {chat.chat_id: chat for chat in chats}
-    assert by_chat_id[10].telegram_chat_id == "telegram-chat-10"
+    assert by_chat_id[10].platform_chat_id == "telegram-chat-10"
     assert by_chat_id[10].total_messages == 5
     assert by_chat_id[10].ordinary_messages == 3
     assert by_chat_id[10].service_messages == 2
@@ -142,7 +143,10 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     assert by_chat_id[11].distinct_identified_senders == 1
     assert by_chat_id[12].total_messages == 0
 
-    by_sender = {contact.platform_user_id: contact for contact in contacts}
+    by_sender = {
+        contact.platform_user_ids[0] if contact.platform_user_ids else None: contact
+        for contact in contacts
+    }
     assert set(by_sender) == {"user-alex", "user-sam", "user-unlinked", None}
     assert "contact_id" not in by_sender["user-alex"].model_dump()
     assert by_sender["user-alex"].source_contact_ids == [20]
@@ -156,7 +160,7 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
 def test_nonstandard_message_type_only_contributes_to_total(db_session):
     add_account(db_session, 1, "user-owner")
     add_chat(db_session, 10, 1, "telegram-chat-10")
-    add_message(db_session, 1, 10, "unknown_event", "user-other")
+    add_message(db_session, 1, 10, "unknown_event", "user-other", is_outgoing=False)
 
     overview = get_overview(db_session)
     contact = get_contact_statistics(db_session)[0]
@@ -169,7 +173,32 @@ def test_nonstandard_message_type_only_contributes_to_total(db_session):
     assert contact.service_events_attributed == 0
 
 
-def test_instagram_records_are_excluded_from_telegram_analytics(db_session):
+def test_unidentified_sender_is_not_multiplied_by_idless_contacts(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10")
+    db_session.execute(
+        text(
+            "INSERT INTO contacts (id, account_id, display_name) "
+            "VALUES (20, 1, 'Address-book entry one'), "
+            "(21, 1, 'Address-book entry two')"
+        )
+    )
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        None,
+        is_outgoing=False,
+    )
+
+    contacts = get_contact_statistics(db_session)
+
+    assert sum(contact.total_messages_sent for contact in contacts) == 1
+    assert len([contact for contact in contacts if contact.source_contact_ids]) == 2
+
+
+def test_instagram_records_are_included_in_unified_analytics(db_session):
     db_session.execute(
         text(
             "INSERT INTO account "
@@ -224,22 +253,169 @@ def test_instagram_records_are_excluded_from_telegram_analytics(db_session):
     forgotten = build_forgotten_contacts_statistics(db_session)
     balance = get_communication_balance(db_session)
 
-    assert overview.total_imported_accounts == 0
-    assert overview.total_chats == 0
-    assert overview.total_messages == 0
-    assert get_chat_statistics(db_session) == []
+    assert overview.total_imported_accounts == 1
+    assert overview.total_chats == 1
+    assert overview.total_messages == 1
+    chat = ChatStatistics.model_validate(get_chat_statistics(db_session)[0])
+    assert chat.platform == "instagram"
     instagram_contacts = get_contact_statistics(db_session)
     assert len(instagram_contacts) == 2
     by_name = {contact.display_name: contact for contact in instagram_contacts}
-    assert by_name["Synthetic Instagram peer"].platform == "instagram"
-    assert by_name["Synthetic Instagram peer"].platform_user_id == "instagram-peer"
-    assert by_name["Synthetic Instagram peer"].total_messages_sent == 1
+    assert by_name["Synthetic Instagram peer"].platforms == ["instagram"]
+    assert by_name["Synthetic Instagram peer"].platform_user_ids == ["instagram-peer"]
+    assert by_name["Synthetic Instagram peer"].total_messages_sent == 0
     assert by_name["Synthetic address-book contact"].source_contact_ids == [21]
     assert by_name["Synthetic address-book contact"].total_messages_sent == 0
     assert balance.contacts == []
-    assert get_chat_insights(db_session).chats == []
-    assert timeline.summary.ordinary_message_count == 0
-    assert forgotten.summary.source_account_count == 0
+    chat_insight = get_chat_insights(db_session).chats[0]
+    assert chat_insight.platform == "instagram"
+    assert chat_insight.ordinary_message_count == 1
+    assert chat_insight.senders[0].sender_id == "instagram-peer"
+    assert timeline.summary.ordinary_message_count == 1
+    assert timeline.summary.unknown_direction_message_count == 1
+    assert forgotten.summary.source_account_count == 1
+
+
+def test_explicitly_linked_contact_aggregates_across_platforms(db_session):
+    add_account(db_session, 1, "tg-owner")
+    add_chat(db_session, 10, 1, "tg-chat", chat_type="personal_chat")
+    add_contact(db_session, 11, 1, "tg-peer", "Shared person")
+    telegram_identity_id = db_session.scalar(
+        text(
+            "SELECT id FROM canonical_identities "
+            "WHERE platform = 'telegram' AND platform_user_id = 'tg-peer'"
+        )
+    )
+
+    db_session.execute(
+        text(
+            "INSERT INTO account (id, platform, name, platform_user_id) "
+            "VALUES (2, 'instagram', 'Instagram account', 'ig-owner')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats (id, account_id, platform, chat_id, chat_type) "
+            "VALUES (20, 2, 'instagram', 'ig-chat', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO canonical_identities "
+            "(id, platform, platform_user_id, identity_group_id) "
+            "VALUES (20, 'instagram', 'ig-peer', 77)"
+        )
+    )
+    db_session.execute(
+        text(
+            "UPDATE canonical_identities SET identity_group_id = 77 WHERE id = :id"
+        ),
+        {"id": telegram_identity_id},
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, canonical_identity_id, display_name) "
+            "VALUES (20, 2, 'instagram', 'ig-peer', 20, 'Shared person')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO canonical_identities "
+            "(id, platform, platform_user_id) "
+            "VALUES (21, 'instagram', 'tg-owner')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, canonical_identity_id, display_name) "
+            "VALUES (21, 2, 'instagram', 'tg-owner', 21, 'Shared person')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats (id, account_id, platform, chat_id, chat_type) "
+            "VALUES (21, 2, 'instagram', 'ig-unlinked-chat', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_contact_id, "
+            "is_outgoing, message_type, text_content, raw_payload) "
+            "VALUES (22, 21, 'instagram', '22', 'tg-owner', 21, FALSE, "
+            "'message', 'unlinked', '{}')"
+        )
+    )
+
+    first_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    second_date = datetime(2025, 1, 2, tzinfo=timezone.utc)
+    add_message(
+        db_session, 1, 10, "message", "tg-owner", first_date,
+        is_outgoing=True, text_content="o" * 250,
+    )
+    add_message(
+        db_session, 2, 10, "message", "tg-peer", first_date,
+        is_outgoing=False, sender_contact_id=11, text_content="p" * 250,
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_contact_id, "
+            "is_outgoing, message_date, message_type, text_content, raw_payload) "
+            "VALUES "
+            "(20, 20, 'instagram', '20', 'ig-owner', NULL, TRUE, :message_date, "
+            "'message', :owner_text, '{}'), "
+            "(21, 20, 'instagram', '21', 'ig-peer', 20, FALSE, :message_date, "
+            "'message', :peer_text, '{}')"
+        ),
+        {
+            "message_date": second_date,
+            "owner_text": "o" * 250,
+            "peer_text": "p" * 250,
+        },
+    )
+
+    all_contacts = get_contact_statistics(db_session)
+    contact = next(
+        item
+        for item in all_contacts
+        if item.identity_group_id == 77
+    )
+    unlinked_same_name = next(
+        item
+        for item in all_contacts
+        if item.display_name == "Shared person" and item.identity_group_id is None
+    )
+    timeline = build_communication_timeline_statistics(
+        db_session,
+        canonical_identity_id=telegram_identity_id,
+    )
+    balance = CommunicationBalanceStatistics.model_validate(
+        get_communication_balance(db_session)
+    )
+
+    assert contact.platforms == ["instagram", "telegram"]
+    assert contact.platform_user_ids == ["ig-peer", "tg-peer"]
+    assert contact.source_account_ids == [1, 2]
+    assert [
+        (source.platform, source.label) for source in contact.source_accounts
+    ] == [("instagram", "Instagram account"), ("telegram", "Account 1")]
+    assert contact.total_messages_sent == 2
+    assert unlinked_same_name.platforms == ["instagram"]
+    assert unlinked_same_name.platform_user_ids == ["tg-owner"]
+    assert unlinked_same_name.total_messages_sent == 1
+    assert timeline.summary.ordinary_message_count == 4
+    assert timeline.summary.owner_message_count == 2
+    assert timeline.summary.contact_message_count == 2
+    assert timeline.summary.source_account_ids == [1, 2]
+    linked_balance = next(
+        item for item in balance.contacts if item.identity_group_id == 77
+    )
+    assert linked_balance.total_message_count == 4
+    assert linked_balance.owner_text_length == 500
+    assert linked_balance.contact_text_length == 500
 
 def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_session):
     add_account(
@@ -257,12 +433,12 @@ def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_sessi
     add_contact(db_session, 21, 1, "user-twin-one", "Twin")
     add_contact(db_session, 31, 2, "user-twin-two", "Twin")
 
-    add_message(db_session, 1, 10, "message", "user-shared-peer")
-    add_message(db_session, 2, 20, "message", "user-shared-peer")
-    add_message(db_session, 3, 10, "message", "user-twin-one")
-    add_message(db_session, 4, 20, "message", "user-twin-two")
-    add_message(db_session, 5, 10, "message", "user-unlinked")
-    add_message(db_session, 6, 20, "message", "user-unlinked")
+    add_message(db_session, 1, 10, "message", "user-shared-peer", is_outgoing=False)
+    add_message(db_session, 2, 20, "message", "user-shared-peer", is_outgoing=False)
+    add_message(db_session, 3, 10, "message", "user-twin-one", is_outgoing=False)
+    add_message(db_session, 4, 20, "message", "user-twin-two", is_outgoing=False)
+    add_message(db_session, 5, 10, "message", "user-unlinked", is_outgoing=False)
+    add_message(db_session, 6, 20, "message", "user-unlinked", is_outgoing=False)
     add_message(
         db_session,
         7,
@@ -273,20 +449,33 @@ def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_sessi
     )
 
     contacts = get_contact_statistics(db_session)
-    shared = next(contact for contact in contacts if contact.platform_user_id == "user-shared-peer")
+    shared = next(
+        contact
+        for contact in contacts
+        if "user-shared-peer" in contact.platform_user_ids
+    )
     twins = [contact for contact in contacts if contact.display_name == "Twin"]
-    unlinked = [contact for contact in contacts if contact.platform_user_id == "user-unlinked"]
+    unlinked = [
+        contact
+        for contact in contacts
+        if "user-unlinked" in contact.platform_user_ids
+    ]
 
     assert shared.total_messages_sent == 2
     assert shared.source_account_ids == [1, 2]
     assert shared.source_account_labels == ["@anton", "Anton Malkov"]
+    assert [
+        (source.platform, source.label) for source in shared.source_accounts
+    ] == [("telegram", "@anton"), ("telegram", "Anton Malkov")]
     assert shared.source_contact_ids == [20, 30]
     assert shared.account_id is None
     assert len(twins) == 2
-    assert {contact.platform_user_id for contact in twins} == {
+    assert {contact.platform_user_ids[0] for contact in twins} == {
         "user-twin-one",
         "user-twin-two",
     }
     assert len(unlinked) == 2
     assert {contact.account_id for contact in unlinked} == {1, 2}
-    assert all(contact.platform_user_id != "user-owner-two" for contact in contacts)
+    assert all(
+        "user-owner-two" not in contact.platform_user_ids for contact in contacts
+    )

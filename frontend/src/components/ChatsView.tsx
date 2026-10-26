@@ -80,7 +80,7 @@ export function ChatsView({
           <p className={emptyStateTextClassName}>
             {hasImportedAccounts
               ? "No chats were included in the imported account data."
-              : "Import a Telegram export to see chat statistics."}
+              : "Import a messaging export to see chat statistics."}
           </p>
         </div>
       )}
@@ -134,7 +134,7 @@ export function ChatsView({
                   </td>
                   <td className={tableCellClassName}>
                     <PlatformAccountBadge
-                      platform="telegram"
+                      platform={chat.platform}
                       accountLabel={chat.source_account_label}
                     />
                   </td>

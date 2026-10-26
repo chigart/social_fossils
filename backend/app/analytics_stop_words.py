@@ -40,11 +40,11 @@ ENGLISH_STOP_WORDS = frozenset(
     every everyone everything everywhere except few fifteen fifty fill find
     fire first five former formerly forty found four front full get give go
     hadnt hasnt havent hence herein hereby herein hereupon however hundred ie
-    inc indeed interest instead keep last latter latterly least less ltd many
-    may meanwhile mill mine moreover mostly move much must name neither never
+    inc indeed interest instead keep last latter latterly least less liked ltd many
+    may meanwhile message mill mine moreover mostly move much must name neither never
     nevertheless next nine ninety nobody none noone nothing nowhere now
     nowhere often other others otherwise our ours outside part per perhaps
-    please put rather re same see seem seemed seeming seems serious several
+    please put rather re reacted same see seem seemed seeming seems serious several
     seventeen seventy six sixty somehow someone something sometime sometimes
     somewhere still thence thereafter thereby therefore therein thereof
     thereupon thirty three throughout thru thus top toward towards twelve
