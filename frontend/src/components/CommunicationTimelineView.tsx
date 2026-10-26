@@ -309,9 +309,7 @@ export function CommunicationTimelineView({
             {data.summary.source_account_labels.length > 0 && (
               <>
                 {" · "}
-                {data.summary.source_account_labels.map((label) => (
-                  <span key={label}>{label}</span>
-                ))}
+                {data.summary.source_account_labels.join(", ")}
               </>
             )}
           </p>

@@ -30,6 +30,24 @@ function renderTimeline(
 }
 
 describe("CommunicationTimelineView", () => {
+  it("separates multiple source account labels in the scope summary", () => {
+    renderTimeline({
+      data: {
+        ...timeline,
+        summary: {
+          ...timeline.summary,
+          source_account_count: 2,
+          source_account_ids: [1, 2],
+          source_account_labels: ["@first", "@second"],
+        },
+      },
+      error: null,
+      loading: false,
+    });
+
+    expect(screen.getByText(/@first, @second/)).toBeInTheDocument();
+  });
+
   it("exposes month totals, gaps, active days, and direction uncertainty", () => {
     renderTimeline();
 

@@ -103,6 +103,7 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
         .group_by(
             Chat.id,
             Chat.account_id,
+            Chat.platform,
             Account.username,
             Account.name,
             Chat.chat_id,

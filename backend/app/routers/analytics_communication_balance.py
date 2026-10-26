@@ -197,9 +197,6 @@ def get_communication_balance(
             eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             func.min(eligible_pairs.c.contact_id).label("contact_id"),
-            func.min(eligible_pairs.c.canonical_identity_id).label(
-                "canonical_identity_id"
-            ),
             func.min(eligible_pairs.c.display_name).label("display_name"),
             func.coalesce(
                 func.sum(
