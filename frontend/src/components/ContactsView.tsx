@@ -6,9 +6,6 @@ import {
   emptyStateTextClassName,
   emptyStateTitleClassName,
   numericTableCellClassName,
-  screenReaderOnlyClassName,
-  searchInputClassName,
-  searchLabelClassName,
   sectionClassName,
   sectionEyebrowClassName,
   sectionHeaderClassName,
@@ -23,6 +20,7 @@ import {
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
+import { SearchPicker } from "./SearchPicker";
 
 export function ContactsView({
   contacts,
@@ -57,18 +55,29 @@ export function ContactsView({
           </h2>
         </div>
         {contacts.data && contacts.data.length > 0 && (
-          <label className={searchLabelClassName}>
-            <span className={screenReaderOnlyClassName}>
-              Search contacts by display name
-            </span>
-            <input
-              className={searchInputClassName}
-              type="search"
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search display names"
-            />
-          </label>
+          <SearchPicker
+            label="Choose a contact"
+            value={search}
+            options={contacts.data
+              .map((contact, index) => ({ contact, index }))
+              .filter(({ contact }) =>
+                contact.display_name?.trim() || contact.platform_user_ids.length > 0
+              )
+              .map(({ contact, index }) => ({
+                value: String(index),
+                label: contact.display_name?.trim() || "Unnamed contact",
+                platforms: contact.platforms,
+                searchTerms: [
+                  ...contact.platform_user_ids,
+                  ...contact.source_account_labels,
+                ],
+              }))}
+            onChange={onSearchChange}
+            placeholder="All contacts"
+            searchPlaceholder="Search contact name or ID"
+            allLabel="All contacts"
+            emptyMessage="No contacts match these filters."
+          />
         )}
       </div>
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
@@ -95,9 +104,7 @@ export function ContactsView({
       {contacts.data && contacts.data.length > 0 && visibleContacts.length === 0 && (
         <div className={`${emptyStateClassName} p-4`}>
           <p className={emptyStateTextClassName}>
-            {search.trim()
-              ? `No display names match “${search}”.`
-              : "No identified contacts are available."}
+            No contacts match the selected contact.
           </p>
         </div>
       )}

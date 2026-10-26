@@ -11,7 +11,7 @@ import {
 import type { Resource } from "../types";
 import { Button } from "./Button";
 import { LoadingMessage, SectionError } from "./Feedback";
-import { IdentityPicker } from "./IdentityPicker";
+import { SearchPicker } from "./SearchPicker";
 import { useIdentityLinks } from "./useIdentityLinks";
 
 export function IdentityLinksView({
@@ -82,17 +82,25 @@ export function IdentityLinksView({
               Link or extend an identity group
             </h3>
             <div className="flex flex-wrap items-end gap-3">
-              <IdentityPicker
+              <SearchPicker
                 label="First platform identity"
                 value={firstIdentityId}
                 options={identityOptions}
                 onChange={setFirstIdentityId}
+                placeholder="Select identity"
+                searchPlaceholder="Search name, username, or ID"
+                allLabel="Select identity"
+                emptyMessage="No identities match these filters."
               />
-              <IdentityPicker
+              <SearchPicker
                 label="Second platform identity"
                 value={secondIdentityId}
                 options={identityOptions}
                 onChange={setSecondIdentityId}
+                placeholder="Select identity"
+                searchPlaceholder="Search name, username, or ID"
+                allLabel="Select identity"
+                emptyMessage="No identities match these filters."
               />
               <Button
                 variant="positive"

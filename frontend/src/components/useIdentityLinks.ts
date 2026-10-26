@@ -5,7 +5,7 @@ import type {
 } from "../api";
 import { PLATFORM_ACCOUNT_PREFIXES } from "../platforms";
 import type { Resource } from "../types";
-import type { IdentityPickerOption } from "./IdentityPicker";
+import type { SearchPickerOption } from "./SearchPicker";
 
 function identityLabel(identity: PlatformIdentity | undefined): string {
   if (!identity) return "Unknown identity";
@@ -110,9 +110,17 @@ export function useIdentityLinks(
   }
 
   const identityOptions = identities.map((identity) => ({
-    identity,
-    label: identityLabel(identity),
-  })) satisfies IdentityPickerOption[];
+    value: String(identity.identity_id),
+    label: `${
+      PLATFORM_ACCOUNT_PREFIXES[identity.platform.toLowerCase()] ??
+      identity.platform.slice(0, 2).toUpperCase()
+    }: ${identityLabel(identity)} (${identity.platform_user_id})`,
+    platforms: [identity.platform],
+    searchTerms: [
+      identity.platform_user_id,
+      ...identity.contacts.map((contact) => contact.username ?? ""),
+    ],
+  })) satisfies SearchPickerOption[];
   const suggestedLinks = identities.flatMap((identity, index) => {
     const fullName = identityFullName(identity);
     if (!fullName || identity.identity_group_id !== null) return [];

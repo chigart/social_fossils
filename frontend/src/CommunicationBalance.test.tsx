@@ -160,7 +160,7 @@ describe("communication balance dashboard", () => {
     expect(balanceRegion).toHaveTextContent("Last seen");
   });
 
-  it("filters contacts by API classification and searches display names", async () => {
+  it("filters contacts by classification and applies the selected name", async () => {
     const user = userEvent.setup();
     await renderBalanceDashboard();
     const balanceRegion = screen.getByRole("region", {
@@ -176,10 +176,27 @@ describe("communication balance dashboard", () => {
     expect(within(balanceRegion).queryByRole("row", { name: /Alex/ })).not.toBeInTheDocument();
 
     await user.selectOptions(classificationFilter, "all");
-    const search = within(balanceRegion).getByRole("searchbox", {
-      name: "Search balance contacts by display name",
-    });
-    await user.type(search, "  cOrA ");
+    const table = within(balanceRegion).getByRole("table");
+    const originalRows = within(table).getAllByRole("row").length;
+    await user.click(
+      within(balanceRegion).getByRole("button", {
+        name: "Choose a balance contact",
+      }),
+    );
+    await user.type(
+      within(balanceRegion).getByRole("searchbox", {
+        name: "Choose a balance contact search",
+      }),
+      "cOrA",
+    );
+    expect(within(table).getAllByRole("row")).toHaveLength(originalRows);
+    await user.click(
+      within(
+        screen.getByRole("listbox", {
+          name: "Choose a balance contact options",
+        }),
+      ).getByRole("option", { name: /Cora/ }),
+    );
     expect(within(balanceRegion).getAllByRole("row")).toHaveLength(2);
     expect(within(balanceRegion).getByRole("row", { name: /Cora/ })).toBeInTheDocument();
   });
@@ -292,8 +309,8 @@ describe("communication balance dashboard", () => {
       within(balanceRegion).getByRole("combobox", { name: "Sort direction" }),
     ).toBeVisible();
     expect(
-      within(balanceRegion).getByRole("searchbox", {
-        name: "Search balance contacts by display name",
+      within(balanceRegion).getByRole("button", {
+        name: "Choose a balance contact",
       }),
     ).toBeVisible();
   });

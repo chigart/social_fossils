@@ -4,9 +4,6 @@ import {
   emptyStateClassName,
   emptyStateTextClassName,
   emptyStateTitleClassName,
-  screenReaderOnlyClassName,
-  searchInputClassName,
-  searchLabelClassName,
   sectionClassName,
   sectionEyebrowClassName,
   sectionHeaderClassName,
@@ -23,6 +20,7 @@ import {
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
+import { SearchPicker } from "./SearchPicker";
 
 type ChatSort = {
   key: "title" | "total_messages";
@@ -60,16 +58,25 @@ export function ChatsView({
           <h2 id="chats-title" className={sectionTitleClassName}>Chats</h2>
         </div>
         {chats.data && (
-          <label className={searchLabelClassName}>
-            <span className={screenReaderOnlyClassName}>Search chats by title</span>
-            <input
-              className={searchInputClassName}
-              type="search"
-              value={search}
-              onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Search chat titles"
-            />
-          </label>
+          <SearchPicker
+            label="Choose a chat"
+            value={search}
+            options={chats.data.map((chat) => ({
+              value: String(chat.chat_id),
+              label: chat.title || "Untitled chat",
+              platforms: [chat.platform],
+              searchTerms: [
+                chat.platform_chat_id,
+                chat.chat_type,
+                chat.source_account_label,
+              ],
+            }))}
+            onChange={onSearchChange}
+            placeholder="All chats"
+            searchPlaceholder="Search chat title or ID"
+            allLabel="All chats"
+            emptyMessage="No chats match these filters."
+          />
         )}
       </div>
       {chats.loading && chats.data === null && <LoadingMessage />}
@@ -87,7 +94,7 @@ export function ChatsView({
       {chats.data && chats.data.length > 0 && visibleChats.length === 0 && (
         <div className={`${emptyStateClassName} p-4`}>
           <p className={emptyStateTextClassName}>
-            No chats match “{search}”. Try a different title.
+            No chats match the selected chat.
           </p>
         </div>
       )}

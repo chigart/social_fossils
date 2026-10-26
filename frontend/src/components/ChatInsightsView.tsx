@@ -2,7 +2,6 @@ import type {
   ChatInsightsResponse,
   CommunicationTimelineStatistics,
 } from "../api";
-import { formatNumber } from "../format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -16,8 +15,11 @@ import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
 import { CommunicationTimelineView } from "./CommunicationTimelineView";
-import { PlatformAccountBadge } from "./PlatformAccountBadge";
-import { useChatInsights } from "./useChatInsights";
+import {
+  getSelectedChatInsights,
+  sortChatInsightsChats,
+} from "./chatInsightsUtils";
+import { SearchPicker } from "./SearchPicker";
 
 export function ChatInsightsView({
   insights,
@@ -31,18 +33,13 @@ export function ChatInsightsView({
   insights: Resource<ChatInsightsResponse>;
   timeline: Resource<CommunicationTimelineStatistics>;
   selectedChatId: number | null;
-  onChatChange: (chatId: number) => void;
+  onChatChange: (chatId: number | null) => void;
   noImportedData: boolean | undefined;
   onRetryInsights: () => void;
   onRetryTimeline: () => void;
 }) {
-  const {
-    chatSearch,
-    trimmedChatSearch,
-    onChatSearchChange,
-    matchingChats,
-    selectedChat,
-  } = useChatInsights(insights, selectedChatId);
+  const sortedChats = sortChatInsightsChats(insights.data?.chats ?? []);
+  const selectedChat = getSelectedChatInsights(sortedChats, selectedChatId);
   const timelineMatchesSelectedChat =
     selectedChat !== undefined &&
     timeline.data?.summary.chat_id === selectedChat.chat_id;
@@ -70,57 +67,27 @@ export function ChatInsightsView({
         </div>
         {insights.data && insights.data.chats.length > 0 && (
           <div className="w-full max-w-[420px]">
-            <label className="sr-only" htmlFor="chat-insights-search">
-              Search chats by title
-            </label>
-            <input
-              id="chat-insights-search"
-              className="w-full rounded-md border border-border-subtle bg-surface px-3 py-2 text-small text-ink"
-              type="search"
-              placeholder="Search chats"
-              value={chatSearch}
-              onChange={(event) => onChatSearchChange(event.target.value)}
+            <SearchPicker
+              label="Choose an insight chat"
+              value={selectedChat ? String(selectedChat.chat_id) : ""}
+              options={sortedChats.map((chat) => ({
+                value: String(chat.chat_id),
+                label: chat.title || "Untitled chat",
+                platforms: [chat.platform],
+                searchTerms: [
+                  chat.chat_type,
+                  chat.source_account_label,
+                  String(chat.chat_id),
+                ],
+              }))}
+              onChange={(value) =>
+                onChatChange(value === "" ? null : Number(value))
+              }
+              placeholder="Select a chat"
+              searchPlaceholder="Search chat title or ID"
+              allLabel="Default chat"
+              emptyMessage="No chats match these filters."
             />
-            <div
-              className="mt-2 max-h-56 overflow-y-auto rounded-md border border-border-subtle bg-surface"
-              role="group"
-              aria-label="Matching chats"
-            >
-              {matchingChats.map((chat) => (
-                <button
-                  className={`flex w-full items-center justify-between gap-3 border-0 border-b border-border-subtle px-3 py-2 text-left last:border-b-0 hover:bg-surface-muted focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-[-3px] ${
-                    selectedChat?.chat_id === chat.chat_id
-                      ? "bg-surface-brand text-brand-strong"
-                      : "bg-surface text-ink"
-                  }`}
-                  key={chat.chat_id}
-                  type="button"
-                  aria-pressed={selectedChat?.chat_id === chat.chat_id}
-                  onClick={() => onChatChange(chat.chat_id)}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-small font-semibold">
-                      {chat.title || "Untitled chat"}
-                    </span>
-                    <span className="block truncate text-caption text-ink-muted">
-                      {chat.chat_type} ·{" "}
-                      <PlatformAccountBadge
-                        platform={chat.platform}
-                        accountLabel={chat.source_account_label}
-                      />
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-caption">
-                    {formatNumber(chat.ordinary_message_count)} messages
-                  </span>
-                </button>
-              ))}
-              {matchingChats.length === 0 && (
-                <p className="m-0 px-3 py-3 text-small text-ink-muted">
-                  No chats match “{trimmedChatSearch}”.
-                </p>
-              )}
-            </div>
           </div>
         )}
       </div>

@@ -21,6 +21,7 @@ import {
   type BalanceSortKey,
   sortCommunicationBalanceContacts,
 } from "./communicationBalanceUtils";
+import type { SearchPickerOption } from "./SearchPicker";
 
 export { sortCommunicationBalanceContacts };
 export type { BalanceSortKey };
@@ -92,6 +93,15 @@ export function CommunicationBalanceView({
           <CommunicationBalanceControls
             search={search}
             onSearchChange={onSearchChange}
+            searchOptions={balance.data.contacts.map((contact, index) => ({
+              value: String(index),
+              label: contact.display_name || "Unnamed contact",
+              platforms: contact.platforms,
+              searchTerms: [
+                ...contact.platform_user_ids,
+                ...contact.source_account_labels,
+              ],
+            } satisfies SearchPickerOption))}
             classification={classification}
             onClassificationChange={onClassificationChange}
             sortKey={sortKey}

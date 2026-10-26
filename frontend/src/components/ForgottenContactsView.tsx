@@ -8,8 +8,6 @@ import {
   emptyStateTextClassName,
   emptyStateTitleClassName,
   numericTableCellClassName,
-  searchInputClassName,
-  searchLabelClassName,
   sectionClassName,
   sectionEyebrowClassName,
   sectionHeaderClassName,
@@ -23,6 +21,7 @@ import {
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
 import { LoadingMessage, MetricCard, SectionError, SortButton } from "./Feedback";
+import { SearchPicker } from "./SearchPicker";
 
 export const forgottenClassificationLabels = {
   inactive: "Inactive",
@@ -206,16 +205,24 @@ export function ForgottenContactsView({
         </div>
         {forgotten.data && forgotten.data.contacts.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
-            <label className={searchLabelClassName}>
-              <span className="sr-only">Search forgotten contacts</span>
-              <input
-                className={searchInputClassName}
-                type="search"
-                value={search}
-                onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search contacts"
-              />
-            </label>
+            <SearchPicker
+              label="Choose a forgotten contact"
+              value={search}
+              options={forgotten.data.contacts.map((contact, index) => ({
+                value: String(index),
+                label: contact.display_name || "Unnamed contact",
+                platforms: contact.platforms,
+                searchTerms: [
+                  ...contact.platform_user_ids,
+                  ...contact.source_account_labels,
+                ],
+              }))}
+              onChange={onSearchChange}
+              placeholder="All contacts"
+              searchPlaceholder="Search contact name or ID"
+              allLabel="All contacts"
+              emptyMessage="No contacts match these filters."
+            />
             <div className="flex items-center gap-3 text-small text-ink-muted">
               <SortButton
                 label="Rank"

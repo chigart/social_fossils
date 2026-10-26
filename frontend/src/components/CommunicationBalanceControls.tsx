@@ -4,16 +4,14 @@ import {
   classificationLabels,
   type BalanceSortKey,
 } from "./communicationBalanceUtils";
-import {
-  screenReaderOnlyClassName,
-  searchInputClassName,
-  searchLabelClassName,
-} from "../styles";
+import { screenReaderOnlyClassName } from "../styles";
 import type { SortDirection } from "../types";
+import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function CommunicationBalanceControls({
   search,
   onSearchChange,
+  searchOptions,
   classification,
   onClassificationChange,
   sortKey,
@@ -23,6 +21,7 @@ export function CommunicationBalanceControls({
 }: {
   search: string;
   onSearchChange: (value: string) => void;
+  searchOptions: SearchPickerOption[];
   classification: CommunicationBalanceClassification | "all";
   onClassificationChange: (
     value: CommunicationBalanceClassification | "all",
@@ -34,18 +33,16 @@ export function CommunicationBalanceControls({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
-      <label className={searchLabelClassName}>
-        <span className={screenReaderOnlyClassName}>
-          Search balance contacts by display name
-        </span>
-        <input
-          className={searchInputClassName}
-          type="search"
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Search contacts"
-        />
-      </label>
+      <SearchPicker
+        label="Choose a balance contact"
+        value={search}
+        options={searchOptions}
+        onChange={onSearchChange}
+        placeholder="All contacts"
+        searchPlaceholder="Search contact name or ID"
+        allLabel="All contacts"
+        emptyMessage="No contacts match these filters."
+      />
       <label className="text-small text-ink-muted">
         <span className={screenReaderOnlyClassName}>Filter by classification</span>
         <select

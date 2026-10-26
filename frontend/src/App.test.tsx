@@ -917,10 +917,11 @@ describe("dashboard", () => {
     expect(
       screen.getByRole("heading", { name: "Chat insights" }),
     ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));
     expect(
-      within(screen.getByRole("group", { name: "Matching chats" })).getAllByRole(
-        "button",
-      ),
+      within(
+        screen.getByRole("listbox", { name: "Choose an insight chat options" }),
+      ).getAllByRole("option"),
     ).toHaveLength(2);
     const messageShare = screen.getByRole("region", {
       name: "Share of messages by person",
@@ -1097,10 +1098,9 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
 
     await user.click(
-      within(screen.getByRole("group", { name: "Matching chats" })).getByRole(
-        "button",
-        { name: /One-to-one chat/ },
-      ),
+      within(
+        screen.getByRole("listbox", { name: "Choose an insight chat options" }),
+      ).getByRole("option", { name: /One-to-one chat/ }),
     );
     expect(
       within(screen.getByRole("region", { name: "Chat insights" }))
@@ -1146,7 +1146,7 @@ describe("dashboard", () => {
     expect(textShare).toHaveTextContent("30 characters · 3.8%");
   });
 
-  it("sorts insight chats by message count and searches their titles", async () => {
+  it("sorts insight chat choices and applies selection only after choosing one", async () => {
     const user = userEvent.setup();
     api.getChatInsights.mockResolvedValue({
       chats: [
@@ -1173,23 +1173,30 @@ describe("dashboard", () => {
     await renderLoadedDashboard();
     await selectDashboardTab("Conversation insights");
 
-    const matchingChats = screen.getByRole("group", { name: "Matching chats" });
-    const optionLabels = within(matchingChats)
-      .getAllByRole("button")
+    const chooser = screen.getByRole("button", { name: "Choose an insight chat" });
+    await user.click(chooser);
+    const options = within(
+      screen.getByRole("listbox", { name: "Choose an insight chat options" }),
+    );
+    const optionLabels = options
+      .getAllByRole("option")
       .map((option) => option.textContent);
     expect(optionLabels[0]).toContain("Most active chat");
-    expect(optionLabels[0]).toContain("30 messages");
     expect(optionLabels[1]).toContain("Medium chat");
     expect(optionLabels[2]).toContain("One-to-one chat");
 
     await user.type(
-      screen.getByRole("searchbox", { name: "Search chats by title" }),
+      screen.getByRole("searchbox", { name: "Choose an insight chat search" }),
       "one-to-one",
     );
-    const filteredResults = within(matchingChats).getAllByRole("button");
+    const filteredResults = options.getAllByRole("option");
     expect(filteredResults).toHaveLength(1);
     expect(filteredResults[0]).toHaveTextContent("One-to-one chat");
-    expect(filteredResults[0]).toHaveTextContent("5 messages");
+    expect(
+      within(screen.getByRole("region", { name: "Chat insights" }))
+        .getByRole("heading", { name: "Ordinary messages" })
+        .closest("article"),
+    ).toHaveTextContent("30");
     await user.click(filteredResults[0]);
 
     expect(
@@ -1198,11 +1205,7 @@ describe("dashboard", () => {
         .closest("article"),
     ).toHaveTextContent("5");
 
-    const filteredLabels = within(matchingChats)
-      .getAllByRole("button")
-      .map((option) => option.textContent);
-    expect(filteredLabels).toHaveLength(1);
-    expect(filteredLabels[0]).toContain("One-to-one chat");
+    expect(chooser).toHaveTextContent("One-to-one chat");
   });
 
   it("shows loading status while all analytics requests are pending", () => {
@@ -1306,55 +1309,60 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
   });
 
-  it("filters chats and contacts by case-insensitive, trimmed search text", async () => {
+  it("filters chats and contacts only after choosing a matching name", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
 
     await selectDashboardTab("Chats");
+    const chatsRegion = screen.getByRole("region", { name: "Chats" });
+    const chatsTable = within(chatsRegion).getByRole("table");
+    await user.click(within(chatsRegion).getByRole("button", { name: "Choose a chat" }));
     await user.type(
-      screen.getByRole("searchbox", { name: "Search chats by title" }),
+      within(chatsRegion).getByRole("searchbox", { name: "Choose a chat search" }),
       "  AURORA ",
     );
-    const chatsRegion = screen.getByRole("region", { name: "Chats" });
+    expect(rowTitles(chatsTable)).toHaveLength(chats.length);
+    await user.click(
+      within(
+        screen.getByRole("listbox", { name: "Choose a chat options" }),
+      ).getByRole("option", { name: /Aurora group/ }),
+    );
     expect(within(chatsRegion).getByRole("row", { name: /Aurora group/ })).toBeInTheDocument();
     expect(within(chatsRegion).queryByRole("row", { name: /Zebra group/ })).not.toBeInTheDocument();
 
     await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
+    const contactsTable = within(contactsRegion).getByRole("table");
+    const rowCount = within(contactsTable).getAllByRole("row").length;
+    await user.click(within(contactsRegion).getByRole("button", { name: "Choose a contact" }));
     await user.type(
-      within(contactsRegion).getByRole("searchbox", {
-        name: "Search contacts by display name",
-      }),
+      within(contactsRegion).getByRole("searchbox", { name: "Choose a contact search" }),
       "  mORGAN ",
+    );
+    expect(within(contactsTable).getAllByRole("row")).toHaveLength(rowCount);
+    await user.click(
+      within(
+        screen.getByRole("listbox", { name: "Choose a contact options" }),
+      ).getByRole("option", { name: /Morgan/ }),
     );
     expect(within(contactsRegion).getByRole("row", { name: /Morgan/ })).toBeInTheDocument();
     expect(within(contactsRegion).queryByRole("row", { name: /Avery/ })).not.toBeInTheDocument();
-
-    const contactSearch = within(contactsRegion).getByRole("searchbox", {
-      name: "Search contacts by display name",
-    });
-    await user.clear(contactSearch);
-    await user.type(contactSearch, "missing");
-    expect(
-      await within(contactsRegion).findByText(
-        "No display names match “missing”.",
-      ),
-    ).toBeInTheDocument();
   });
 
-  it("shows a no-match message when a chat search returns no results", async () => {
+  it("shows no matching options without filtering the page while typing", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
     await selectDashboardTab("Chats");
 
+    const region = screen.getByRole("region", { name: "Chats" });
+    const originalRows = rowTitles(within(region).getByRole("table"));
+    await user.click(within(region).getByRole("button", { name: "Choose a chat" }));
     await user.type(
-      screen.getByRole("searchbox", { name: "Search chats by title" }),
+      within(region).getByRole("searchbox", { name: "Choose a chat search" }),
       "missing",
     );
-
-    expect(
-      await screen.findByText("No chats match “missing”. Try a different title."),
-    ).toBeInTheDocument();
+    expect(within(region).getByText("No chats match these filters.")).toBeInTheDocument();
+    expect(rowTitles(within(region).getByRole("table"))).toEqual(originalRows);
   });
 
   it("sorts chats by message count by default and toggles title sort direction", async () => {
@@ -1495,9 +1503,15 @@ describe("dashboard", () => {
 
     await user.click(within(region).getByRole("button", { name: "Sort by Name" }));
     expect(rowTitles(table)).toEqual(["Lena", "Mika", "Zoe"]);
-    await user.type(
-      within(region).getByRole("searchbox", { name: "Search forgotten contacts" }),
-      "zoe",
+    await user.click(within(region).getByRole("button", {
+      name: "Choose a forgotten contact",
+    }));
+    await user.click(
+      within(
+        screen.getByRole("listbox", {
+          name: "Choose a forgotten contact options",
+        }),
+      ).getByRole("option", { name: /Zoe/ }),
     );
     expect(rowTitles(table)).toEqual(["Zoe"]);
   });
@@ -1527,12 +1541,17 @@ describe("dashboard", () => {
       within(region).getByText(/insufficient history or ambiguous message direction/),
     ).toBeInTheDocument();
     expect(within(region).getByText("Insufficient history")).toBeInTheDocument();
+    await user.click(within(region).getByRole("button", {
+      name: "Choose a forgotten contact",
+    }));
     await user.type(
-      within(region).getByRole("searchbox", { name: "Search forgotten contacts" }),
+      within(region).getByRole("searchbox", {
+        name: "Choose a forgotten contact search",
+      }),
       "nobody",
     );
     expect(
-      within(region).getByText("No contacts match the selected search."),
+      within(region).getByText("No contacts match these filters."),
     ).toBeInTheDocument();
   });
 
@@ -1626,8 +1645,8 @@ describe("dashboard", () => {
       name: "Communication timeline",
     });
     expect(
-      screen.getAllByRole("searchbox", { name: "Search chats by title" }),
-    ).toHaveLength(1);
+      screen.getByRole("button", { name: "Choose an insight chat" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Timeline scope" }),
     ).not.toBeInTheDocument();
@@ -1666,11 +1685,11 @@ describe("dashboard", () => {
       orderedHeadings.indexOf("Share of messages by person (top 10 senders)"),
     );
 
+    await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));
     await user.click(
-      within(screen.getByRole("group", { name: "Matching chats" })).getByRole(
-        "button",
-        { name: /One-to-one chat/ },
-      ),
+      within(
+        screen.getByRole("listbox", { name: "Choose an insight chat options" }),
+      ).getByRole("option", { name: /One-to-one chat/ }),
     );
 
     expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, undefined, 11);

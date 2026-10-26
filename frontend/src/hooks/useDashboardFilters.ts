@@ -61,11 +61,7 @@ export function useDashboardFilters({
   };
 
   const visibleChats = (chats.data ?? [])
-    .filter((chat) =>
-      (chat.title ?? "Untitled chat")
-        .toLocaleLowerCase()
-        .includes(chatSearch.trim().toLocaleLowerCase()),
-    )
+    .filter((chat) => chatSearch === "" || String(chat.chat_id) === chatSearch)
     .sort((left, right) => {
       const comparison =
         chatSort.key === "title"
@@ -75,15 +71,15 @@ export function useDashboardFilters({
     });
 
   const visibleContacts = (contacts.data ?? [])
+    .map((contact, index) => ({ contact, index }))
     .filter(
-      (contact) =>
+      ({ contact }) =>
         contact.display_name?.trim() || contact.platform_user_ids.length > 0,
     )
-    .filter((contact) =>
-      (contact.display_name ?? "")
-        .toLocaleLowerCase()
-        .includes(contactSearch.trim().toLocaleLowerCase()),
+    .filter(({ index }) =>
+      contactSearch === "" || String(index) === contactSearch,
     )
+    .map(({ contact }) => contact)
     .sort(
       (left, right) =>
         (contactSortDirection === "asc" ? 1 : -1) *
@@ -92,10 +88,8 @@ export function useDashboardFilters({
 
   const visibleBalanceContacts = sortCommunicationBalanceContacts(
     (balance.data?.contacts ?? [])
-      .filter((contact) =>
-        (contact.display_name ?? "")
-          .toLocaleLowerCase()
-          .includes(balanceSearch.trim().toLocaleLowerCase()),
+      .filter((_, index) =>
+        balanceSearch === "" || String(index) === balanceSearch,
       )
       .filter(
         (contact) =>
@@ -107,10 +101,8 @@ export function useDashboardFilters({
   );
 
   const visibleForgottenContacts = (forgottenContacts.data?.contacts ?? [])
-    .filter((contact) =>
-      (contact.display_name ?? "")
-        .toLocaleLowerCase()
-        .includes(forgottenSearch.trim().toLocaleLowerCase()),
+    .filter((_, index) =>
+      forgottenSearch === "" || String(index) === forgottenSearch,
     )
     .sort((left, right) => {
       const direction = forgottenSortDirection === "asc" ? 1 : -1;

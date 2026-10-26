@@ -1,10 +1,26 @@
 # Social Fossils
 
+Python, FastAPI, SQLAlchemy 2, PostgreSQL, Alembic, React, TypeScript, Vite, Airflow.
+
 ### Run Project
 - docker compose up --build -d
 
-### Finish Work
-- docker compose down
+### Overview 
+- import messaging data from Telegram and Instagram and unite
+- analyze locally, no private data leaves your pc
+- get the whole picture of all your social connections, important friendships, people characters
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Development
 - cd frontend
@@ -15,7 +31,6 @@
 - python3 -m venv .venv
 - source .venv/bin/activate
 - pip install -r requirements.txt
-- Python: Select Interpreter (IDE)
 
 - docker compose up --build -d
 - docker compose exec backend alembic upgrade head
@@ -25,11 +40,8 @@
 - Frontend: `cd frontend && npm test`
 
 ## TODO
-- LOW: AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
+- LOW: AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it.
 - LOW: Add Facebook, VK
 - LOW: Web App with encryption
-- MED: Order links suggestions by FullName length
 - LOW: Instagram group chats analytics
 - LOW: Show file upload progress in UI
-- MED: Fix lagging search - make it universal dropdown link in link contacts with platform filter
-- MED: chats, contacts delete service_message columns
