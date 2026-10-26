@@ -24,7 +24,7 @@ RUSSIAN_STOP_WORDS = frozenset(
 
 ENGLISH_STOP_WORDS = frozenset(
     """
-    a about above after again against all am an and any are as at be because
+    a about above after again against all am an and any are as at attachment be because
     been before being below between both but by can cannot could did do does
     doing down during each few for from further had has have having he her
     here hers herself him himself his how i if in into is it its itself just
@@ -44,7 +44,7 @@ ENGLISH_STOP_WORDS = frozenset(
     may meanwhile message mill mine moreover mostly move much must name neither never
     nevertheless next nine ninety nobody none noone nothing nowhere now
     nowhere often other others otherwise our ours outside part per perhaps
-    please put rather re reacted same see seem seemed seeming seems serious several
+    please put rather re reacted same see seem seemed seeming seems sent serious several
     seventeen seventy six sixty somehow someone something sometime sometimes
     somewhere still thence thereafter thereby therefore therein thereof
     thereupon thirty three throughout thru thus top toward towards twelve

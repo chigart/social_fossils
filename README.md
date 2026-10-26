@@ -25,12 +25,11 @@
 - Frontend: `cd frontend && npm test`
 
 ## TODO
-1. LOW: AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
-2. HIGH: Fix timeline in insights tab.
-3. MED: Fix parallel import heavy files.
-4. LOW: Add Facebook, VK
-5. LOW: Web App with encryption
-6. MED: Order links suggestions by FullName length
-7. LOW: Instagram group chats analytics
-8. MED: Show file upload progress in UI
-9. MED: Fix lagging search
+- LOW: AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it with AI.
+- LOW: Add Facebook, VK
+- LOW: Web App with encryption
+- MED: Order links suggestions by FullName length
+- LOW: Instagram group chats analytics
+- LOW: Show file upload progress in UI
+- MED: Fix lagging search - make it universal dropdown link in link contacts with platform filter
+- MED: chats, contacts delete service_message columns
