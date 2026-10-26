@@ -5,7 +5,9 @@ import hashlib
 import importlib
 import json
 import logging
+from collections.abc import Iterable
 from datetime import datetime, timezone
+from itertools import islice
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,7 @@ from app.platforms import PLATFORM_CONFIGS, TELEGRAM_PLATFORM_ID
 from app.telegram_parser import parse_telegram_export
 
 logger = logging.getLogger(__name__)
+MESSAGE_INSERT_BATCH_SIZE = 50
 
 
 def get_or_create_account(
@@ -137,49 +140,108 @@ def get_or_create_contact(session, account_id: int, sender_telegram_id: str, sen
     return contact
 
 
-def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int) -> bool:
+def _message_values(
+    session,
+    chat: Chat,
+    payload: dict[str, Any],
+    account_id: int,
+    contact_cache: dict[str, Contact],
+) -> dict[str, Any] | None:
     message_id = payload.get("telegram_message_id")
     if message_id is None:
-        return False
-
-    existing_message = session.scalar(
-        select(Message).where(
-            Message.chat_id == chat.id,
-            Message.platform == TELEGRAM_PLATFORM_ID,
-            Message.message_id == str(message_id),
-        )
-    )
-    if existing_message is not None:
-        return False
+        return None
 
     sender_telegram_id = payload.get("sender_telegram_id")
     sender_contact_id = None
     if sender_telegram_id:
-        contact = get_or_create_contact(session, account_id, sender_telegram_id, payload.get("sender_name"))
+        contact = contact_cache.get(sender_telegram_id)
+        if contact is None:
+            contact = get_or_create_contact(
+                session,
+                account_id,
+                sender_telegram_id,
+                payload.get("sender_name"),
+            )
+            if contact is not None:
+                contact_cache[sender_telegram_id] = contact
         if contact is not None:
             sender_contact_id = contact.id
 
-    stmt = insert(Message).values(
-        chat_id=chat.id,
-        platform=TELEGRAM_PLATFORM_ID,
-        message_id=str(message_id),
-        source_record_key=hashlib.sha256(
+    return {
+        "chat_id": chat.id,
+        "platform": TELEGRAM_PLATFORM_ID,
+        "message_id": str(message_id),
+        "source_record_key": hashlib.sha256(
             f"{TELEGRAM_PLATFORM_ID}:{message_id}".encode("utf-8")
         ).hexdigest(),
-        sender_id=sender_telegram_id,
-        sender_contact_id=sender_contact_id,
-        sender_name=payload.get("sender_name"),
-        is_outgoing=payload.get("is_outgoing"),
-        message_date=payload.get("message_date"),
-        message_type=payload.get("message_type") or "message",
-        text_content=payload.get("text_content"),
-        reply_to_telegram_message_id=payload.get("reply_to_telegram_message_id"),
-        source_reply_id=payload.get("reply_to_telegram_message_id"),
-        raw_payload=payload.get("raw_payload") or {},
-    ).on_conflict_do_nothing(index_elements=["chat_id", "message_id"]) \
-      .returning(Message.id)
-    inserted = session.execute(stmt).first()
-    return inserted is not None
+        "sender_id": sender_telegram_id,
+        "sender_contact_id": sender_contact_id,
+        "sender_name": payload.get("sender_name"),
+        "is_outgoing": payload.get("is_outgoing"),
+        "message_date": payload.get("message_date"),
+        "message_type": payload.get("message_type") or "message",
+        "text_content": payload.get("text_content"),
+        "reply_to_telegram_message_id": payload.get(
+            "reply_to_telegram_message_id"
+        ),
+        "source_reply_id": payload.get("reply_to_telegram_message_id"),
+        "raw_payload": payload.get("raw_payload") or {},
+    }
+
+
+def _insert_message_batch(session, values: list[dict[str, Any]]) -> int:
+    statement = (
+        insert(Message)
+        .values(values)
+        .on_conflict_do_nothing(index_elements=["chat_id", "message_id"])
+        .returning(Message.id)
+    )
+    return len(session.execute(statement).scalars().all())
+
+
+def _existing_message_ids(session, chat: Chat, message_ids: list[str]) -> set[str]:
+    if not message_ids:
+        return set()
+    statement = select(Message.message_id).where(
+        Message.chat_id == chat.id,
+        Message.platform == TELEGRAM_PLATFORM_ID,
+        Message.message_id.in_(message_ids),
+    )
+    return set(session.scalars(statement))
+
+
+def insert_messages(
+    session,
+    chat: Chat,
+    payloads: Iterable[dict[str, Any]],
+    account_id: int,
+    contact_cache: dict[str, Contact] | None = None,
+) -> int:
+    cache = contact_cache if contact_cache is not None else {}
+    inserted_count = 0
+    payload_iterator = iter(payloads)
+    while batch := list(islice(payload_iterator, MESSAGE_INSERT_BATCH_SIZE)):
+        message_ids = [
+            str(payload["telegram_message_id"])
+            for payload in batch
+            if payload.get("telegram_message_id") is not None
+        ]
+        existing_message_ids = _existing_message_ids(session, chat, message_ids)
+        pending_values = []
+        for payload in batch:
+            message_id = payload.get("telegram_message_id")
+            if message_id is None or str(message_id) in existing_message_ids:
+                continue
+            values = _message_values(session, chat, payload, account_id, cache)
+            if values is not None:
+                pending_values.append(values)
+        if pending_values:
+            inserted_count += _insert_message_batch(session, pending_values)
+    return inserted_count
+
+
+def insert_message(session, chat: Chat, payload: dict[str, Any], account_id: int) -> bool:
+    return insert_messages(session, chat, (payload,), account_id) == 1
 
 
 def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str, Any]:
@@ -234,6 +296,7 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
         total_messages = 0
         inserted_messages = 0
         skipped_messages = 0
+        contact_cache: dict[str, Contact] = {}
 
         for chat_index, parsed_chat in enumerate(parsed_export.chats, start=1):
             logger.info(
@@ -243,12 +306,16 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
                 len(parsed_chat.messages),
             )
             chat = ensure_chat(session, account.id, parsed_chat)
-            for message_payload in parsed_chat.messages:
-                total_messages += 1
-                if insert_message(session, chat, message_payload, account.id):
-                    inserted_messages += 1
-                else:
-                    skipped_messages += 1
+            total_messages += len(parsed_chat.messages)
+            inserted_for_chat = insert_messages(
+                session,
+                chat,
+                parsed_chat.messages,
+                account.id,
+                contact_cache,
+            )
+            inserted_messages += inserted_for_chat
+            skipped_messages += len(parsed_chat.messages) - inserted_for_chat
             logger.info(
                 "Processed chat %d/%d: %d/%d messages inserted, %d skipped",
                 chat_index,

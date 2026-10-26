@@ -46,7 +46,7 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
     monkeypatch.setattr(importer, "parse_telegram_export", lambda _payload: parsed_export)
     monkeypatch.setattr(importer, "get_or_create_account", lambda *_args: account)
     monkeypatch.setattr(importer, "ensure_chat", lambda *_args: SimpleNamespace(id=1))
-    monkeypatch.setattr(importer, "insert_message", lambda *_args: True)
+    monkeypatch.setattr(importer, "insert_messages", lambda *_args: 1)
 
     export_path = tmp_path / "export.json"
     export_path.write_text(json.dumps({"synthetic": True}), encoding="utf-8")

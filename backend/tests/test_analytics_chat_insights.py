@@ -39,6 +39,10 @@ def test_extract_emojis_preserves_combined_sequences():
     ]
 
 
+def test_extract_emojis_skips_plain_text():
+    assert extract_emojis("synthetic benchmark text alpha beta 123") == []
+
+
 def test_popular_words_exclude_common_english_and_russian_words(db_session):
     add_account(db_session, 1, "user-owner")
     add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")
