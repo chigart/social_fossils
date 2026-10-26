@@ -15,12 +15,10 @@ import {
 } from "../styles";
 import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
-import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
 export type TimelineContactOption = {
   canonicalIdentityId: number;
   displayName: string;
-  platformUserId: string | null;
 };
 
 function formatMonth(month: string) {
@@ -248,9 +246,6 @@ export function CommunicationTimelineView({
                 value={contact.canonicalIdentityId}
               >
                 {contact.displayName}
-                {contact.platformUserId
-                  ? ` · ${contact.platformUserId}`
-                  : ""}
               </option>
             ))}
           </select>
@@ -314,13 +309,7 @@ export function CommunicationTimelineView({
             {data.summary.source_account_labels.length > 0 && (
               <>
                 {" · "}
-                {data.summary.source_account_labels.map((label) => (
-                  <PlatformAccountBadge
-                    key={label}
-                    platform="telegram"
-                    accountLabel={label}
-                  />
-                ))}
+                {data.summary.source_account_labels.join(", ")}
               </>
             )}
           </p>

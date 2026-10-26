@@ -552,6 +552,10 @@ describe("dashboard", () => {
         contact_id: 11,
         source_account_ids: [1, 2],
         source_account_labels: ["@anton", "Anton Malkov"],
+        source_accounts: [
+          { platform: "telegram", label: "@anton" },
+          { platform: "telegram", label: "Anton Malkov" },
+        ],
         source_contact_ids: [11, 22],
         total_messages_sent: 24,
         ordinary_messages_sent: 22,
@@ -583,7 +587,9 @@ describe("dashboard", () => {
       name: /Avery/,
     });
     expect(combinedContactRows).toHaveLength(1);
-    expect(combinedContactRows[0]).toHaveTextContent(/TG@antonTG Anton Malkov/);
+    expect(combinedContactRows[0]).toHaveTextContent(
+      "TG@anton, TG Anton Malkov",
+    );
     expect(combinedContactRows[0]).toHaveTextContent("24");
     await selectDashboardTab("Overview");
     const sourceAccountsCard = within(
@@ -692,26 +698,25 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
   });
 
-  it("prefixes contact account labels with their platform abbreviations", async () => {
-    api.getContacts.mockResolvedValue(
-      [
-        ["instagram", "@antonmalkov", "Instagram peer"],
-        ["facebook", "@facebookowner", "Facebook peer"],
-        ["telegram", "@telegramowner", "Telegram peer"],
-        ["vk", "@vkowner", "VK peer"],
-      ].map(([platform, accountLabel, displayName], index) => ({
+  it("shows one combined contact row for explicitly linked platform identities", async () => {
+    api.getContacts.mockResolvedValue([
+      {
         ...contacts[0],
-        platform,
-        account_id: index + 1,
-        contact_id: index + 1,
-        canonical_identity_id: null,
-        source_account_ids: [index + 1],
-        source_account_labels: [accountLabel],
-        source_contact_ids: [index + 1],
-        platform_user_id: `peer-${index + 1}`,
-        display_name: displayName,
-      })),
-    );
+        platforms: ["instagram", "telegram"],
+        identity_group_id: 18,
+        source_account_ids: [1, 2],
+        source_account_labels: ["@instagram-account", "@telegram-account"],
+        source_accounts: [
+          { platform: "instagram", label: "@instagram-account" },
+          { platform: "telegram", label: "@telegram-account" },
+        ],
+        source_contact_ids: [1, 2],
+        platform_user_ids: ["instagram-peer", "telegram-peer"],
+        display_name: "Shared person",
+        total_messages_sent: 17,
+        ordinary_messages_sent: 15,
+      },
+    ]);
 
     await renderLoadedDashboard();
     await selectDashboardTab("Contacts");
@@ -719,23 +724,20 @@ describe("dashboard", () => {
     const contactsRegion = screen.getByRole("region", {
       name: "Contacts & senders",
     });
-    const platformBadges = [
-      ["IG@antonmalkov", "bg-platform-instagram-background"],
-      ["FB@facebookowner", "bg-platform-facebook-background"],
-      ["TG@telegramowner", "bg-platform-telegram-background"],
-      ["VK@vkowner", "bg-platform-vk-background"],
-    ] as const;
-    for (const [label, backgroundClass] of platformBadges) {
-      expect(
-        within(contactsRegion).getByRole("row", { name: new RegExp(label) }),
-      ).toBeInTheDocument();
-      expect(within(contactsRegion).getByText(label)).toHaveClass(
-        "inline-block",
-        backgroundClass,
-        "text-label",
-        "font-semibold",
-      );
-    }
+    expect(
+      within(contactsRegion).getAllByRole("row", { name: /Shared person/ }),
+    ).toHaveLength(1);
+    expect(
+      within(contactsRegion).getByRole("row", { name: /Shared person/ }),
+    ).toHaveTextContent("17");
+    expect(
+      within(contactsRegion).getByRole("row", { name: /Shared person/ }),
+    ).toHaveTextContent("IG@instagram-account, TG@telegram-account");
+    expect(
+      within(contactsRegion).getByText(
+        /Explicitly linked identities are combined across messaging accounts/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows only conversation handoffs that occurred at least three times", async () => {
@@ -1098,7 +1100,7 @@ describe("dashboard", () => {
           ordinary_message_count: 78,
           text_length: 780,
           senders: Array.from({ length: 12 }, (_, index) => ({
-            sender_telegram_id: `user-${index + 1}`,
+            sender_id: `user-${index + 1}`,
             display_name: `Sender ${index + 1}`,
             message_count: 12 - index,
             text_length: (12 - index) * 10,
@@ -1254,7 +1256,7 @@ describe("dashboard", () => {
 
     expect(await screen.findByText("No imported data yet.")).toBeInTheDocument();
     expect(
-      await screen.findByText("Import a Telegram export to see chat statistics."),
+      await screen.findByText("Import a messaging export to see chat statistics."),
     ).toBeInTheDocument();
     await selectDashboardTab("Contacts");
     expect(
@@ -1595,7 +1597,7 @@ describe("dashboard", () => {
     expect(
       within(region).getByText("Combined owner history", { selector: "strong" }),
     ).toBeInTheDocument();
-    expect(within(region).getByText(/TG@anton/)).toBeInTheDocument();
+    expect(within(region).getByText(/@anton/)).toBeInTheDocument();
 
     await user.selectOptions(
       within(region).getByRole("combobox", { name: "Timeline scope" }),
@@ -1603,7 +1605,9 @@ describe("dashboard", () => {
     );
 
     expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, 1);
-    expect(await within(region).findByText("Avery")).toBeInTheDocument();
+    expect(
+      await within(region).findByText("Avery", { selector: "strong" }),
+    ).toBeInTheDocument();
   });
 
   it("shows timeline retry errors and undated-only empty states", async () => {

@@ -2,10 +2,10 @@ from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.models import Account, Chat, Contact, Message
-from app.platforms import TELEGRAM_PLATFORM_ID
+from app.models import CanonicalIdentity
 from app.schemas.analytics import (
     CommunicationTimelineMonth,
     CommunicationTimelineStatistics,
@@ -36,10 +36,23 @@ def build_communication_timeline_statistics(
     *,
     canonical_identity_id: int | None = None,
 ) -> CommunicationTimelineStatistics:
-    owner_ids = select(Account.platform_user_id).where(
-        Account.platform == TELEGRAM_PLATFORM_ID,
-        Account.platform_user_id.is_not(None)
+    identity_group_id = (
+        db.scalar(
+            select(CanonicalIdentity.identity_group_id).where(
+                CanonicalIdentity.id == canonical_identity_id
+            )
+        )
+        if canonical_identity_id is not None
+        else None
     )
+    if identity_group_id is None:
+        identity_ids = select(CanonicalIdentity.id).where(
+            CanonicalIdentity.id == canonical_identity_id
+        )
+    else:
+        identity_ids = select(CanonicalIdentity.id).where(
+            CanonicalIdentity.identity_group_id == identity_group_id
+        )
     contact_pairs = None
     if canonical_identity_id is not None:
         contact_pairs = (
@@ -47,6 +60,7 @@ def build_communication_timeline_statistics(
                 Chat.id.label("chat_id"),
                 Chat.account_id.label("account_id"),
                 Contact.id.label("contact_id"),
+                Contact.platform.label("platform"),
             )
             .join(Contact, Contact.account_id == Chat.account_id)
             .join(
@@ -63,12 +77,11 @@ def build_communication_timeline_statistics(
                 ),
             )
             .where(
-                Chat.platform == TELEGRAM_PLATFORM_ID,
-                Contact.platform == TELEGRAM_PLATFORM_ID,
-                Message.platform == TELEGRAM_PLATFORM_ID,
+                Chat.platform == Contact.platform,
+                Message.platform == Contact.platform,
                 Chat.chat_type == "personal_chat",
                 Message.message_type == ORDINARY_MESSAGE_TYPE,
-                Contact.canonical_identity_id == canonical_identity_id,
+                Contact.canonical_identity_id.in_(identity_ids),
             )
             .distinct()
             .cte("timeline_contact_pairs")
@@ -84,14 +97,14 @@ def build_communication_timeline_statistics(
             Message.id.label("message_id"),
             Message.sender_id.label("sender_telegram_id"),
             Message.sender_contact_id.label("sender_contact_id"),
+            Message.platform.label("platform"),
             Message.is_outgoing.label("is_outgoing"),
             Message.message_date.label("message_date"),
             Chat.account_id.label("account_id"),
         )
         .join(Chat, Chat.id == Message.chat_id)
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Message.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Message.platform,
             Message.message_type == ORDINARY_MESSAGE_TYPE,
         )
     )
@@ -103,21 +116,28 @@ def build_communication_timeline_statistics(
     scoped_messages = scoped_messages_statement.cte("timeline_messages")
 
     sender_id = scoped_messages.c.sender_telegram_id
-    owner_direction = sender_id.in_(owner_ids)
+    owner_account = aliased(Account)
+    owner_direction = (
+        select(owner_account.id)
+        .where(
+            owner_account.platform == scoped_messages.c.platform,
+            owner_account.platform_user_id == sender_id,
+        )
+        .exists()
+    )
     if canonical_identity_id is None:
         contact_direction = and_(
             sender_id.is_not(None),
-            sender_id.not_in(owner_ids),
+            ~owner_direction,
             scoped_messages.c.is_outgoing.is_(False),
         )
     else:
         contact_ids = select(Contact.id).where(
-            Contact.platform == TELEGRAM_PLATFORM_ID,
-            Contact.canonical_identity_id == canonical_identity_id
+            Contact.canonical_identity_id.in_(identity_ids)
         )
         contact_platform_ids = select(Contact.platform_user_id).where(
-            Contact.platform == TELEGRAM_PLATFORM_ID,
-            Contact.canonical_identity_id == canonical_identity_id
+            Contact.platform == scoped_messages.c.platform,
+            Contact.canonical_identity_id.in_(identity_ids),
         )
         matching_contact = or_(
             sender_id.in_(contact_platform_ids),
@@ -203,7 +223,6 @@ def build_communication_timeline_statistics(
                     Account.username,
                     Account.name,
                 )
-                .where(Account.platform == TELEGRAM_PLATFORM_ID)
                 .order_by(Account.id)
             )
         )
@@ -221,7 +240,6 @@ def build_communication_timeline_statistics(
                     Account,
                     Account.id == contact_pairs.c.account_id,
                 )
-                .where(Account.platform == TELEGRAM_PLATFORM_ID)
                 .distinct()
                 .order_by(contact_pairs.c.account_id, contact_pairs.c.contact_id)
             )
@@ -289,6 +307,7 @@ def build_communication_timeline_statistics(
         summary=CommunicationTimelineSummary(
             scope="contact" if canonical_identity_id is not None else "owner",
             canonical_identity_id=canonical_identity_id,
+            identity_group_id=identity_group_id,
             source_account_count=len(account_ids),
             source_account_ids=account_ids,
             source_account_labels=[

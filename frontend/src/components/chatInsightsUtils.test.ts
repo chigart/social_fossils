@@ -64,7 +64,7 @@ describe("chat insights utilities", () => {
   it("ranks the top ten senders and combines the rest in the other slice", () => {
     const senders = Array.from({ length: 11 }, (_, index) => ({
       ...chatInsights.chats[0].senders[0],
-      sender_telegram_id: `user-${index}`,
+      sender_id: `user-${index}`,
       display_name: `Sender ${index}`,
       message_count: 11 - index,
       text_length: index + 1,
@@ -99,7 +99,7 @@ describe("chat insights utilities", () => {
   it("ranks all senders by average characters per message", () => {
     const senders = Array.from({ length: 12 }, (_, index) => ({
       ...chatInsights.chats[0].senders[0],
-      sender_telegram_id: `user-${index}`,
+      sender_id: `user-${index}`,
       display_name: `Sender ${index}`,
       message_count: index === 11 ? 0 : 1,
       text_length: index === 11 ? 1000 : 12 - index,
@@ -124,7 +124,7 @@ describe("chat insights utilities", () => {
 
   it("normalizes the top five senders in a message type to a complete pie", () => {
     const senders = Array.from({ length: 6 }, (_, index) => ({
-      sender_telegram_id: `user-${index + 1}`,
+      sender_id: `user-${index + 1}`,
       display_name: `Sender ${index + 1}`,
       count: 6 - index,
     }));

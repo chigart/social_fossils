@@ -94,7 +94,7 @@ export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
                     {senders.map((sender) => (
                       <li
                         className={chatInsightsListItemClassName}
-                        key={sender.sender_telegram_id ?? "unknown"}
+                        key={sender.sender_id ?? "unknown"}
                       >
                         <span className={chatInsightsPersonNameClassName}>
                           {sender.display_name}

@@ -1,10 +1,9 @@
 from datetime import datetime
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.selectable import CTE, Select
 
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
-from app.platforms import TELEGRAM_PLATFORM_ID
 
 from .analytics_constants import ORDINARY_MESSAGE_TYPE
 
@@ -20,27 +19,34 @@ def _utc_month_expression(db: Session):
 
 def build_forgotten_contact_queries(
     db: Session,
-    owner_ids: Select,
     recent_start: datetime,
     current_time: datetime,
 ) -> tuple[CTE, Select, Select]:
+    owner_account = aliased(Account)
+    owner_sender = (
+        select(owner_account.id)
+        .where(
+            owner_account.platform == Message.platform,
+            owner_account.platform_user_id == Message.sender_id,
+        )
+        .exists()
+    )
     peers_statement = (
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            Message.sender_id.label("peer_telegram_user_id"),
+            Message.sender_id.label("peer_platform_user_id"),
         )
         .join(Message, Message.chat_id == Chat.id)
         .join(Account, Account.id == Chat.account_id)
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
-            Message.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
+            Message.platform == Chat.platform,
             Chat.chat_type == "personal_chat",
             Account.platform_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
             Message.sender_id.is_not(None),
-            Message.sender_id.not_in(owner_ids),
+            ~owner_sender,
         )
         .distinct()
     )
@@ -55,22 +61,42 @@ def build_forgotten_contact_queries(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            func.coalesce(CanonicalIdentity.id, -Contact.id).label(
-                "identity_group_id"
-            ),
+            CanonicalIdentity.identity_group_id.label("identity_group_id"),
             case(
-                (CanonicalIdentity.id.is_(None), Chat.account_id),
+                (
+                    CanonicalIdentity.identity_group_id.is_(None),
+                    CanonicalIdentity.id,
+                ),
+                else_=None,
+            ).label("canonical_identity_id"),
+            case(
+                (
+                    and_(
+                        CanonicalIdentity.identity_group_id.is_(None),
+                        CanonicalIdentity.id.is_(None),
+                    ),
+                    Contact.id,
+                ),
+                else_=None,
+            ).label("identity_contact_id"),
+            case(
+                (
+                    and_(
+                        CanonicalIdentity.identity_group_id.is_(None),
+                        CanonicalIdentity.id.is_(None),
+                    ),
+                    Chat.account_id,
+                ),
                 else_=None,
             ).label("identity_source_account_id"),
-            CanonicalIdentity.id.label("canonical_identity_id"),
             Contact.id.label("contact_id"),
+            Contact.platform.label("platform"),
             Contact.platform_user_id.label("contact_platform_user_id"),
             Contact.display_name.label("display_name"),
         )
         .join(Account, Account.id == Chat.account_id)
         .where(
-            Chat.platform == TELEGRAM_PLATFORM_ID,
-            Account.platform == TELEGRAM_PLATFORM_ID,
+            Chat.platform == Account.platform,
         )
         .join(peers, peers.c.chat_id == Chat.id)
         .join(single_peer_chats, single_peer_chats.c.chat_id == Chat.id)
@@ -78,8 +104,8 @@ def build_forgotten_contact_queries(
             Contact,
             and_(
                 Contact.account_id == Chat.account_id,
-                Contact.platform == TELEGRAM_PLATFORM_ID,
-                Contact.platform_user_id == peers.c.peer_telegram_user_id,
+                Contact.platform == Chat.platform,
+                Contact.platform_user_id == peers.c.peer_platform_user_id,
             ),
         )
         .outerjoin(
@@ -90,8 +116,16 @@ def build_forgotten_contact_queries(
     )
 
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = Message.sender_id.in_(owner_ids)
+    owner_direction = (
+        select(owner_account.id)
+        .where(
+            owner_account.platform == Message.platform,
+            owner_account.platform_user_id == Message.sender_id,
+        )
+        .exists()
+    )
     contact_direction = and_(
+        Message.platform == eligible_pairs.c.platform,
         Message.sender_id == eligible_pairs.c.contact_platform_user_id,
         Message.is_outgoing.is_(False),
     )
@@ -121,12 +155,10 @@ def build_forgotten_contact_queries(
     aggregate_statement = (
         select(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             func.min(eligible_pairs.c.contact_id).label("contact_id"),
-            func.min(eligible_pairs.c.canonical_identity_id).label(
-                "canonical_identity_id"
-            ),
-            eligible_pairs.c.contact_platform_user_id.label("platform_user_id"),
             func.min(eligible_pairs.c.display_name).label("display_name"),
             count_when(and_(ordinary_message, owner_direction)).label(
                 "owner_message_count"
@@ -220,11 +252,12 @@ def build_forgotten_contact_queries(
         )
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
-        .where(Message.platform == TELEGRAM_PLATFORM_ID)
+        .where(Message.platform == eligible_pairs.c.platform)
         .group_by(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
-            eligible_pairs.c.contact_platform_user_id,
         )
     )
 
@@ -242,6 +275,8 @@ def build_forgotten_contact_queries(
     monthly_statement = (
         select(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             month_expression.label("month"),
             count_when(and_(historical_month, owner_direction)).label(
@@ -260,12 +295,14 @@ def build_forgotten_contact_queries(
         .select_from(eligible_pairs)
         .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
         .where(
-            Message.platform == TELEGRAM_PLATFORM_ID,
+            Message.platform == eligible_pairs.c.platform,
             Message.message_date.is_not(None),
             dated_message,
         )
         .group_by(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             month_expression,
         )

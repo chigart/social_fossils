@@ -86,7 +86,7 @@ export function ReactionAnalytics({ chat }: { chat: ChatInsightsStatistics }) {
                   {chat.reactors.map((reactor) => (
                     <tr
                       className={chatInsightsTableRowClassName}
-                      key={reactor.reactor_telegram_id}
+                      key={reactor.reactor_id}
                     >
                       <td className={chatInsightsCompactCellClassName}>
                         {reactor.display_name}
@@ -140,7 +140,7 @@ export function ReactionAnalytics({ chat }: { chat: ChatInsightsStatistics }) {
                   {chat.reactor_author_pairs.map((pair) => (
                     <tr
                       className={chatInsightsTableRowClassName}
-                      key={`${pair.reactor_telegram_id}:${pair.author_telegram_id}`}
+                      key={`${pair.reactor_id}:${pair.author_id}`}
                     >
                       <td className={chatInsightsCompactCellClassName}>
                         {pair.reactor_name} → {pair.author_name}

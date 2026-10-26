@@ -1,5 +1,6 @@
 import type { ContactStatistics } from "../api";
 import { formatNumber } from "../format";
+import { formatPlatformAccountLabel } from "../platforms";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -21,7 +22,6 @@ import {
   tableRowTitleClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
-import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
 
 export function ContactsView({
@@ -72,8 +72,9 @@ export function ContactsView({
         )}
       </div>
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
-        Contacts and incoming senders are shown per platform. Identities are
-        never matched by display name.
+        Explicitly linked identities are combined across messaging accounts.
+        Unlinked identities remain separate; display names are never used to
+        merge people.
       </p>
       {contacts.loading && contacts.data === null && <LoadingMessage />}
       {contacts.error && (
@@ -106,8 +107,6 @@ export function ContactsView({
             <thead className={tableHeadClassName}>
               <tr>
                 <th className={tableHeaderClassName} scope="col">Contact / sender</th>
-                <th className={tableHeaderClassName} scope="col">Platform</th>
-                <th className={tableHeaderClassName} scope="col">Platform user ID</th>
                 <th className={tableHeaderClassName} scope="col">Accounts</th>
                 <th className={tableHeaderClassName} scope="col">
                   <SortButton
@@ -124,26 +123,17 @@ export function ContactsView({
               {visibleContacts.map((contact, index) => (
                 <tr
                   className={tableRowClassName}
-                  key={`${contact.platform}-${contact.canonical_identity_id ?? contact.source_contact_ids[0] ?? contact.account_id ?? "sources"}-${contact.platform_user_id ?? "unknown"}-${index}`}
+                  key={`${contact.identity_group_id ?? contact.canonical_identity_id ?? contact.source_contact_ids[0] ?? contact.account_id ?? "sources"}-${index}`}
                 >
                   <th className={tableRowTitleClassName} scope="row">
                     {contact.display_name?.trim() || "Unnamed contact"}
                   </th>
-                  <td className={tableCellClassName}>{contact.platform}</td>
-                  <td className="max-w-[200px] break-words border-b border-border-muted px-[13px] py-3 align-middle font-mono text-caption text-ink-code last:border-b-0">
-                    {contact.platform_user_id ?? "—"}
-                  </td>
                   <td className={tableCellClassName}>
-                    <div className="flex flex-wrap gap-1">
-                      {contact.source_account_labels.map((label) => (
-                        <PlatformAccountBadge
-                          key={label}
-                          platform={contact.platform}
-                          accountLabel={label}
-                        />
-                      ))}
-                      {contact.source_account_labels.length === 0 && "—"}
-                    </div>
+                    {contact.source_accounts
+                      .map(({ platform, label }) =>
+                        formatPlatformAccountLabel(platform, label),
+                      )
+                      .join(", ") || "—"}
                   </td>
                   <td className={numericTableCellClassName}>
                     {formatNumber(contact.total_messages_sent)}

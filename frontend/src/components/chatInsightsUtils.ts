@@ -103,7 +103,7 @@ export function buildSenderShareChart(
     .reduce((sum, sender) => sum + valueForSender(sender, metric), 0);
   const sliceValues = [
     ...visibleSenders.map((sender, index) => ({
-      key: sender.sender_telegram_id ?? "unknown",
+      key: sender.sender_id ?? "unknown",
       label: sender.display_name,
       value: valueForSender(sender, metric),
       color: senderColors[index],
@@ -154,7 +154,7 @@ export function buildSenderAverageLengthChart(senders: ChatInsightSender[]) {
   const rankedSenders = senders
     .filter((sender) => sender.message_count > 0)
     .map((sender) => ({
-      key: sender.sender_telegram_id ?? sender.display_name,
+      key: sender.sender_id ?? sender.display_name,
       label: sender.display_name,
       messageCount: sender.message_count,
       textLength: sender.text_length,
@@ -188,7 +188,7 @@ export function buildMessageTypeShareChart(senders: ConversationParticipantCount
     const startAngle = nextAngle;
     nextAngle += percentage * DEGREES_PER_PERCENTAGE_POINT;
     return {
-      key: sender.sender_telegram_id ?? sender.display_name,
+      key: sender.sender_id ?? sender.display_name,
       label: sender.display_name,
       value: sender.count,
       color: senderColors[index],

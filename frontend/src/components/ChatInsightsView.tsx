@@ -86,7 +86,7 @@ export function ChatInsightsView({
                     <span className="block truncate text-caption text-ink-muted">
                       {chat.chat_type} ·{" "}
                       <PlatformAccountBadge
-                        platform="telegram"
+                        platform={chat.platform}
                         accountLabel={chat.source_account_label}
                       />
                     </span>
@@ -112,7 +112,7 @@ export function ChatInsightsView({
       )}
       {noImportedData && insights.data && (
         <p className="text-small text-ink-muted">
-          Import a Telegram export to see text and reaction insights.
+          Import messaging exports to see text and reaction insights.
         </p>
       )}
       {insights.data && insights.data.chats.length === 0 ? (

@@ -77,7 +77,7 @@ export function useDashboardFilters({
   const visibleContacts = (contacts.data ?? [])
     .filter(
       (contact) =>
-        contact.display_name?.trim() || contact.platform_user_id?.trim(),
+        contact.display_name?.trim() || contact.platform_user_ids.length > 0,
     )
     .filter((contact) =>
       (contact.display_name ?? "")
@@ -148,10 +148,8 @@ export function useDashboardFilters({
           {
             canonicalIdentityId: contact.canonical_identity_id,
             displayName:
-              contact.display_name ||
-              contact.platform_user_id ||
-              "Unnamed contact",
-            platformUserId: contact.platform_user_id,
+                contact.display_name ||
+                "Unnamed contact",
           },
         ]),
     ).values(),

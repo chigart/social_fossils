@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Account
-from app.platforms import TELEGRAM_PLATFORM_ID
 from app.schemas.analytics import (
     ForgottenContact,
     ForgottenContactEvidenceStatus,
@@ -62,9 +61,7 @@ def build_forgotten_contacts_statistics(
 
     source_account_count = int(
         db.scalar(
-            select(func.count(Account.id)).where(
-                Account.platform == TELEGRAM_PLATFORM_ID
-            )
+            select(func.count(Account.id))
         )
         or 0
     )
@@ -83,26 +80,27 @@ def build_forgotten_contacts_statistics(
 
     current_time = _as_utc(as_of or datetime.now(timezone.utc))
     recent_start = current_time - timedelta(days=FORGOTTEN_RECENT_WINDOW_DAYS)
-    owner_ids = select(Account.platform_user_id).where(
-        Account.platform == TELEGRAM_PLATFORM_ID,
-        Account.platform_user_id.is_not(None)
-    )
-
     eligible_pairs, aggregate_statement, monthly_statement = (
         build_forgotten_contact_queries(
             db,
-            owner_ids,
             recent_start,
             current_time,
         )
     )
 
     monthly_by_contact: dict[
-        tuple[int, int | None], list[dict[str, int | str]]
+        tuple[int | None, int | None, int | None, int | None],
+        list[dict[str, int | str]],
     ] = {}
     for month_row in db.execute(monthly_statement):
         monthly_by_contact.setdefault(
-            (month_row.identity_group_id, month_row.identity_source_account_id), []
+            (
+                month_row.identity_group_id,
+                month_row.canonical_identity_id,
+                month_row.identity_contact_id,
+                month_row.identity_source_account_id,
+            ),
+            [],
         ).append(
             {
                 "month": month_row.month,
@@ -124,27 +122,45 @@ def build_forgotten_contacts_statistics(
     source_rows = db.execute(
         select(
             eligible_pairs.c.identity_group_id,
+            eligible_pairs.c.canonical_identity_id,
+            eligible_pairs.c.identity_contact_id,
             eligible_pairs.c.identity_source_account_id,
             eligible_pairs.c.account_id,
             eligible_pairs.c.contact_id,
+            eligible_pairs.c.platform,
+            eligible_pairs.c.contact_platform_user_id,
             Account.username.label("account_username"),
             Account.name.label("account_name"),
         ).distinct()
         .join(Account, Account.id == eligible_pairs.c.account_id)
     )
     source_ids: dict[
-        tuple[int, int | None], tuple[set[int], set[int], set[str]]
+        tuple[int | None, int | None, int | None, int | None],
+        tuple[set[int], set[int], set[str], set[str], set[str], set[int]],
     ] = {}
     for source_row in source_rows:
         key = (
             source_row.identity_group_id,
+            source_row.canonical_identity_id,
+            source_row.identity_contact_id,
             source_row.identity_source_account_id,
         )
-        accounts, contact_ids, account_labels = source_ids.setdefault(
-            key, (set(), set(), set())
+        (
+            accounts,
+            contact_ids,
+            account_labels,
+            platforms,
+            platform_user_ids,
+            identity_ids,
+        ) = source_ids.setdefault(
+            key, (set(), set(), set(), set(), set(), set())
         )
         accounts.add(source_row.account_id)
         contact_ids.add(source_row.contact_id)
+        platforms.add(source_row.platform)
+        platform_user_ids.add(source_row.contact_platform_user_id)
+        if source_row.canonical_identity_id is not None:
+            identity_ids.add(source_row.canonical_identity_id)
         account_labels.add(
             f"@{source_row.account_username}"
             if source_row.account_username
@@ -188,7 +204,12 @@ def build_forgotten_contacts_statistics(
 
         historical_months: list[ForgottenContactMonthlyActivity] = []
         recent_months: list[ForgottenContactMonthlyActivity] = []
-        group_key = (row.identity_group_id, row.identity_source_account_id)
+        group_key = (
+            row.identity_group_id,
+            row.canonical_identity_id,
+            row.identity_contact_id,
+            row.identity_source_account_id,
+        )
         monthly_rows = monthly_by_contact.get(group_key, [])
         historical_active_month_count = 0
         for month_row in monthly_rows:
@@ -301,9 +322,14 @@ def build_forgotten_contacts_statistics(
         else:
             classification = "active"
 
-        source_account_ids, source_contact_ids, source_account_labels = source_ids[
-            group_key
-        ]
+        (
+            source_account_ids,
+            source_contact_ids,
+            source_account_labels,
+            platforms,
+            platform_user_ids,
+            identity_ids,
+        ) = source_ids[group_key]
         contacts.append(
             ForgottenContact(
                 account_id=(
@@ -312,11 +338,13 @@ def build_forgotten_contacts_statistics(
                     else None
                 ),
                 contact_id=row.contact_id,
-                canonical_identity_id=row.canonical_identity_id,
+                canonical_identity_id=min(identity_ids) if identity_ids else None,
+                identity_group_id=row.identity_group_id,
+                platforms=sorted(platforms),
                 source_account_ids=sorted(source_account_ids),
                 source_account_labels=sorted(source_account_labels),
                 source_contact_ids=sorted(source_contact_ids),
-                platform_user_id=row.platform_user_id,
+                platform_user_ids=sorted(platform_user_ids),
                 display_name=row.display_name,
                 first_message_at=first_message_at,
                 last_message_at=last_message_at,
