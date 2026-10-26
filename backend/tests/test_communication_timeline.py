@@ -247,6 +247,55 @@ def test_contact_timeline_combines_canonical_sources_and_rejects_unknown_identit
     assert error.value.status_code == 404
 
 
+def test_chat_timeline_includes_only_the_selected_chat(db_session):
+    add_account(db_session, 1, "user-owner", username="owner")
+    add_chat(db_session, 10, 1, "chat-10", chat_type="personal_chat")
+    add_chat(db_session, 20, 1, "chat-20", chat_type="personal_chat")
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        "user-owner",
+        datetime(2025, 1, 1, tzinfo=timezone.utc),
+        is_outgoing=True,
+    )
+    add_message(
+        db_session,
+        2,
+        10,
+        "message",
+        "user-peer",
+        datetime(2025, 1, 2, tzinfo=timezone.utc),
+        is_outgoing=False,
+    )
+    add_message(
+        db_session,
+        3,
+        20,
+        "message",
+        "user-peer",
+        datetime(2025, 3, 1, tzinfo=timezone.utc),
+        is_outgoing=False,
+    )
+
+    result = CommunicationTimelineStatistics.model_validate(
+        get_communication_timeline(db_session, chat_id=10)
+    )
+
+    assert result.summary.scope == "chat"
+    assert result.summary.chat_id == 10
+    assert result.summary.ordinary_message_count == 2
+    assert result.summary.owner_message_count == 1
+    assert result.summary.contact_message_count == 1
+    assert [month.month for month in result.months] == ["2025-01"]
+    assert result.summary.source_account_ids == [1]
+
+    with pytest.raises(HTTPException) as error:
+        get_communication_timeline(db_session, chat_id=9999)
+    assert error.value.status_code == 404
+
+
 def test_utc_sql_expressions_compile_for_postgresql():
     postgresql_session = SimpleNamespace(
         get_bind=lambda: SimpleNamespace(dialect=postgresql.dialect())

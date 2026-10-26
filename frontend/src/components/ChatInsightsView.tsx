@@ -1,4 +1,7 @@
-import type { ChatInsightsResponse } from "../api";
+import type {
+  ChatInsightsResponse,
+  CommunicationTimelineStatistics,
+} from "../api";
 import { formatNumber } from "../format";
 import {
   emptyStateClassName,
@@ -12,21 +15,26 @@ import {
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
+import { CommunicationTimelineView } from "./CommunicationTimelineView";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { useChatInsights } from "./useChatInsights";
 
 export function ChatInsightsView({
   insights,
+  timeline,
   selectedChatId,
   onChatChange,
   noImportedData,
-  onRetry,
+  onRetryInsights,
+  onRetryTimeline,
 }: {
   insights: Resource<ChatInsightsResponse>;
+  timeline: Resource<CommunicationTimelineStatistics>;
   selectedChatId: number | null;
   onChatChange: (chatId: number) => void;
   noImportedData: boolean | undefined;
-  onRetry: () => void;
+  onRetryInsights: () => void;
+  onRetryTimeline: () => void;
 }) {
   const {
     chatSearch,
@@ -35,6 +43,17 @@ export function ChatInsightsView({
     matchingChats,
     selectedChat,
   } = useChatInsights(insights, selectedChatId);
+  const timelineMatchesSelectedChat =
+    selectedChat !== undefined &&
+    timeline.data?.summary.chat_id === selectedChat.chat_id;
+  const selectedTimeline: Resource<CommunicationTimelineStatistics> =
+    timelineMatchesSelectedChat
+      ? timeline
+      : {
+          data: null,
+          error: timeline.data === null ? timeline.error : null,
+          loading: timeline.loading || timeline.data !== null,
+        };
 
   return (
     <section
@@ -108,7 +127,7 @@ export function ChatInsightsView({
 
       {insights.loading && insights.data === null && <LoadingMessage />}
       {insights.error && (
-        <SectionError message={insights.error} onRetry={onRetry} />
+        <SectionError message={insights.error} onRetry={onRetryInsights} />
       )}
       {noImportedData && insights.data && (
         <p className="text-small text-ink-muted">
@@ -124,7 +143,16 @@ export function ChatInsightsView({
           </p>
         </div>
       ) : selectedChat ? (
-        <ChatInsightsDetails chat={selectedChat} />
+        <>
+          <CommunicationTimelineView
+            timeline={selectedTimeline}
+            onRetry={onRetryTimeline}
+          />
+          <ChatInsightsDetails
+            chat={selectedChat}
+            timeline={selectedTimeline.data}
+          />
+        </>
       ) : null}
     </section>
   );

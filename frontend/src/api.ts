@@ -337,7 +337,8 @@ export type CommunicationTimelineMonth = {
 };
 
 export type CommunicationTimelineSummary = {
-  scope: "owner" | "contact";
+  scope: "owner" | "contact" | "chat";
+  chat_id: number | null;
   canonical_identity_id: number | null;
   identity_group_id: number | null;
   source_account_count: number;
@@ -550,9 +551,18 @@ export const getCommunicationBalance = () =>
 export const getForgottenContacts = () =>
   getJson<ForgottenContactsStatistics>("/api/analytics/forgotten-contacts");
 
-export const getCommunicationTimeline = (canonicalIdentityId?: number) =>
-  getJson<CommunicationTimelineStatistics>(
+export const getCommunicationTimeline = (
+  canonicalIdentityId?: number,
+  chatId?: number,
+) => {
+  const parameters = [
     canonicalIdentityId === undefined
-      ? "/api/analytics/communication-timeline"
-      : `/api/analytics/communication-timeline?canonical_identity_id=${canonicalIdentityId}`,
+      ? null
+      : `canonical_identity_id=${canonicalIdentityId}`,
+    chatId === undefined ? null : `chat_id=${chatId}`,
+  ].filter((parameter): parameter is string => parameter !== null);
+  const query = parameters.length > 0 ? `?${parameters.join("&")}` : "";
+  return getJson<CommunicationTimelineStatistics>(
+    `/api/analytics/communication-timeline${query}`,
   );
+};

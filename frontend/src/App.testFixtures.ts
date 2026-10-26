@@ -20,7 +20,8 @@ export const overview: OverviewStatistics = {
 
 export const timeline: CommunicationTimelineStatistics = {
   summary: {
-    scope: "owner",
+    scope: "chat",
+    chat_id: 10,
     canonical_identity_id: null,
     identity_group_id: null,
     source_account_count: 1,

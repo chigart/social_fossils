@@ -14,12 +14,7 @@ import {
   sectionTitleClassName,
 } from "../styles";
 import type { Resource } from "../types";
-import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
-
-export type TimelineContactOption = {
-  canonicalIdentityId: number;
-  displayName: string;
-};
+import { LoadingMessage, SectionError } from "./Feedback";
 
 function formatMonth(month: string) {
   const date = new Date(`${month}-01T00:00:00Z`);
@@ -185,15 +180,9 @@ function TimelineChart({
 
 export function CommunicationTimelineView({
   timeline,
-  contactOptions,
-  selectedContactId,
-  onContactChange,
   onRetry,
 }: {
   timeline: Resource<CommunicationTimelineStatistics>;
-  contactOptions: TimelineContactOption[];
-  selectedContactId: number | null;
-  onContactChange: (contactId: number | null) => void;
   onRetry: () => void;
 }) {
   const data = timeline.data;
@@ -204,11 +193,6 @@ export function CommunicationTimelineView({
   const showUnknown = months.some(
     (month) => month.unknown_direction_message_count > 0,
   );
-  const activeDays = months.reduce((total, month) => total + month.active_days, 0);
-  const selectedContact = contactOptions.find(
-    (contact) => contact.canonicalIdentityId === selectedContactId,
-  );
-
   return (
     <section
       id="communication-timeline"
@@ -225,31 +209,6 @@ export function CommunicationTimelineView({
             Communication timeline
           </h2>
         </div>
-        <label className="flex min-w-[220px] flex-col gap-1 text-caption font-semibold text-ink-muted max-sm:w-full">
-          Timeline scope
-          <select
-            className="min-h-[38px] rounded-[7px] border border-border-input bg-surface px-3 py-2 text-small text-ink outline-none focus:border-brand focus:ring-[3px] focus:ring-focus-ring"
-            value={selectedContactId ?? ""}
-            onChange={(event) =>
-              onContactChange(
-                event.currentTarget.value === ""
-                  ? null
-                  : Number(event.currentTarget.value),
-              )
-            }
-            aria-label="Timeline scope"
-          >
-            <option value="">Combined owner history</option>
-            {contactOptions.map((contact) => (
-              <option
-                key={contact.canonicalIdentityId}
-                value={contact.canonicalIdentityId}
-              >
-                {contact.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
@@ -264,56 +223,6 @@ export function CommunicationTimelineView({
       )}
       {data && (
         <>
-          <div className="mb-5 grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
-            <MetricCard
-              label="Ordinary messages"
-              value={formatNumber(data.summary.ordinary_message_count)}
-            />
-            <MetricCard
-              label="Dated messages"
-              value={formatNumber(data.summary.dated_ordinary_message_count)}
-            />
-            <MetricCard
-              label="Undated messages"
-              value={formatNumber(data.summary.undated_ordinary_message_count)}
-            />
-            <MetricCard
-              label="Active days"
-              value={formatNumber(activeDays)}
-              detail="sum of monthly active days"
-            />
-            <MetricCard
-              label="Owner messages"
-              value={formatNumber(data.summary.owner_message_count)}
-            />
-            <MetricCard
-              label="Contact messages"
-              value={formatNumber(data.summary.contact_message_count)}
-            />
-            <MetricCard
-              label="Unknown direction"
-              value={formatNumber(data.summary.unknown_direction_message_count)}
-            />
-          </div>
-
-          <p className="mb-3 text-small text-ink-muted">
-            Scope:{" "}
-            <strong className="font-semibold text-ink">
-              {data.summary.scope === "owner"
-                ? "Combined owner history"
-                : selectedContact?.displayName ?? "Selected canonical contact"}
-            </strong>
-            {" · "}
-            {formatNumber(data.summary.source_account_count)} source{" "}
-            {data.summary.source_account_count === 1 ? "account" : "accounts"}
-            {data.summary.source_account_labels.length > 0 && (
-              <>
-                {" · "}
-                {data.summary.source_account_labels.join(", ")}
-              </>
-            )}
-          </p>
-
           {months.length === 0 ? (
             <div className={`${emptyStateClassName} p-[23px]`}>
               <h3 className={emptyStateTitleClassName}>

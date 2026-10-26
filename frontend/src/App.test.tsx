@@ -1565,18 +1565,42 @@ describe("dashboard", () => {
     expect(api.getForgottenContacts).toHaveBeenCalledTimes(2);
   });
 
-  it("plots monthly totals and loads a canonical contact timeline on selection", async () => {
+  it("uses one chat selection for the timeline and insight details", async () => {
     const user = userEvent.setup();
+    api.getChatInsights.mockResolvedValue({
+      chats: [
+        {
+          ...chatInsights.chats[0],
+          chat_id: 10,
+          title: "Private group",
+        },
+        {
+          ...chatInsights.chats[0],
+          chat_id: 11,
+          title: "One-to-one chat",
+          ordinary_message_count: 5,
+        },
+      ],
+    });
     api.getCommunicationTimeline
       .mockResolvedValueOnce(timeline)
       .mockResolvedValueOnce({
         ...timeline,
         summary: {
           ...timeline.summary,
-          scope: "contact",
-          canonical_identity_id: 1,
-          source_contact_ids: [11],
+          chat_id: 11,
+          ordinary_message_count: 2,
+          owner_message_count: 1,
+          contact_message_count: 1,
         },
+        months: timeline.months.map((month) => ({
+          ...month,
+          ordinary_message_count: month.month === "2023-03" ? 2 : 0,
+          owner_message_count: month.month === "2023-03" ? 1 : 0,
+          contact_message_count: month.month === "2023-03" ? 1 : 0,
+          unknown_direction_message_count: 0,
+          active_days: month.month === "2023-03" ? 1 : 0,
+        })),
       });
     await renderLoadedDashboard();
     await selectDashboardTab("Conversation insights");
@@ -1584,6 +1608,12 @@ describe("dashboard", () => {
     const region = screen.getByRole("region", {
       name: "Communication timeline",
     });
+    expect(
+      screen.getAllByRole("searchbox", { name: "Search chats by title" }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole("combobox", { name: "Timeline scope" }),
+    ).not.toBeInTheDocument();
     const chart = within(region).getByRole("img", {
       name: "Monthly ordinary message activity",
     });
@@ -1595,18 +1625,45 @@ describe("dashboard", () => {
       }),
     ).toHaveTextContent("unknown direction");
     expect(
-      within(region).getByText("Combined owner history", { selector: "strong" }),
+      screen.getByRole("heading", { name: "Active days" }),
     ).toBeInTheDocument();
-    expect(within(region).getByText(/@anton/)).toBeInTheDocument();
-
-    await user.selectOptions(
-      within(region).getByRole("combobox", { name: "Timeline scope" }),
-      "1",
+    expect(
+      screen.getByRole("heading", { name: "Owner messages" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Contact messages" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Text volume" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Emoji reactions" }),
+    ).toBeInTheDocument();
+    const orderedHeadings = [
+      ...screen.getAllByRole("heading"),
+    ].map((heading) => heading.textContent);
+    expect(orderedHeadings.indexOf("Communication timeline")).toBeLessThan(
+      orderedHeadings.indexOf("Ordinary messages"),
+    );
+    expect(orderedHeadings.indexOf("Ordinary messages")).toBeLessThan(
+      orderedHeadings.indexOf("Share of messages by person (top 10 senders)"),
     );
 
-    expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, 1);
+    await user.click(
+      within(screen.getByRole("group", { name: "Matching chats" })).getByRole(
+        "button",
+        { name: /One-to-one chat/ },
+      ),
+    );
+
+    expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, undefined, 11);
     expect(
-      await within(region).findByText("Avery", { selector: "strong" }),
+      await within(region).findByRole("img", {
+        name: "Monthly ordinary message activity",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Active days"),
     ).toBeInTheDocument();
   });
 

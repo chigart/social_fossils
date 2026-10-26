@@ -1,4 +1,7 @@
-import type { ChatInsightsStatistics } from "../api";
+import type {
+  ChatInsightsStatistics,
+  CommunicationTimelineStatistics,
+} from "../api";
 import { formatNumber } from "../format";
 import {
   chatInsightsCardClassName,
@@ -16,9 +19,21 @@ import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
 import { SenderShareChart } from "./SenderShareChart";
 import { filterRepeatedItems } from "./chatInsightsUtils";
 
-export function ChatInsightsDetails({ chat }: { chat: ChatInsightsStatistics }) {
+export function ChatInsightsDetails({
+  chat,
+  timeline,
+}: {
+  chat: ChatInsightsStatistics;
+  timeline: CommunicationTimelineStatistics | null;
+}) {
   const popularWords = filterRepeatedItems(chat.popular_words);
   const popularEmojis = filterRepeatedItems(chat.popular_emojis);
+  const activeDays = timeline?.months.reduce(
+    (total, month) => total + month.active_days,
+    0,
+  );
+  const ownerMessageCount = timeline?.summary.owner_message_count;
+  const contactMessageCount = timeline?.summary.contact_message_count;
 
   return (
     <>
@@ -26,6 +41,26 @@ export function ChatInsightsDetails({ chat }: { chat: ChatInsightsStatistics }) 
         <MetricCard
           label="Ordinary messages"
           value={formatNumber(chat.ordinary_message_count)}
+        />
+        <MetricCard
+          label="Active days"
+          value={activeDays === undefined ? "—" : formatNumber(activeDays)}
+        />
+        <MetricCard
+          label="Owner messages"
+          value={
+            ownerMessageCount === undefined
+              ? "—"
+              : formatNumber(ownerMessageCount)
+          }
+        />
+        <MetricCard
+          label="Contact messages"
+          value={
+            contactMessageCount === undefined
+              ? "—"
+              : formatNumber(contactMessageCount)
+          }
         />
         <MetricCard
           label="Text volume"

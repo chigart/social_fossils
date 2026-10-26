@@ -90,6 +90,20 @@ describe("analytics API helpers", () => {
     );
   });
 
+  it("requests a chat-specific timeline when selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ summary: {}, months: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCommunicationTimeline(undefined, 17);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/analytics/communication-timeline?chat_id=17",
+    );
+  });
+
   it("lists, links, and unlinks platform identities", async () => {
     const response = {
       identities: [],

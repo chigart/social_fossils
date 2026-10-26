@@ -1,9 +1,11 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CanonicalIdentity
+from app.models import CanonicalIdentity, Chat
 from app.schemas.analytics import CommunicationTimelineStatistics
 
 from .analytics_communication_timeline_queries import (
@@ -21,7 +23,8 @@ router = APIRouter()
         "Returns ordinary-message counts in UTC calendar months across the "
         "combined imported owner history. Pass canonical_identity_id to limit "
         "the timeline to that identity in one-to-one personal chats; explicitly "
-        "linked platform identities share one timeline. Owner aliases are "
+        "linked platform identities share one timeline. Pass chat_id to limit "
+        "the timeline to one chat. Owner aliases are "
         "identified by platform-scoped stored user IDs. Contact "
         "direction requires a non-owner sender with is_outgoing=false; when "
         "a selected canonical identity is requested, the sender must also "
@@ -35,8 +38,14 @@ router = APIRouter()
 )
 def get_communication_timeline(
     db: Session = Depends(get_db),
-    canonical_identity_id: int | None = Query(default=None, gt=0),
+    canonical_identity_id: Annotated[int | None, Query(gt=0)] = None,
+    chat_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> CommunicationTimelineStatistics:
+    if canonical_identity_id is not None and chat_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Select either a canonical identity or a chat, not both.",
+        )
     if canonical_identity_id is not None:
         identity_id = db.scalar(
             select(CanonicalIdentity.id).where(
@@ -48,7 +57,12 @@ def get_communication_timeline(
                 status_code=404,
                 detail="Canonical identity not found.",
             )
+    if chat_id is not None:
+        selected_chat_id = db.scalar(select(Chat.id).where(Chat.id == chat_id))
+        if selected_chat_id is None:
+            raise HTTPException(status_code=404, detail="Chat not found.")
     return build_communication_timeline_statistics(
         db,
         canonical_identity_id=canonical_identity_id,
+        chat_id=chat_id,
     )

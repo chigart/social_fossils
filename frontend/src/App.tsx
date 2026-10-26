@@ -5,11 +5,14 @@ import { CommunicationBalanceView } from "./components/CommunicationBalanceView"
 import { ContactsView } from "./components/ContactsView";
 import { DashboardHeader } from "./components/DashboardHeader";
 import { DashboardIntro } from "./components/DashboardIntro";
-import { CommunicationTimelineView } from "./components/CommunicationTimelineView";
 import { ForgottenContactsView } from "./components/ForgottenContactsView";
 import { IdentityLinksView } from "./components/IdentityLinksView";
 import { OverviewView } from "./components/OverviewView";
 import { UploadView } from "./components/UploadView";
+import {
+  getSelectedChatInsights,
+  sortChatInsightsChats,
+} from "./components/chatInsightsUtils";
 import {
   dashboardTabFromHash,
   type DashboardTab,
@@ -28,8 +31,6 @@ export default function App() {
     forgottenContacts,
     identityLinks,
     communicationTimeline,
-    selectedTimelineContactId,
-    setSelectedTimelineContactId,
     loadOverview,
     loadChats,
     loadChatInsights,
@@ -79,8 +80,11 @@ export default function App() {
     visibleContacts,
     visibleBalanceContacts,
     visibleForgottenContacts,
-    timelineContactOptions,
   } = filters;
+  const selectedChat = getSelectedChatInsights(
+    sortChatInsightsChats(chatInsights.data?.chats ?? []),
+    selectedInsightsChatId,
+  );
 
   useEffect(() => {
     const syncSelectedTab = () =>
@@ -92,6 +96,12 @@ export default function App() {
       window.removeEventListener("popstate", syncSelectedTab);
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedChat) {
+      void loadCommunicationTimeline(undefined, selectedChat.chat_id);
+    }
+  }, [selectedChat?.chat_id]);
 
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
@@ -127,21 +137,16 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "conversation-insights"}
         >
-          <CommunicationTimelineView
-            timeline={communicationTimeline}
-            contactOptions={timelineContactOptions}
-            selectedContactId={selectedTimelineContactId}
-            onContactChange={setSelectedTimelineContactId}
-            onRetry={() =>
-              void loadCommunicationTimeline(selectedTimelineContactId)
-            }
-          />
           <ChatInsightsView
             insights={chatInsights}
+            timeline={communicationTimeline}
             selectedChatId={selectedInsightsChatId}
             onChatChange={setSelectedInsightsChatId}
             noImportedData={noImportedData}
-            onRetry={() => void loadChatInsights()}
+            onRetryInsights={() => void loadChatInsights()}
+            onRetryTimeline={() =>
+              void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
+            }
           />
         </div>
         <div

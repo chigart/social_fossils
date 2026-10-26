@@ -35,6 +35,7 @@ def build_communication_timeline_statistics(
     db: Session,
     *,
     canonical_identity_id: int | None = None,
+    chat_id: int | None = None,
 ) -> CommunicationTimelineStatistics:
     identity_group_id = (
         db.scalar(
@@ -112,6 +113,10 @@ def build_communication_timeline_statistics(
         scoped_messages_statement = scoped_messages_statement.join(
             relevant_chats,
             relevant_chats.c.chat_id == Chat.id,
+        )
+    if chat_id is not None:
+        scoped_messages_statement = scoped_messages_statement.where(
+            Chat.id == chat_id
         )
     scoped_messages = scoped_messages_statement.cte("timeline_messages")
 
@@ -215,7 +220,17 @@ def build_communication_timeline_statistics(
     )
     month_rows = list(db.execute(month_statement))
 
-    if canonical_identity_id is None:
+    if chat_id is not None:
+        source_accounts = list(
+            db.execute(
+                select(Account.id, Account.username, Account.name)
+                .join(Chat, Chat.account_id == Account.id)
+                .where(Chat.id == chat_id)
+                .order_by(Account.id)
+            )
+        )
+        source_contact_ids: list[int] = []
+    elif canonical_identity_id is None:
         source_accounts = list(
             db.execute(
                 select(
@@ -305,7 +320,12 @@ def build_communication_timeline_statistics(
     account_ids = [row[0] for row in source_accounts]
     return CommunicationTimelineStatistics(
         summary=CommunicationTimelineSummary(
-            scope="contact" if canonical_identity_id is not None else "owner",
+            scope=(
+                "chat"
+                if chat_id is not None
+                else "contact" if canonical_identity_id is not None else "owner"
+            ),
+            chat_id=chat_id,
             canonical_identity_id=canonical_identity_id,
             identity_group_id=identity_group_id,
             source_account_count=len(account_ids),

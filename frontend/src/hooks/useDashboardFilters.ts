@@ -135,26 +135,6 @@ export function useDashboardFilters({
       return direction * (leftValue - rightValue);
     });
 
-  const timelineContactOptions = [
-    ...new Map(
-      (contacts.data ?? [])
-        .filter(
-          (contact): contact is ContactStatistics & {
-            canonical_identity_id: number;
-          } => contact.canonical_identity_id !== null,
-        )
-        .map((contact) => [
-          contact.canonical_identity_id,
-          {
-            canonicalIdentityId: contact.canonical_identity_id,
-            displayName:
-                contact.display_name ||
-                "Unnamed contact",
-          },
-        ]),
-    ).values(),
-  ].sort((left, right) => left.displayName.localeCompare(right.displayName));
-
   return {
     chatSearch,
     setChatSearch,
@@ -182,6 +162,5 @@ export function useDashboardFilters({
     visibleContacts,
     visibleBalanceContacts,
     visibleForgottenContacts,
-    timelineContactOptions,
   };
 }

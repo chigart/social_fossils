@@ -41,8 +41,6 @@ export function useDashboardData() {
     useState<Resource<IdentityLinksResponse>>(emptyResource);
   const [communicationTimeline, setCommunicationTimeline] =
     useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
-  const [selectedTimelineContactId, setSelectedTimelineContactId] =
-    useState<number | null>(null);
   const timelineRequestId = useRef(0);
 
   const loadOverview = async () => {
@@ -191,17 +189,15 @@ export function useDashboardData() {
   };
 
   const loadCommunicationTimeline = async (
-    canonicalIdentityId = selectedTimelineContactId,
+    canonicalIdentityId?: number,
+    chatId?: number,
   ) => {
     const requestId = ++timelineRequestId.current;
-    setCommunicationTimeline((current) => ({
-      ...current,
-      error: null,
-      loading: true,
-    }));
+    setCommunicationTimeline(emptyResource);
     try {
       const data = await getCommunicationTimeline(
         canonicalIdentityId ?? undefined,
+        chatId,
       );
       if (requestId === timelineRequestId.current) {
         setCommunicationTimeline({ data, error: null, loading: false });
@@ -230,10 +226,6 @@ export function useDashboardData() {
     void loadIdentityLinks();
   }, []);
 
-  useEffect(() => {
-    void loadCommunicationTimeline(selectedTimelineContactId);
-  }, [selectedTimelineContactId]);
-
   return {
     overview,
     chats,
@@ -243,8 +235,6 @@ export function useDashboardData() {
     forgottenContacts,
     identityLinks,
     communicationTimeline,
-    selectedTimelineContactId,
-    setSelectedTimelineContactId,
     loadOverview,
     loadChats,
     loadChatInsights,

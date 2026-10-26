@@ -365,7 +365,11 @@ class CommunicationTimelineMonth(BaseModel):
 
 
 class CommunicationTimelineSummary(BaseModel):
-    scope: Literal["owner", "contact"]
+    scope: Literal["owner", "contact", "chat"]
+    chat_id: int | None = Field(
+        default=None,
+        description="Selected chat ID for chat scope; null otherwise.",
+    )
     identity_group_id: int | None = Field(
         default=None,
         description="Explicit identity group selected for contact scope, when linked.",
