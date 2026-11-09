@@ -38,11 +38,3 @@ Python, FastAPI, SQLAlchemy 2, PostgreSQL, Alembic, React, TypeScript, Vite, Air
 ### Test
 - Backend: `cd backend && pytest`
 - Frontend: `cd frontend && npm test`
-
-## TODO
-- HIGH: Add VK import
-- MED: AI code review for speed/vulnerabilities. Test JSONs for injection. Try to break it.
-- MED: Production build
-- MED: Instagram group chats analytics
-- MED: Show file upload progress in UI
-- LOW: Hosted Web App with encryption
