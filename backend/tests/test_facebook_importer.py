@@ -68,7 +68,13 @@ def _create_import_tables(engine):
         )
 
 
-def _write_archive(path, *, include_profile=True, friend_name="Synthetic Friend"):
+def _write_archive(
+    path,
+    *,
+    include_profile=True,
+    friend_name="Synthetic Friend",
+    extra_messages=None,
+):
     with ZipFile(path, "w") as archive:
         if include_profile:
             archive.writestr(
@@ -93,6 +99,7 @@ def _write_archive(path, *, include_profile=True, friend_name="Synthetic Friend"
                         {"name": friend_name, "user_id": "friend-456"},
                     ],
                     "messages": [
+                        *(extra_messages or []),
                         {
                             "sender_name": "Synthetic Owner",
                             "sender_id": "owner-123",
@@ -132,7 +139,7 @@ def test_facebook_import_is_idempotent_and_classifies_outgoing_messages(tmp_path
         assert account is not None and account.platform == "facebook"
         assert chat is not None and chat.title == "Synthetic conversation"
         messages = session.scalars(
-            select(Message).order_by(Message.message_id)
+            select(Message).order_by(Message.message_date)
         ).all()
         assert [message.is_outgoing for message in messages] == [True, False]
         assert all(message.source_record_key for message in messages)
@@ -192,4 +199,45 @@ def test_facebook_import_keeps_direction_unknown_without_profile_identity(tmp_pa
         assert all(message.sender_contact_id is None for message in messages)
         chat = session.scalar(select(Chat))
         assert chat is not None and chat.title == "Synthetic conversation"
+    engine.dispose()
+
+
+def test_facebook_import_keeps_existing_messages_when_older_history_is_added(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-incremental.db'}")
+    _create_import_tables(engine)
+    first_archive = tmp_path / "facebook-first.zip"
+    later_archive = tmp_path / "facebook-later.zip"
+    _write_archive(first_archive)
+    _write_archive(
+        later_archive,
+        extra_messages=[
+            {
+                "sender_name": "Synthetic Friend",
+                "sender_id": "friend-456",
+                "timestamp_ms": 1_600_000_000_000,
+                "content": "older synthetic message",
+            }
+        ],
+    )
+
+    with Session(engine) as session:
+        first = facebook_importer.import_facebook_export(first_archive, session=session)
+        original_ids = {
+            message.text_content: message.message_id
+            for message in session.scalars(select(Message)).all()
+        }
+        second = facebook_importer.import_facebook_export(later_archive, session=session)
+        imported_messages = session.scalars(select(Message)).all()
+
+        assert first["inserted_messages"] == 2
+        assert second["total_messages"] == 3
+        assert second["inserted_messages"] == 1
+        assert second["skipped_messages"] == 2
+        assert len(imported_messages) == 3
+        assert {
+            message.text_content: message.message_id
+            for message in imported_messages
+            if message.text_content in original_ids
+        } == original_ids
+
     engine.dispose()

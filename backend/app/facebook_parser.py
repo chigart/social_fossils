@@ -13,8 +13,8 @@ from typing import Any
 
 
 MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
-MAX_MESSAGE_FILE_BYTES = 100 * 1024 * 1024
-MAX_MESSAGE_DATA_BYTES = 1024 * 1024 * 1024
+MAX_MESSAGE_FILE_BYTES = 4 * 1024 * 1024
+MAX_MESSAGE_DATA_BYTES = 16 * 1024 * 1024
 MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
 
 
@@ -91,12 +91,21 @@ def _normalize_text(value: str) -> str:
     ):
         return value
     try:
-        decoded = value.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        try:
-            decoded = value.encode("latin-1").decode("utf-8", errors="replace")
-        except UnicodeEncodeError:
+        encoded = value.encode("latin-1")
+    except UnicodeEncodeError:
+        return value
+    try:
+        decoded = encoded.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        if exc.reason != "unexpected end of data" or exc.end != len(encoded):
             return value
+        try:
+            decoded_prefix = encoded[: exc.start].decode("utf-8")
+        except UnicodeDecodeError:
+            return value
+        if not any(not character.isascii() for character in decoded_prefix):
+            return value
+        decoded = encoded.decode("utf-8", errors="replace")
     return decoded if decoded != value else value
 
 
@@ -273,6 +282,14 @@ def _account_details(archive: zipfile.ZipFile) -> dict[str, str]:
     return details
 
 
+def _archive_sha256(archive_path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(archive_path).open("rb") as source_file:
+        while chunk := source_file.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def parse_facebook_archive(
     archive_path: str | Path,
 ) -> ParsedFacebookExport:
@@ -289,19 +306,26 @@ def parse_facebook_archive(
 
         total_size = sum(member.file_size for member, _ in message_files)
         if total_size > MAX_MESSAGE_DATA_BYTES:
-            raise ValueError("Facebook message data exceeds the supported archive size.")
+            raise ValueError(
+                "Facebook message data exceeds the supported limit of "
+                f"{MAX_MESSAGE_DATA_BYTES} bytes."
+            )
 
         chats_by_id: dict[str, ParsedFacebookChat] = {}
         identical_message_counts: dict[str, Counter[str]] = {}
         for member, chat_id in message_files:
             if member.file_size > MAX_MESSAGE_FILE_BYTES:
-                raise ValueError("Facebook message JSON file exceeds the supported size.")
+                raise ValueError(
+                    "Facebook message JSON file exceeds the supported limit of "
+                    f"{MAX_MESSAGE_FILE_BYTES} bytes."
+                )
             try:
                 with archive.open(member) as message_file:
                     raw_json = message_file.read(MAX_MESSAGE_FILE_BYTES + 1)
                     if len(raw_json) > MAX_MESSAGE_FILE_BYTES:
                         raise ValueError(
-                            "Facebook message JSON file exceeds the supported size."
+                            "Facebook message JSON file exceeds the supported limit of "
+                            f"{MAX_MESSAGE_FILE_BYTES} bytes."
                         )
                     payload = json.loads(raw_json.decode("utf-8"))
             except (
@@ -376,7 +400,7 @@ def parse_facebook_archive(
                 occurrence = occurrences[serialized]
                 occurrences[serialized] += 1
                 message = _message_payload(chat_id, raw_message, occurrence)
-                message["message_id"] = str(len(chat.messages) + 1)
+                message["message_id"] = f"facebook:{message['source_record_key']}"
                 chat.messages.append(message)
 
     account_name = (
@@ -388,7 +412,7 @@ def parse_facebook_archive(
     owner_platform_user_id = (
         account_details.get("user_id")
         or account_username
-        or f"name:{hashlib.sha256(account_name.casefold().encode('utf-8')).hexdigest()}"
+        or f"archive:{_archive_sha256(archive_path)}"
     )
     named_chats = [
         chat

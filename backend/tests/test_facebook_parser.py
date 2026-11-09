@@ -69,13 +69,18 @@ def test_parse_facebook_archive_reads_profile_and_normalizes_messages(tmp_path):
     assert chat.chat_type == "personal_chat"
     assert chat.correspondent_platform_user_id == "123"
     assert chat.correspondent_name == "Example Friend"
-    assert [message["message_id"] for message in chat.messages] == ["1", "2", "3"]
+    assert [message["message_id"] for message in chat.messages] == [
+        f"facebook:{message['source_record_key']}" for message in chat.messages
+    ]
     assert chat.messages[0]["message_type"] == "message"
     assert chat.messages[0]["text_content"] == "hello"
     assert chat.messages[0]["message_date"].isoformat() == "2023-11-14T22:13:20+00:00"
     assert chat.messages[1]["source_record_key"] != chat.messages[2]["source_record_key"]
     assert [message["source_record_key"] for message in chat.messages] == [
         message["source_record_key"] for message in repeated.chats[0].messages
+    ]
+    assert [message["message_id"] for message in chat.messages] == [
+        message["message_id"] for message in repeated.chats[0].messages
     ]
 
 
@@ -98,9 +103,8 @@ def test_parse_facebook_archive_numbers_split_files_in_order(tmp_path):
     parsed = parse_facebook_archive(archive_path)
 
     assert [
-        (message["message_id"], message["text_content"])
-        for message in parsed.chats[0].messages
-    ] == [("1", "first"), ("2", "second"), ("3", "third")]
+        message["text_content"] for message in parsed.chats[0].messages
+    ] == ["first", "second", "third"]
 
 
 def test_parse_facebook_archive_skips_untitled_conversations(tmp_path):
@@ -147,6 +151,7 @@ def test_parse_facebook_archive_repairs_thai_and_georgian_text(tmp_path):
                     "sender_name": truncated_mojibake_russian,
                     "content": truncated_mojibake_russian,
                 },
+                {"content": "Olá"},
             ],
             title=mojibake_clinic,
         )
@@ -165,6 +170,7 @@ def test_parse_facebook_archive_repairs_thai_and_georgian_text(tmp_path):
     )
     assert chat.messages[2]["sender_name"] == expected_truncated_name
     assert chat.messages[2]["text_content"] == expected_truncated_name
+    assert chat.messages[3]["text_content"] == "Olá"
 
 
 def test_parse_facebook_archive_preserves_cyrillic_name_ending_in_u0085(tmp_path):
@@ -230,3 +236,59 @@ def test_parse_facebook_archive_rejects_invalid_and_malformed_archives(tmp_path)
         )
     with pytest.raises(ValueError, match="entries must be JSON objects"):
         parse_facebook_archive(malformed_path)
+
+
+def test_profileless_archives_have_distinct_stable_owner_ids(tmp_path):
+    first_path = tmp_path / "first.zip"
+    second_path = tmp_path / "second.zip"
+    for path, content in ((first_path, "first export"), (second_path, "second export")):
+        with ZipFile(path, "w") as archive:
+            _write_conversation(
+                archive,
+                "messages/inbox/friend_123/message_1.json",
+                [{"content": content}],
+                title="Synthetic conversation",
+            )
+
+    first = parse_facebook_archive(first_path)
+    repeated_first = parse_facebook_archive(first_path)
+    second = parse_facebook_archive(second_path)
+
+    assert first.has_owner_identity is False
+    assert first.owner_platform_user_id == repeated_first.owner_platform_user_id
+    assert first.owner_platform_user_id != second.owner_platform_user_id
+
+
+def test_parse_facebook_archive_rejects_message_data_over_memory_limit(
+    tmp_path,
+    monkeypatch,
+):
+    archive_path = tmp_path / "oversized-messages.zip"
+    with ZipFile(archive_path, "w") as archive:
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_123/message_1.json",
+            [{"content": "synthetic"}],
+            title="Synthetic conversation",
+        )
+
+    monkeypatch.setattr("app.facebook_parser.MAX_MESSAGE_DATA_BYTES", 1)
+
+    with pytest.raises(ValueError, match="message data exceeds"):
+        parse_facebook_archive(archive_path)
+
+
+def test_parse_facebook_archive_rejects_oversized_message_file(tmp_path, monkeypatch):
+    archive_path = tmp_path / "oversized-message-file.zip"
+    with ZipFile(archive_path, "w") as archive:
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_123/message_1.json",
+            [{"content": "synthetic"}],
+            title="Synthetic conversation",
+        )
+
+    monkeypatch.setattr("app.facebook_parser.MAX_MESSAGE_FILE_BYTES", 1)
+
+    with pytest.raises(ValueError, match="message JSON file exceeds"):
+        parse_facebook_archive(archive_path)

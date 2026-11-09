@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,12 @@ def _get_or_create_account(
     account_username: str | None,
     owner_platform_user_id: str,
 ) -> Account:
+    if session.get_bind().dialect.name == "postgresql":
+        lock_key = f"facebook-account:{owner_platform_user_id}"
+        session.execute(
+            select(func.pg_advisory_xact_lock(func.hashtext(lock_key)))
+        )
+
     accounts = session.scalars(
         select(Account).where(
             Account.platform == FACEBOOK_PLATFORM_ID,
