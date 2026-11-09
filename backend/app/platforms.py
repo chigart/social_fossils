@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 TELEGRAM_PLATFORM_ID = "telegram"
 INSTAGRAM_PLATFORM_ID = "instagram"
+FACEBOOK_PLATFORM_ID = "facebook"
 
 
 @dataclass(frozen=True)
@@ -34,5 +35,16 @@ PLATFORM_CONFIGS: dict[str, PlatformConfig] = {
             "as its export format."
         ),
         importer="app.instagram_importer:import_instagram_export",
+    ),
+    FACEBOOK_PLATFORM_ID: PlatformConfig(
+        label="Facebook",
+        file_extensions=(".zip",),
+        accepted_file_types=".zip,application/zip",
+        file_input_label="Choose Facebook ZIP files",
+        instructions=(
+            "Choose the downloaded Facebook ZIP archive with JSON selected "
+            "as its export format."
+        ),
+        importer="app.facebook_importer:import_facebook_export",
     ),
 }

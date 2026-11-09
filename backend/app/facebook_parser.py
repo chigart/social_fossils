@@ -1,0 +1,404 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import re
+import zipfile
+from collections import Counter
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path, PurePosixPath
+from typing import Any
+
+
+MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
+MAX_MESSAGE_FILE_BYTES = 100 * 1024 * 1024
+MAX_MESSAGE_DATA_BYTES = 1024 * 1024 * 1024
+MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
+
+
+@dataclass
+class ParsedFacebookChat:
+    platform_chat_id: str
+    title: str | None
+    chat_type: str
+    correspondent_platform_user_id: str | None
+    correspondent_name: str | None
+    messages: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ParsedFacebookExport:
+    account_name: str
+    account_username: str | None
+    owner_platform_user_id: str
+    has_owner_identity: bool
+    chats: list[ParsedFacebookChat] = field(default_factory=list)
+
+
+def _message_files(
+    archive: zipfile.ZipFile,
+) -> list[tuple[zipfile.ZipInfo, str]]:
+    files: list[tuple[zipfile.ZipInfo, str]] = []
+    for member in archive.infolist():
+        if member.is_dir():
+            continue
+        path = PurePosixPath(member.filename)
+        parts = path.parts
+        try:
+            messages_index = next(
+                index
+                for index, part in enumerate(parts)
+                if part.casefold() == "messages"
+            )
+        except StopIteration:
+            continue
+        if (
+            messages_index + 2 >= len(parts)
+            or not MESSAGE_FILE_PATTERN.fullmatch(path.name)
+        ):
+            continue
+        thread_path = "/".join(parts[messages_index + 1 : -1])
+        files.append((member, thread_path))
+
+    def sort_key(item: tuple[zipfile.ZipInfo, str]) -> tuple[str, int, str]:
+        member, thread_path = item
+        match = MESSAGE_FILE_PATTERN.fullmatch(PurePosixPath(member.filename).name)
+        file_number = int(match.group(1) or 1) if match is not None else 1
+        return thread_path, file_number, member.filename
+
+    return sorted(files, key=sort_key)
+
+
+def _normalize_text(value: str) -> str:
+    if not any(
+        marker in value
+        for marker in (
+            "Ã",
+            "Ð",
+            "Ñ",
+            "ð",
+            "à",
+            "á",
+            "Â",
+            "\x80",
+            "\x81",
+            "\x83",
+            "\x8d",
+            "\x9f",
+        )
+    ):
+        return value
+    try:
+        decoded = value.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        try:
+            decoded = value.encode("latin-1").decode("utf-8", errors="replace")
+        except UnicodeEncodeError:
+            return value
+    return decoded if decoded != value else value
+
+
+def _source_id(value: Any) -> str | None:
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _timestamp_from_message(message: dict[str, Any]) -> datetime | None:
+    value = message.get("timestamp_ms")
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()):
+        return None
+    try:
+        return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
+    except (OverflowError, OSError, TypeError, ValueError):
+        return None
+
+
+def _stable_record_key(
+    chat_id: str,
+    raw_message: dict[str, Any],
+    occurrence: int,
+) -> str:
+    serialized = json.dumps(
+        [chat_id, raw_message, occurrence],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _message_payload(
+    chat_id: str,
+    raw_message: dict[str, Any],
+    occurrence: int,
+) -> dict[str, Any]:
+    sender_name = raw_message.get("sender_name")
+    if not isinstance(sender_name, str) or not sender_name.strip():
+        sender_name = None
+
+    content = raw_message.get("content")
+    if not isinstance(content, str):
+        content = None
+
+    message_type = raw_message.get("type")
+    if not isinstance(message_type, str) or not message_type.strip():
+        message_type = "message"
+    else:
+        message_type = message_type.strip()
+        if message_type.casefold() == "generic":
+            message_type = "message"
+
+    is_outgoing = raw_message.get("is_outgoing")
+    if not isinstance(is_outgoing, bool):
+        is_outgoing = raw_message.get("is_sent_by_you")
+    if not isinstance(is_outgoing, bool):
+        is_outgoing = None
+
+    normalized_sender_name = (
+        _normalize_text(sender_name).strip() if sender_name else None
+    )
+
+    return {
+        "source_record_key": _stable_record_key(chat_id, raw_message, occurrence),
+        "sender_id": _source_id(
+            raw_message.get("sender_id", raw_message.get("sender_user_id"))
+        ),
+        "sender_name": normalized_sender_name,
+        "is_outgoing": is_outgoing,
+        "message_date": _timestamp_from_message(raw_message),
+        "message_type": message_type[:50],
+        "text_content": _normalize_text(content) if content is not None else None,
+        "source_reply_id": _source_id(
+            raw_message.get("reply_to_message_id")
+        ),
+        "raw_payload": raw_message,
+    }
+
+
+def _chat_type(participants: Any) -> str:
+    if not isinstance(participants, list) or len(participants) < 2:
+        return "unknown"
+    return "private_group" if len(participants) > 2 else "personal_chat"
+
+
+def _is_owner_participant(
+    participant: dict[str, Any],
+    account_details: dict[str, str],
+) -> bool:
+    participant_name = _profile_value(participant.get("name"))
+    participant_id = _source_id(
+        participant.get("user_id", participant.get("id"))
+    )
+    owner_names = {
+        value.casefold()
+        for value in (account_details.get("name"), account_details.get("username"))
+        if value
+    }
+    owner_ids = {
+        value
+        for value in (account_details.get("user_id"), account_details.get("username"))
+        if value
+    }
+    return (
+        participant_name is not None
+        and participant_name.casefold() in owner_names
+    ) or (participant_id is not None and participant_id in owner_ids)
+
+
+def _profile_value(value: Any) -> str | None:
+    if isinstance(value, dict):
+        value = value.get("value", value.get("full_name"))
+    if isinstance(value, (str, int)) and not isinstance(value, bool):
+        normalized = _normalize_text(str(value)).strip()
+        return normalized or None
+    return None
+
+
+def _profile_fields(payload: Any) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    key_map = {
+        "name": "name",
+        "full name": "name",
+        "username": "username",
+        "user name": "username",
+        "user id": "user_id",
+        "user id number": "user_id",
+        "profile id": "user_id",
+        "facebook id": "user_id",
+        "facebook user id": "user_id",
+    }
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized_key = key.casefold().replace("_", " ").strip()
+                target = key_map.get(normalized_key)
+                candidate = _profile_value(child)
+                if target is not None and candidate is not None:
+                    fields.setdefault(target, candidate)
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(payload)
+    return fields
+
+
+def _account_details(archive: zipfile.ZipFile) -> dict[str, str]:
+    details: dict[str, str] = {}
+    for member in sorted(archive.infolist(), key=lambda item: item.filename):
+        if member.is_dir() or not member.filename.casefold().endswith(".json"):
+            continue
+        path_parts = {part.casefold() for part in PurePosixPath(member.filename).parts}
+        if not path_parts.intersection(
+            {"profile_information", "personal_information", "account_information"}
+        ):
+            continue
+        if member.file_size > MAX_PROFILE_FILE_BYTES:
+            continue
+        try:
+            with archive.open(member) as profile_file:
+                payload = json.loads(profile_file.read(MAX_PROFILE_FILE_BYTES + 1))
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError, zipfile.BadZipFile):
+            continue
+        for key, value in _profile_fields(payload).items():
+            details.setdefault(key, value)
+    return details
+
+
+def parse_facebook_archive(
+    archive_path: str | Path,
+) -> ParsedFacebookExport:
+    try:
+        archive = zipfile.ZipFile(archive_path)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError("Facebook export must be a valid ZIP archive.") from exc
+
+    with archive:
+        account_details = _account_details(archive)
+        message_files = _message_files(archive)
+        if not message_files:
+            raise ValueError("Facebook export contains no supported message JSON files.")
+
+        total_size = sum(member.file_size for member, _ in message_files)
+        if total_size > MAX_MESSAGE_DATA_BYTES:
+            raise ValueError("Facebook message data exceeds the supported archive size.")
+
+        chats_by_id: dict[str, ParsedFacebookChat] = {}
+        identical_message_counts: dict[str, Counter[str]] = {}
+        for member, chat_id in message_files:
+            if member.file_size > MAX_MESSAGE_FILE_BYTES:
+                raise ValueError("Facebook message JSON file exceeds the supported size.")
+            try:
+                with archive.open(member) as message_file:
+                    raw_json = message_file.read(MAX_MESSAGE_FILE_BYTES + 1)
+                    if len(raw_json) > MAX_MESSAGE_FILE_BYTES:
+                        raise ValueError(
+                            "Facebook message JSON file exceeds the supported size."
+                        )
+                    payload = json.loads(raw_json.decode("utf-8"))
+            except (
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                OSError,
+                zipfile.BadZipFile,
+            ) as exc:
+                raise ValueError("Facebook message JSON file is malformed.") from exc
+
+            if not isinstance(payload, dict):
+                raise ValueError("Facebook conversation JSON must be an object.")
+            raw_messages = payload.get("messages")
+            if not isinstance(raw_messages, list):
+                raise ValueError("Facebook conversation must contain a messages list.")
+
+            chat = chats_by_id.get(chat_id)
+            if chat is None:
+                participants = payload.get("participants")
+                correspondent = (
+                    next(
+                        (
+                            participant
+                            for participant in participants
+                            if isinstance(participant, dict)
+                            and not _is_owner_participant(
+                                participant,
+                                account_details,
+                            )
+                        ),
+                        None,
+                    )
+                    if isinstance(participants, list) and account_details
+                    else None
+                )
+                title = payload.get("title")
+                correspondent_name = (
+                    _profile_value(correspondent.get("name"))
+                    if correspondent is not None
+                    else None
+                )
+                correspondent_id = (
+                    _source_id(
+                        correspondent.get(
+                            "user_id",
+                            correspondent.get("id"),
+                        )
+                    )
+                    if correspondent is not None
+                    else None
+                )
+                chat = ParsedFacebookChat(
+                    platform_chat_id=chat_id,
+                    title=_profile_value(title),
+                    chat_type=_chat_type(participants),
+                    correspondent_platform_user_id=correspondent_id,
+                    correspondent_name=correspondent_name,
+                )
+                chats_by_id[chat_id] = chat
+                identical_message_counts[chat_id] = Counter()
+
+            occurrences = identical_message_counts[chat_id]
+            for raw_message in raw_messages:
+                if not isinstance(raw_message, dict):
+                    raise ValueError("Facebook message entries must be JSON objects.")
+                serialized = json.dumps(
+                    raw_message,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                occurrence = occurrences[serialized]
+                occurrences[serialized] += 1
+                message = _message_payload(chat_id, raw_message, occurrence)
+                message["message_id"] = str(len(chat.messages) + 1)
+                chat.messages.append(message)
+
+    account_name = (
+        account_details.get("name")
+        or account_details.get("username")
+        or "Facebook account"
+    )
+    account_username = account_details.get("username")
+    owner_platform_user_id = (
+        account_details.get("user_id")
+        or account_username
+        or f"name:{hashlib.sha256(account_name.casefold().encode('utf-8')).hexdigest()}"
+    )
+    named_chats = [
+        chat
+        for chat in chats_by_id.values()
+        if chat.title is not None and chat.title.strip()
+    ]
+    return ParsedFacebookExport(
+        account_name=account_name,
+        account_username=account_username,
+        owner_platform_user_id=owner_platform_user_id,
+        has_owner_identity=bool(account_details),
+        chats=named_chats,
+    )

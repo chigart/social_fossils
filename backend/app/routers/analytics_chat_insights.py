@@ -353,22 +353,25 @@ def _build_conversation_activity(
         for message in messages
         if message.message_type == ORDINARY_MESSAGE_TYPE
     ]
-    dated_messages = sorted(
-        (message for message in ordinary_messages if message.message_date is not None),
-        key=lambda message: (_as_utc(message.message_date), message.message_id),
-    )
+    dated_messages: list[tuple[_ConversationMessage, datetime]] = []
+    for message in ordinary_messages:
+        message_date = message.message_date
+        if message_date is not None:
+            dated_messages.append((message, _as_utc(message_date)))
+    dated_messages.sort(key=lambda item: (item[1], item[0].message_id))
     undated_count = len(ordinary_messages) - len(dated_messages)
     sessions: list[list[_ConversationMessage]] = []
-    for message in dated_messages:
+    previous_message_date: datetime | None = None
+    for message, message_date in dated_messages:
         if (
             not sessions
-            or _as_utc(message.message_date)
-            - _as_utc(sessions[-1][-1].message_date)
-            >= CONVERSATION_GAP
+            or previous_message_date is None
+            or message_date - previous_message_date >= CONVERSATION_GAP
         ):
             sessions.append([message])
         else:
             sessions[-1].append(message)
+        previous_message_date = message_date
 
     names: dict[str, str] = {}
     for message in ordinary_messages:

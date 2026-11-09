@@ -12,6 +12,13 @@ export const PLATFORM_CONFIG = {
     instructions:
       "Choose the downloaded Instagram ZIP archive with JSON selected as its export format.",
   },
+  facebook: {
+    label: "Facebook",
+    acceptedFileType: ".zip,application/zip",
+    fileInputLabel: "Choose Facebook ZIP files",
+    instructions:
+      "Choose the downloaded Facebook ZIP archive with JSON selected as its export format.",
+  },
 } as const;
 
 export type UploadPlatform = keyof typeof PLATFORM_CONFIG;

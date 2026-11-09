@@ -155,6 +155,39 @@ describe("UploadView", () => {
     expect(uploadFile).toHaveBeenCalledWith(archive, "instagram");
   });
 
+  it("uploads Facebook JSON archives with the selected platform", async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadFile).mockResolvedValue({
+      id: 83,
+      filename: "facebook.zip",
+      platform: "facebook",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-83",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+    });
+
+    render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "facebook",
+    );
+    const fileInput = screen.getByLabelText("Choose Facebook ZIP files");
+    const archive = new File(["synthetic"], "facebook.zip", {
+      type: "application/zip",
+    });
+    await user.upload(fileInput, archive);
+    expect(fileInput).toHaveAttribute("accept", ".zip,application/zip");
+    await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+    expect(await screen.findByText("facebook.zip")).toBeInTheDocument();
+    expect(uploadFile).toHaveBeenCalledWith(archive, "facebook");
+  });
+
   it("shows duplicate uploads as an informational warning and still queues them", async () => {
     const user = userEvent.setup();
     vi.mocked(uploadFile).mockResolvedValue({

@@ -133,6 +133,34 @@ def test_instagram_upload_records_platform_and_requires_zip_archive(tmp_path, mo
             )
             assert invalid.status_code == 400
             assert ".zip" in invalid.json()["detail"]
+
+            facebook = client.post(
+                "/api/uploads/upload",
+                data={"platform": "facebook"},
+                files={
+                    "file": (
+                        "facebook.zip",
+                        b"synthetic archive",
+                        "application/zip",
+                    )
+                },
+            )
+            assert facebook.status_code == 202
+            assert facebook.json()["platform"] == "facebook"
+
+            invalid_facebook = client.post(
+                "/api/uploads/upload",
+                data={"platform": "facebook"},
+                files={
+                    "file": (
+                        "facebook.html",
+                        b"synthetic export",
+                        "text/html",
+                    )
+                },
+            )
+            assert invalid_facebook.status_code == 400
+            assert ".zip" in invalid_facebook.json()["detail"]
         finally:
             app.dependency_overrides.pop(get_db, None)
             session.close()
