@@ -84,6 +84,60 @@ def test_parse_facebook_archive_reads_profile_and_normalizes_messages(tmp_path):
     ]
 
 
+def test_facebook_uses_numeric_thread_folder_id_for_personal_chat(tmp_path):
+    archive_path = tmp_path / "facebook-short-id.zip"
+    long_user_id = "name:" + "a" * 64
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile_information/profile_information.json",
+            json.dumps(
+                {
+                    "profile_v2": {
+                        "name": {"full_name": "Synthetic Owner"},
+                        "user_id": {"value": "owner-123"},
+                    }
+                }
+            ),
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_858127978920780/message_1.json",
+            [
+                {
+                    "sender_name": "Synthetic Friend",
+                    "sender_id": long_user_id,
+                    "content": "synthetic incoming",
+                }
+            ],
+            title="Synthetic conversation",
+            participants=[
+                {"name": "Synthetic Owner", "user_id": "owner-123"},
+                {"name": "Synthetic Friend", "user_id": long_user_id},
+            ],
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_858127978920780/message_2.json",
+            [
+                {
+                    "sender_name": "Synthetic Friend",
+                    "sender_id": long_user_id,
+                    "content": "synthetic incoming continuation",
+                }
+            ],
+        )
+
+    parsed = parse_facebook_archive(archive_path)
+
+    chat = parsed.chats[0]
+    assert chat.platform_chat_id == "inbox/friend_858127978920780"
+    assert chat.correspondent_platform_user_id == "858127978920780"
+    assert [message["sender_id"] for message in chat.messages] == [
+        "858127978920780",
+        "858127978920780",
+    ]
+
+
 def test_parse_facebook_archive_numbers_split_files_in_order(tmp_path):
     archive_path = tmp_path / "facebook-split.zip"
     with ZipFile(archive_path, "w") as archive:

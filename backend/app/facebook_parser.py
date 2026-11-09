@@ -13,6 +13,7 @@ from typing import Any
 
 
 MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
+USER_FOLDER_PATTERN = re.compile(r"^.+_(?P<user_id>\d+)$")
 MAX_MESSAGE_FILE_BYTES = 4 * 1024 * 1024
 MAX_MESSAGE_DATA_BYTES = 16 * 1024 * 1024
 MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
@@ -114,6 +115,12 @@ def _source_id(value: Any) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def _folder_user_id(thread_path: str) -> str | None:
+    folder_name = thread_path.rsplit("/", 1)[-1]
+    match = USER_FOLDER_PATTERN.fullmatch(folder_name)
+    return match.group("user_id") if match is not None else None
 
 
 def _timestamp_from_message(message: dict[str, Any]) -> datetime | None:
@@ -342,50 +349,59 @@ def parse_facebook_archive(
             if not isinstance(raw_messages, list):
                 raise ValueError("Facebook conversation must contain a messages list.")
 
-            chat = chats_by_id.get(chat_id)
-            if chat is None:
-                participants = payload.get("participants")
-                correspondent = (
-                    next(
-                        (
-                            participant
-                            for participant in participants
-                            if isinstance(participant, dict)
-                            and not _is_owner_participant(
-                                participant,
-                                account_details,
-                            )
-                        ),
-                        None,
-                    )
-                    if isinstance(participants, list) and account_details
-                    else None
+            participants = payload.get("participants")
+            chat_type = _chat_type(participants)
+            correspondent = (
+                next(
+                    (
+                        participant
+                        for participant in participants
+                        if isinstance(participant, dict)
+                        and not _is_owner_participant(
+                            participant,
+                            account_details,
+                        )
+                    ),
+                    None,
                 )
+                if isinstance(participants, list) and account_details
+                else None
+            )
+            correspondent_id = (
+                _source_id(
+                    correspondent.get(
+                        "user_id",
+                        correspondent.get("id"),
+                    )
+                )
+                if correspondent is not None
+                else None
+            )
+            chat = chats_by_id.get(chat_id)
+            folder_user_id = (
+                _folder_user_id(chat_id)
+                if chat_type == "personal_chat"
+                or (chat is not None and chat.chat_type == "personal_chat")
+                else None
+            )
+            if chat is None:
                 title = payload.get("title")
                 correspondent_name = (
                     _profile_value(correspondent.get("name"))
                     if correspondent is not None
                     else None
                 )
-                correspondent_id = (
-                    _source_id(
-                        correspondent.get(
-                            "user_id",
-                            correspondent.get("id"),
-                        )
-                    )
-                    if correspondent is not None
-                    else None
-                )
                 chat = ParsedFacebookChat(
                     platform_chat_id=chat_id,
                     title=_profile_value(title),
-                    chat_type=_chat_type(participants),
-                    correspondent_platform_user_id=correspondent_id,
+                    chat_type=chat_type,
+                    correspondent_platform_user_id=folder_user_id or correspondent_id,
                     correspondent_name=correspondent_name,
                 )
                 chats_by_id[chat_id] = chat
                 identical_message_counts[chat_id] = Counter()
+            elif chat.chat_type == "personal_chat":
+                chat.chat_type = chat_type
 
             occurrences = identical_message_counts[chat_id]
             for raw_message in raw_messages:
@@ -400,6 +416,19 @@ def parse_facebook_archive(
                 occurrence = occurrences[serialized]
                 occurrences[serialized] += 1
                 message = _message_payload(chat_id, raw_message, occurrence)
+                if (
+                    folder_user_id is not None
+                    and (
+                        message["sender_id"] == correspondent_id
+                        or (
+                            chat.correspondent_name is not None
+                            and message["sender_name"] is not None
+                            and message["sender_name"].casefold()
+                            == chat.correspondent_name.casefold()
+                        )
+                    )
+                ):
+                    message["sender_id"] = folder_user_id
                 message["message_id"] = f"facebook:{message['source_record_key']}"
                 chat.messages.append(message)
 
