@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChatsView } from "./components/ChatsView";
 import { ChatInsightsView } from "./components/ChatInsightsView";
 import { CommunicationBalanceView } from "./components/CommunicationBalanceView";
@@ -81,9 +81,13 @@ export default function App() {
     visibleBalanceContacts,
     visibleForgottenContacts,
   } = filters;
-  const selectedChat = getSelectedChatInsights(
-    sortChatInsightsChats(chatInsights.data?.chats ?? []),
-    selectedInsightsChatId,
+  const sortedInsightChats = useMemo(
+    () => sortChatInsightsChats(chatInsights.data?.chats ?? []),
+    [chatInsights.data],
+  );
+  const selectedChat = useMemo(
+    () => getSelectedChatInsights(sortedInsightChats, selectedInsightsChatId),
+    [sortedInsightChats, selectedInsightsChatId],
   );
 
   useEffect(() => {
@@ -98,10 +102,51 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    switch (selectedTab) {
+      case "overview":
+        void loadOverview();
+        break;
+      case "conversation-insights":
+        void loadOverview();
+        void loadChatInsights();
+        break;
+      case "chats":
+        void loadOverview();
+        void loadChats();
+        break;
+      case "contacts":
+        void loadOverview();
+        void loadContacts();
+        break;
+      case "identity-links":
+        void loadIdentityLinks();
+        break;
+      case "communication-balance":
+        void loadBalance();
+        break;
+      case "forgotten-contacts":
+        void loadOverview();
+        void loadForgottenContacts();
+        break;
+      case "uploads":
+        break;
+    }
+  }, [
+    selectedTab,
+    loadOverview,
+    loadChats,
+    loadChatInsights,
+    loadContacts,
+    loadIdentityLinks,
+    loadBalance,
+    loadForgottenContacts,
+  ]);
+
+  useEffect(() => {
     if (selectedChat) {
       void loadCommunicationTimeline(undefined, selectedChat.chat_id);
     }
-  }, [selectedChat?.chat_id]);
+  }, [selectedChat?.chat_id, loadCommunicationTimeline]);
 
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
@@ -123,11 +168,13 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "overview"}
         >
-          <OverviewView
-            overview={overview}
-            noImportedData={noImportedData}
-            onRetry={() => void loadOverview()}
-          />
+          {selectedTab === "overview" && (
+            <OverviewView
+              overview={overview}
+              noImportedData={noImportedData}
+              onRetry={() => void loadOverview(true)}
+            />
+          )}
         </div>
         <div
           id="conversation-insights-panel"
@@ -137,17 +184,19 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "conversation-insights"}
         >
-          <ChatInsightsView
-            insights={chatInsights}
-            timeline={communicationTimeline}
-            selectedChatId={selectedInsightsChatId}
-            onChatChange={setSelectedInsightsChatId}
-            noImportedData={noImportedData}
-            onRetryInsights={() => void loadChatInsights()}
-            onRetryTimeline={() =>
-              void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
-            }
-          />
+          {selectedTab === "conversation-insights" && (
+            <ChatInsightsView
+              insights={chatInsights}
+              timeline={communicationTimeline}
+              selectedChatId={selectedInsightsChatId}
+              onChatChange={setSelectedInsightsChatId}
+              noImportedData={noImportedData}
+              onRetryInsights={() => void loadChatInsights(true)}
+              onRetryTimeline={() =>
+                void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
+              }
+            />
+          )}
         </div>
         <div
           id="chats-panel"
@@ -157,18 +206,20 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "chats"}
         >
-          <ChatsView
-            chats={chats}
-            visibleChats={visibleChats}
-            search={chatSearch}
-            onSearchChange={setChatSearch}
-            sort={chatSort}
-            onSort={changeChatSort}
-            hasImportedAccounts={
-              (overview.data?.total_imported_accounts ?? 0) > 0
-            }
-            onRetry={() => void loadChats()}
-          />
+          {selectedTab === "chats" && (
+            <ChatsView
+              chats={chats}
+              visibleChats={visibleChats}
+              search={chatSearch}
+              onSearchChange={setChatSearch}
+              sort={chatSort}
+              onSort={changeChatSort}
+              hasImportedAccounts={
+                (overview.data?.total_imported_accounts ?? 0) > 0
+              }
+              onRetry={() => void loadChats(true)}
+            />
+          )}
         </div>
         <div
           id="uploads-panel"
@@ -188,20 +239,22 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "contacts"}
         >
-          <ContactsView
-            contacts={contacts}
-            visibleContacts={visibleContacts}
-            search={contactSearch}
-            onSearchChange={setContactSearch}
-            sortDirection={contactSortDirection}
-            onSort={() =>
-              setContactSortDirection((direction) =>
-                direction === "asc" ? "desc" : "asc",
-              )
-            }
-            hasMessages={(overview.data?.total_messages ?? 0) > 0}
-            onRetry={() => void loadContacts()}
-          />
+          {selectedTab === "contacts" && (
+            <ContactsView
+              contacts={contacts}
+              visibleContacts={visibleContacts}
+              search={contactSearch}
+              onSearchChange={setContactSearch}
+              sortDirection={contactSortDirection}
+              onSort={() =>
+                setContactSortDirection((direction) =>
+                  direction === "asc" ? "desc" : "asc",
+                )
+              }
+              hasMessages={(overview.data?.total_messages ?? 0) > 0}
+              onRetry={() => void loadContacts(true)}
+            />
+          )}
         </div>
         <div
           id="identity-links-panel"
@@ -211,12 +264,14 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "identity-links"}
         >
-          <IdentityLinksView
-            identityLinks={identityLinks}
-            onRetry={() => void loadIdentityLinks()}
-            onLink={createIdentityLink}
-            onUnlink={removeIdentityLink}
-          />
+          {selectedTab === "identity-links" && (
+            <IdentityLinksView
+              identityLinks={identityLinks}
+              onRetry={() => void loadIdentityLinks(true)}
+              onLink={createIdentityLink}
+              onUnlink={removeIdentityLink}
+            />
+          )}
         </div>
         <div
           id="communication-balance-panel"
@@ -226,19 +281,21 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "communication-balance"}
         >
-          <CommunicationBalanceView
-            balance={balance}
-            visibleContacts={visibleBalanceContacts}
-            search={balanceSearch}
-            onSearchChange={setBalanceSearch}
-            classification={balanceClassification}
-            onClassificationChange={setBalanceClassification}
-            sortKey={balanceSortKey}
-            sortDirection={balanceSortDirection}
-            onSortKeyChange={setBalanceSortKey}
-            onSortDirectionChange={setBalanceSortDirection}
-            onRetry={() => void loadBalance()}
-          />
+          {selectedTab === "communication-balance" && (
+            <CommunicationBalanceView
+              balance={balance}
+              visibleContacts={visibleBalanceContacts}
+              search={balanceSearch}
+              onSearchChange={setBalanceSearch}
+              classification={balanceClassification}
+              onClassificationChange={setBalanceClassification}
+              sortKey={balanceSortKey}
+              sortDirection={balanceSortDirection}
+              onSortKeyChange={setBalanceSortKey}
+              onSortDirectionChange={setBalanceSortDirection}
+              onRetry={() => void loadBalance(true)}
+            />
+          )}
         </div>
         <div
           id="forgotten-contacts-panel"
@@ -248,18 +305,20 @@ export default function App() {
           tabIndex={0}
           hidden={selectedTab !== "forgotten-contacts"}
         >
-          <ForgottenContactsView
-            forgotten={forgottenContacts}
-            noImportedData={noImportedData}
-            visibleContacts={visibleForgottenContacts}
-            search={forgottenSearch}
-            onSearchChange={setForgottenSearch}
-            sortKey={forgottenSortKey}
-            sortDirection={forgottenSortDirection}
-            onSortKeyChange={setForgottenSortKey}
-            onSortDirectionChange={setForgottenSortDirection}
-            onRetry={() => void loadForgottenContacts()}
-          />
+          {selectedTab === "forgotten-contacts" && (
+            <ForgottenContactsView
+              forgotten={forgottenContacts}
+              noImportedData={noImportedData}
+              visibleContacts={visibleForgottenContacts}
+              search={forgottenSearch}
+              onSearchChange={setForgottenSearch}
+              sortKey={forgottenSortKey}
+              sortDirection={forgottenSortDirection}
+              onSortKeyChange={setForgottenSortKey}
+              onSortDirectionChange={setForgottenSortDirection}
+              onRetry={() => void loadForgottenContacts(true)}
+            />
+          )}
         </div>
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">
           Statistics are aggregated from imported data. Message contents are not shown.

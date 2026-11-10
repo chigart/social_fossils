@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -59,6 +59,43 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
+  it("loads analytics on first tab visit and reuses results on revisits", async () => {
+    render(<App />);
+
+    await screen.findByText("All messages");
+    expect(api.getOverview).toHaveBeenCalledTimes(1);
+    expect(api.getChats).not.toHaveBeenCalled();
+    expect(api.getChatInsights).not.toHaveBeenCalled();
+    expect(api.getContacts).not.toHaveBeenCalled();
+    expect(api.getCommunicationBalance).not.toHaveBeenCalled();
+    expect(api.getForgottenContacts).not.toHaveBeenCalled();
+    expect(api.getIdentityLinks).not.toHaveBeenCalled();
+    expect(document.querySelector("#chats")).toBeNull();
+
+    await selectDashboardTab("Chats");
+    await waitFor(() => expect(api.getChats).toHaveBeenCalledTimes(1));
+    expect(api.getOverview).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("#chats")).not.toBeNull();
+
+    await selectDashboardTab("Overview");
+    await selectDashboardTab("Chats");
+    expect(api.getChats).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads only the analytics needed by a directly linked tab", async () => {
+    window.history.replaceState(null, "", "/#identity-links");
+    render(<App />);
+
+    await waitFor(() => expect(api.getIdentityLinks).toHaveBeenCalledTimes(1));
+    expect(api.getOverview).not.toHaveBeenCalled();
+    expect(api.getChats).not.toHaveBeenCalled();
+    expect(api.getChatInsights).not.toHaveBeenCalled();
+    expect(api.getContacts).not.toHaveBeenCalled();
+    expect(api.getCommunicationBalance).not.toHaveBeenCalled();
+    expect(api.getForgottenContacts).not.toHaveBeenCalled();
+    expect(document.querySelector("#overview")).toBeNull();
+  });
+
   it("opens the multi-file uploader from the Import tab", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
@@ -74,6 +111,21 @@ describe("dashboard", () => {
     expect(
       screen.getByLabelText("Choose Telegram JSON files"),
     ).toHaveAttribute("multiple");
+  });
+
+  it("preserves import form state when switching dashboard tabs", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    await selectDashboardTab("Import");
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "vk",
+    );
+
+    await selectDashboardTab("Chats");
+    await selectDashboardTab("Import");
+
+    expect(screen.getByLabelText("Messaging platform")).toHaveValue("vk");
   });
 
   it("links and unlinks platform identities explicitly", async () => {
@@ -1208,16 +1260,15 @@ describe("dashboard", () => {
     expect(chooser).toHaveTextContent("One-to-one chat");
   });
 
-  it("shows loading status while all analytics requests are pending", () => {
+  it("shows loading status while the active overview request is pending", () => {
     api.getOverview.mockReturnValue(new Promise(() => {}));
-    api.getChats.mockReturnValue(new Promise(() => {}));
-    api.getContacts.mockReturnValue(new Promise(() => {}));
-    api.getCommunicationTimeline.mockReturnValue(new Promise(() => {}));
 
     render(<App />);
 
     expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(screen.getByRole("status")).toHaveTextContent("Loading analytics…");
+    expect(api.getChatInsights).not.toHaveBeenCalled();
+    expect(api.getChats).not.toHaveBeenCalled();
   });
 
   it("supports keyboard tab navigation and keeps inactive sections hidden", async () => {
@@ -1245,7 +1296,8 @@ describe("dashboard", () => {
 
   it("maps legacy insight and timeline hashes to the combined destination", async () => {
     window.history.replaceState(null, "", "/#communication-timeline");
-    await renderLoadedDashboard();
+    render(<App />);
+    await screen.findByRole("button", { name: "Choose an insight chat" });
 
     expect(
       screen.getByRole("tab", { name: "Conversation insights" }),
@@ -1275,16 +1327,17 @@ describe("dashboard", () => {
     render(<App />);
 
     expect(await screen.findByText("No imported data yet.")).toBeInTheDocument();
+    await selectDashboardTab("Chats");
     expect(
       await screen.findByText("Import a messaging export to see chat statistics."),
     ).toBeInTheDocument();
     await selectDashboardTab("Contacts");
     expect(
-      screen.getByText("Import messages to see incoming communication by sender."),
+      await screen.findByText("Import messages to see incoming communication by sender."),
     ).toBeInTheDocument();
     await selectDashboardTab("Forgotten");
     expect(
-      screen.getByRole("heading", { name: "No imported data yet" }),
+      await screen.findByRole("heading", { name: "No imported data yet" }),
     ).toBeInTheDocument();
   });
 
@@ -1650,7 +1703,7 @@ describe("dashboard", () => {
     expect(
       screen.queryByRole("combobox", { name: "Timeline scope" }),
     ).not.toBeInTheDocument();
-    const chart = within(region).getByRole("img", {
+    const chart = await within(region).findByRole("img", {
       name: "Monthly ordinary message activity",
     });
     expect(chart.querySelector('[data-month="2023-02"][data-count="0"]')).toBeTruthy();

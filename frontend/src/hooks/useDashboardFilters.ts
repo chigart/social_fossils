@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   type ChatStatistics,
   type CommunicationBalanceClassification,
@@ -60,72 +60,99 @@ export function useDashboardFilters({
     }));
   };
 
-  const visibleChats = (chats.data ?? [])
-    .filter((chat) => chatSearch === "" || String(chat.chat_id) === chatSearch)
-    .sort((left, right) => {
-      const comparison =
-        chatSort.key === "title"
-          ? (left.title ?? "").localeCompare(right.title ?? "")
-          : left.total_messages - right.total_messages;
-      return chatSort.direction === "asc" ? comparison : -comparison;
-    });
-
-  const visibleContacts = (contacts.data ?? [])
-    .map((contact, index) => ({ contact, index }))
-    .filter(
-      ({ contact }) =>
-        contact.display_name?.trim() || contact.platform_user_ids.length > 0,
-    )
-    .filter(({ index }) =>
-      contactSearch === "" || String(index) === contactSearch,
-    )
-    .map(({ contact }) => contact)
-    .sort(
-      (left, right) =>
-        (contactSortDirection === "asc" ? 1 : -1) *
-        (left.total_messages_sent - right.total_messages_sent),
-    );
-
-  const visibleBalanceContacts = sortCommunicationBalanceContacts(
-    (balance.data?.contacts ?? [])
-      .filter((_, index) =>
-        balanceSearch === "" || String(index) === balanceSearch,
-      )
-      .filter(
-        (contact) =>
-          balanceClassification === "all" ||
-          contact.classification === balanceClassification,
-      ),
-    balanceSortKey,
-    balanceSortDirection,
+  const visibleChats = useMemo(
+    () =>
+      (chats.data ?? [])
+        .filter((chat) => chatSearch === "" || String(chat.chat_id) === chatSearch)
+        .sort((left, right) => {
+          const comparison =
+            chatSort.key === "title"
+              ? (left.title ?? "").localeCompare(right.title ?? "")
+              : left.total_messages - right.total_messages;
+          return chatSort.direction === "asc" ? comparison : -comparison;
+        }),
+    [chats.data, chatSearch, chatSort],
   );
 
-  const visibleForgottenContacts = (forgottenContacts.data?.contacts ?? [])
-    .filter((_, index) =>
-      forgottenSearch === "" || String(index) === forgottenSearch,
-    )
-    .sort((left, right) => {
-      const direction = forgottenSortDirection === "asc" ? 1 : -1;
+  const visibleContacts = useMemo(
+    () =>
+      (contacts.data ?? [])
+        .map((contact, index) => ({ contact, index }))
+        .filter(
+          ({ contact }) =>
+            contact.display_name?.trim() || contact.platform_user_ids.length > 0,
+        )
+        .filter(({ index }) =>
+          contactSearch === "" || String(index) === contactSearch,
+        )
+        .map(({ contact }) => contact)
+        .sort(
+          (left, right) =>
+            (contactSortDirection === "asc" ? 1 : -1) *
+            (left.total_messages_sent - right.total_messages_sent),
+        ),
+    [contacts.data, contactSearch, contactSortDirection],
+  );
 
-      if (forgottenSortKey === "display_name") {
-        return (
-          direction *
-          (left.display_name ?? "").localeCompare(right.display_name ?? "")
-        );
-      }
+  const visibleBalanceContacts = useMemo(
+    () =>
+      sortCommunicationBalanceContacts(
+        (balance.data?.contacts ?? [])
+          .filter((_, index) =>
+            balanceSearch === "" || String(index) === balanceSearch,
+          )
+          .filter(
+            (contact) =>
+              balanceClassification === "all" ||
+              contact.classification === balanceClassification,
+          ),
+        balanceSortKey,
+        balanceSortDirection,
+      ),
+    [
+      balance.data,
+      balanceSearch,
+      balanceClassification,
+      balanceSortKey,
+      balanceSortDirection,
+    ],
+  );
 
-      const leftValue = forgottenSortKey === "days_since_last_communication"
-        ? left.days_since_last_communication
-        : left.ranking_score;
-      const rightValue = forgottenSortKey === "days_since_last_communication"
-        ? right.days_since_last_communication
-        : right.ranking_score;
+  const visibleForgottenContacts = useMemo(
+    () =>
+      (forgottenContacts.data?.contacts ?? [])
+        .filter((_, index) =>
+          forgottenSearch === "" || String(index) === forgottenSearch,
+        )
+        .sort((left, right) => {
+          const direction = forgottenSortDirection === "asc" ? 1 : -1;
 
-      if (leftValue === null) return rightValue === null ? 0 : 1;
-      if (rightValue === null) return -1;
+          if (forgottenSortKey === "display_name") {
+            return (
+              direction *
+              (left.display_name ?? "").localeCompare(right.display_name ?? "")
+            );
+          }
 
-      return direction * (leftValue - rightValue);
-    });
+          const leftValue = forgottenSortKey === "days_since_last_communication"
+            ? left.days_since_last_communication
+            : left.ranking_score;
+          const rightValue = forgottenSortKey === "days_since_last_communication"
+            ? right.days_since_last_communication
+            : right.ranking_score;
+
+          if (leftValue === null) return rightValue === null ? 0 : 1;
+          if (rightValue === null) return -1;
+
+          return direction * (leftValue - rightValue);
+        }),
+    [
+      forgottenContacts.data,
+      forgottenSearch,
+      forgottenSortDirection,
+      forgottenSortKey,
+    ],
+  );
 
   return {
     chatSearch,

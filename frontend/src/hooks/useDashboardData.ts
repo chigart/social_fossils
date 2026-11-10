@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   getChatInsights,
   getChats,
@@ -42,12 +42,16 @@ export function useDashboardData() {
   const [communicationTimeline, setCommunicationTimeline] =
     useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
   const timelineRequestId = useRef(0);
+  const loadedResources = useRef(new Set<string>());
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("overview")) return;
+    loadedResources.current.add("overview");
     setOverview((current) => ({ ...current, error: null, loading: true }));
     try {
       setOverview({ data: await getOverview(), error: null, loading: false });
     } catch (error) {
+      loadedResources.current.delete("overview");
       setOverview((current) => ({
         ...current,
         error:
@@ -57,13 +61,16 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadChats = async () => {
+  const loadChats = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("chats")) return;
+    loadedResources.current.add("chats");
     setChats((current) => ({ ...current, error: null, loading: true }));
     try {
       setChats({ data: await getChats(), error: null, loading: false });
     } catch (error) {
+      loadedResources.current.delete("chats");
       setChats((current) => ({
         ...current,
         error:
@@ -73,9 +80,11 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadChatInsights = async () => {
+  const loadChatInsights = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("chatInsights")) return;
+    loadedResources.current.add("chatInsights");
     setChatInsights((current) => ({ ...current, error: null, loading: true }));
     try {
       setChatInsights({
@@ -84,6 +93,7 @@ export function useDashboardData() {
         loading: false,
       });
     } catch (error) {
+      loadedResources.current.delete("chatInsights");
       setChatInsights((current) => ({
         ...current,
         error:
@@ -93,13 +103,16 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("contacts")) return;
+    loadedResources.current.add("contacts");
     setContacts((current) => ({ ...current, error: null, loading: true }));
     try {
       setContacts({ data: await getContacts(), error: null, loading: false });
     } catch (error) {
+      loadedResources.current.delete("contacts");
       setContacts((current) => ({
         ...current,
         error:
@@ -109,9 +122,11 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadBalance = async () => {
+  const loadBalance = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("balance")) return;
+    loadedResources.current.add("balance");
     setBalance((current) => ({ ...current, error: null, loading: true }));
     try {
       setBalance({
@@ -120,6 +135,7 @@ export function useDashboardData() {
         loading: false,
       });
     } catch (error) {
+      loadedResources.current.delete("balance");
       setBalance((current) => ({
         ...current,
         error:
@@ -129,9 +145,11 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadForgottenContacts = async () => {
+  const loadForgottenContacts = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("forgottenContacts")) return;
+    loadedResources.current.add("forgottenContacts");
     setForgottenContacts((current) => ({
       ...current,
       error: null,
@@ -144,6 +162,7 @@ export function useDashboardData() {
         loading: false,
       });
     } catch (error) {
+      loadedResources.current.delete("forgottenContacts");
       setForgottenContacts((current) => ({
         ...current,
         error:
@@ -153,9 +172,11 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
-  const loadIdentityLinks = async () => {
+  const loadIdentityLinks = useCallback(async (force = false) => {
+    if (!force && loadedResources.current.has("identityLinks")) return;
+    loadedResources.current.add("identityLinks");
     setIdentityLinks((current) => ({ ...current, error: null, loading: true }));
     try {
       setIdentityLinks({
@@ -164,6 +185,7 @@ export function useDashboardData() {
         loading: false,
       });
     } catch (error) {
+      loadedResources.current.delete("identityLinks");
       setIdentityLinks((current) => ({
         ...current,
         error:
@@ -173,22 +195,22 @@ export function useDashboardData() {
         loading: false,
       }));
     }
-  };
+  }, []);
 
   const createIdentityLink = async (
     firstIdentityId: number,
     secondIdentityId: number,
   ) => {
     await linkPlatformIdentities(firstIdentityId, secondIdentityId);
-    await loadIdentityLinks();
+    await loadIdentityLinks(true);
   };
 
   const removeIdentityLink = async (identityId: number) => {
     await unlinkPlatformIdentity(identityId);
-    await loadIdentityLinks();
+    await loadIdentityLinks(true);
   };
 
-  const loadCommunicationTimeline = async (
+  const loadCommunicationTimeline = useCallback(async (
     canonicalIdentityId?: number,
     chatId?: number,
   ) => {
@@ -214,16 +236,6 @@ export function useDashboardData() {
         }));
       }
     }
-  };
-
-  useEffect(() => {
-    void loadOverview();
-    void loadChats();
-    void loadChatInsights();
-    void loadContacts();
-    void loadBalance();
-    void loadForgottenContacts();
-    void loadIdentityLinks();
   }, []);
 
   return {
