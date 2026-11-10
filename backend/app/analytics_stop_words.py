@@ -25,9 +25,9 @@ RUSSIAN_STOP_WORDS = frozenset(
 ENGLISH_STOP_WORDS = frozenset(
     """
     a about above after again against all am an and any are as at attachment be because
-    been before being below between both but by can cannot could did do does
+    been before being below between both but by can cannot com could did do does
     doing down during each few for from further had has have having he her
-    here hers herself him himself his how i if in into is it its itself just
+    here hers herself him himself his how http https i if in into is it its itself just
     me more most my myself no nor not of off on once only or other ought our
     ours ourselves out over own same she should so some such than that the
     their theirs them themselves then there these they this those through to
@@ -48,9 +48,9 @@ ENGLISH_STOP_WORDS = frozenset(
     seventeen seventy six sixty somehow someone something sometime sometimes
     somewhere still thence thereafter thereby therefore therein thereof
     thereupon thirty three throughout thru thus top toward towards twelve
-    twenty two un under unless unlike unlikely upon used using us various via
-    well whatever whenever wherever whether whoever whole whose within without
-    wont
+    twenty two un under unless unlike unlikely upon used using us various v via vk
+    watch well whatever whenever wherever whether whoever whole whose within without
+    wont www youtube
     ain't aren't couldn't didn't doesn't don't hadn't hasn't haven't isn't
     mightn't mustn't needn't shouldn't wasn't weren't wouldn't
     """.split()
