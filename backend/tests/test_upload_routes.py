@@ -1,5 +1,7 @@
+from typing import cast
+
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Table, create_engine
 from sqlalchemy.orm import Session
 
 from app.db import Base, get_db
@@ -24,7 +26,7 @@ def test_upload_and_job_routes_are_local_and_unauthenticated(tmp_path, monkeypat
         f"sqlite+pysqlite:///{tmp_path / 'uploads.db'}",
         connect_args={"check_same_thread": False},
     )
-    UploadJob.__table__.create(engine)
+    cast(Table, UploadJob.__table__).create(engine)
     session = Session(engine)
     monkeypatch.setattr(upload.settings, "upload_staging_dir", str(tmp_path / "staging"))
     monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
@@ -86,12 +88,15 @@ def test_upload_job_schema_has_no_app_user():
     assert UploadJob.__table__.c.platform.server_default is None
 
 
-def test_instagram_upload_records_platform_and_requires_zip_archive(tmp_path, monkeypatch):
+def test_zip_platform_uploads_record_platform_and_require_zip_archive(
+    tmp_path,
+    monkeypatch,
+):
     engine = create_engine(
         f"sqlite+pysqlite:///{tmp_path / 'instagram-uploads.db'}",
         connect_args={"check_same_thread": False},
     )
-    UploadJob.__table__.create(engine)
+    cast(Table, UploadJob.__table__).create(engine)
     session = Session(engine)
     monkeypatch.setattr(
         upload.settings,
@@ -161,6 +166,34 @@ def test_instagram_upload_records_platform_and_requires_zip_archive(tmp_path, mo
             )
             assert invalid_facebook.status_code == 400
             assert ".zip" in invalid_facebook.json()["detail"]
+
+            vk = client.post(
+                "/api/uploads/upload",
+                data={"platform": "vk"},
+                files={
+                    "file": (
+                        "vk.zip",
+                        b"synthetic archive",
+                        "application/zip",
+                    )
+                },
+            )
+            assert vk.status_code == 202
+            assert vk.json()["platform"] == "vk"
+
+            invalid_vk = client.post(
+                "/api/uploads/upload",
+                data={"platform": "vk"},
+                files={
+                    "file": (
+                        "vk.html",
+                        b"synthetic export",
+                        "text/html",
+                    )
+                },
+            )
+            assert invalid_vk.status_code == 400
+            assert ".zip" in invalid_vk.json()["detail"]
         finally:
             app.dependency_overrides.pop(get_db, None)
             session.close()
@@ -172,7 +205,7 @@ def test_pending_upload_without_airflow_run_can_be_retried(tmp_path, monkeypatch
         f"sqlite+pysqlite:///{tmp_path / 'retry.db'}",
         connect_args={"check_same_thread": False},
     )
-    UploadJob.__table__.create(engine)
+    cast(Table, UploadJob.__table__).create(engine)
     session = Session(engine)
     monkeypatch.setattr(upload, "get_airflow_client", FakeAirflowClient)
     job = UploadJob(

@@ -188,6 +188,39 @@ describe("UploadView", () => {
     expect(uploadFile).toHaveBeenCalledWith(archive, "facebook");
   });
 
+  it("uploads VK archives with the selected platform", async () => {
+    const user = userEvent.setup();
+    vi.mocked(uploadFile).mockResolvedValue({
+      id: 84,
+      filename: "vk.zip",
+      platform: "vk",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-84",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+    });
+
+    render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "vk",
+    );
+    const fileInput = screen.getByLabelText("Choose VK ZIP files");
+    const archive = new File(["synthetic"], "vk.zip", {
+      type: "application/zip",
+    });
+    await user.upload(fileInput, archive);
+    expect(fileInput).toHaveAttribute("accept", ".zip,application/zip");
+    await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+    expect(await screen.findByText("vk.zip")).toBeInTheDocument();
+    expect(uploadFile).toHaveBeenCalledWith(archive, "vk");
+  });
+
   it("shows duplicate uploads as an informational warning and still queues them", async () => {
     const user = userEvent.setup();
     vi.mocked(uploadFile).mockResolvedValue({
