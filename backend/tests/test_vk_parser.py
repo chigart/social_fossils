@@ -12,7 +12,7 @@ def _write_archive(path, *, include_profile=True):
                 <meta charset="windows-1251">
                 <div class="item">
                   <div class="item__tertiary">Полное имя</div>
-                  <div>Sample VK Owner</div>
+                  <div>Антон Мальков</div>
                 </div>"""
             archive.writestr(
                 "profile/page-info.html",
@@ -37,7 +37,7 @@ def _write_archive(path, *, include_profile=True):
             <div class="item"><div class="item__main">
               <div class="message" data-id="message-2">
                 <div class="message__header">
-                  Sample VK Owner 6 мая 2024 в 13:15
+                  Вы 6 мая 2024 в 13:15
                 </div>
                 <div>outgoing text</div>
               </div>
@@ -84,8 +84,8 @@ def test_parse_vk_archive_extracts_profile_conversation_and_messages(tmp_path):
 
     parsed = parse_vk_archive(archive_path)
 
-    assert parsed.account_name == "Sample VK Owner"
-    assert parsed.account_username is None
+    assert parsed.account_name == "Антон Мальков"
+    assert parsed.account_username == "AntonMalkov"
     assert parsed.owner_platform_user_id is None
     assert len(parsed.chats) == 1
     chat = parsed.chats[0]
@@ -107,9 +107,9 @@ def test_parse_vk_archive_extracts_profile_conversation_and_messages(tmp_path):
     assert chat.messages[0]["message_date"].isoformat() == (
         "2024-05-05T12:30:00+00:00"
     )
-    assert chat.messages[1]["sender_name"] == "Sample VK Owner"
+    assert chat.messages[1]["sender_name"] == "Антон Мальков"
     assert chat.messages[1]["is_outgoing"] is True
-    assert chat.messages[4]["sender_name"] == "Вы"
+    assert chat.messages[4]["sender_name"] == "Антон Мальков"
     assert chat.messages[4]["is_outgoing"] is True
     assert chat.messages[2]["text_content"] is None
     assert chat.messages[2]["message_type"] == "attachment"

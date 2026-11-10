@@ -76,7 +76,7 @@ def _write_archive(path):
             """<meta charset="utf-8">
             <div class="item">
               <div class="item__tertiary">Full name</div>
-              <div>Sample VK Owner</div>
+              <div>Антон Мальков</div>
             </div>""",
         )
         archive.writestr(
@@ -93,7 +93,7 @@ def _write_archive(path):
             </div>
             <div class="message" data-id="message-2">
               <div class="message__header">
-                Sample VK Owner 6 мая 2024 в 13:15
+                Вы 6 мая 2024 в 13:15
               </div>
               <div>outgoing text</div>
             </div>""",
@@ -108,20 +108,18 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
 
     with Session(engine) as session:
         first = vk_importer.import_vk_export(archive_path, session=session)
-        second = import_source_export("vk", archive_path, session=session)
 
         assert first["platform"] == "vk"
         assert "account_name" not in first
         assert first["total_messages"] == 2
         assert first["inserted_messages"] == 2
         assert first["skipped_messages"] == 0
-        assert second["inserted_messages"] == 0
-        assert second["skipped_messages"] == 2
         account = session.scalar(select(Account))
         chat = session.scalar(select(Chat))
         assert account is not None
         assert account.platform == "vk"
-        assert account.name == "Sample VK Owner"
+        assert account.name == "Антон Мальков"
+        assert account.username == "AntonMalkov"
         assert account.platform_user_id is None
         assert chat is not None
         assert chat.title == "Sample Friend"
@@ -131,7 +129,19 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
         assert [message.is_outgoing for message in messages] == [False, True]
         assert messages[0].sender_contact_id is not None
         assert messages[1].sender_contact_id is None
+        assert messages[1].sender_name == "Антон Мальков"
         assert all(message.source_record_key for message in messages)
+
+        messages[1].sender_name = "Вы"
+        account.username = None
+        session.flush()
+
+        second = import_source_export("vk", archive_path, session=session)
+        assert second["inserted_messages"] == 0
+        assert second["skipped_messages"] == 2
+        assert account.username == "AntonMalkov"
+        assert messages[1].sender_name == "Антон Мальков"
+
         assert len(session.scalars(select(Contact)).all()) == 1
         sessions = session.scalars(
             select(ImportSession).order_by(ImportSession.id)

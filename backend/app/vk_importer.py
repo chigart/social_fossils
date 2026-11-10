@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -306,6 +306,34 @@ def _insert_message_batch(session: Session, values: list[dict[str, Any]]) -> int
     return len(session.execute(statement).scalars().all())
 
 
+def _update_existing_outgoing_sender_names(
+    session: Session,
+    chat: Chat,
+    messages: list[dict[str, Any]],
+    account_name: str,
+) -> None:
+    source_record_keys = {
+        message["source_record_key"]
+        for message in messages
+        if message.get("is_outgoing") is True
+        and isinstance(message.get("source_record_key"), str)
+    }
+    if not source_record_keys:
+        return
+
+    session.execute(
+        update(Message)
+        .where(
+            Message.chat_id == chat.id,
+            Message.platform == VK_PLATFORM_ID,
+            Message.source_record_key.in_(source_record_keys),
+            Message.is_outgoing.is_(True),
+            Message.sender_name.is_distinct_from(account_name),
+        )
+        .values(sender_name=account_name)
+    )
+
+
 def _insert_messages_for_chat(
     session: Session,
     chat: Chat,
@@ -333,6 +361,12 @@ def _insert_messages_for_chat(
             )
             values.append(message_values)
             inserted_contacts += int(contact_inserted)
+        _update_existing_outgoing_sender_names(
+            session,
+            chat,
+            batch,
+            account.name,
+        )
         inserted = _insert_message_batch(session, values)
         inserted_messages += inserted
         skipped_messages += len(values) - inserted
