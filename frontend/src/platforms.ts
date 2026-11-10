@@ -19,6 +19,12 @@ export const PLATFORM_CONFIG = {
     instructions:
       "Choose the downloaded Facebook ZIP archive with JSON selected as its export format.",
   },
+  vk: {
+    label: "VK",
+    acceptedFileType: ".zip,application/zip",
+    fileInputLabel: "Choose VK ZIP files",
+    instructions: "Choose the downloaded VK ZIP export with message history.",
+  },
 } as const;
 
 export type UploadPlatform = keyof typeof PLATFORM_CONFIG;
