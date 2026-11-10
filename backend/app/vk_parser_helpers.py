@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
 import zipfile
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -13,41 +14,6 @@ from app.vk_parser_html import _Element, _elements, _element_text, _parse_docume
 
 MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
 OWNER_SENDER_LABELS = {"me", "you", "you (you)", "я", "вы"}
-CYRILLIC_USERNAME_TRANSLITERATION = {
-    "а": "a",
-    "б": "b",
-    "в": "v",
-    "г": "g",
-    "д": "d",
-    "е": "e",
-    "ё": "yo",
-    "ж": "zh",
-    "з": "z",
-    "и": "i",
-    "й": "y",
-    "к": "k",
-    "л": "l",
-    "м": "m",
-    "н": "n",
-    "о": "o",
-    "п": "p",
-    "р": "r",
-    "с": "s",
-    "т": "t",
-    "у": "u",
-    "ф": "f",
-    "х": "kh",
-    "ц": "ts",
-    "ч": "ch",
-    "ш": "sh",
-    "щ": "shch",
-    "ъ": "",
-    "ы": "y",
-    "ь": "",
-    "э": "e",
-    "ю": "yu",
-    "я": "ya",
-}
 
 MONTH_NUMBERS = {
     "января": 1,
@@ -129,21 +95,6 @@ def _source_id(value: Any) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized if normalized and len(normalized) <= 100 else None
-
-
-def _username_from_name(name: str) -> str | None:
-    words = re.findall(r"[^\W_]+", name.casefold(), flags=re.UNICODE)
-    username = "".join(
-        "".join(
-            CYRILLIC_USERNAME_TRANSLITERATION.get(
-                character,
-                character if character.isascii() else "",
-            )
-            for character in word
-        ).capitalize()
-        for word in words
-    )
-    return username[:100] or None
 
 
 def _platform_id_from_href(href: str) -> str | None:
@@ -229,6 +180,56 @@ def _chat_type(chat_id: str) -> str:
     return "personal_chat"
 
 
+def _archive_sha256(archive_path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(archive_path).open("rb") as source_file:
+        while chunk := source_file.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _metadata_owner_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        for key in ("owner_id", "ownerId", "user_id", "userId", "id"):
+            owner_id = _source_id(value.get(key))
+            if owner_id is not None:
+                return owner_id
+        for child in value.values():
+            owner_id = _metadata_owner_id(child)
+            if owner_id is not None:
+                return owner_id
+    elif isinstance(value, list):
+        for child in value:
+            owner_id = _metadata_owner_id(child)
+            if owner_id is not None:
+                return owner_id
+    return None
+
+
+def _owner_id_from_metadata(root: _Element) -> str | None:
+    for element in _elements(root):
+        if element.tag != "meta" or element.attrs.get("name", "").casefold() != "jd":
+            continue
+        encoded = element.attrs.get("content", "").strip()
+        if not encoded:
+            continue
+        padded = encoded + "=" * (-len(encoded) % 4)
+        try:
+            payload = json.loads(
+                base64.b64decode(
+                    padded,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            )
+        except (ValueError, UnicodeDecodeError):
+            continue
+        owner_id = _metadata_owner_id(payload)
+        if owner_id is not None:
+            return owner_id
+    return None
+
+
 def _account_details(
     archive: zipfile.ZipFile,
 ) -> tuple[str | None, str | None, str | None]:
@@ -254,7 +255,7 @@ def _account_details(
 
     account_name = None
     account_username = None
-    owner_platform_user_id = None
+    owner_platform_user_id = _owner_id_from_metadata(root)
     name_labels = {"full name", "name", "полное имя", "имя"}
     username_labels = {"username", "user name", "имя пользователя"}
     id_labels = {"user id", "vk id", "id", "ид", "идентификатор"}
@@ -281,8 +282,5 @@ def _account_details(
             account_username = value.strip().lstrip("@").strip()[:100] or None
         elif label in id_labels and owner_platform_user_id is None:
             owner_platform_user_id = _source_id(value)
-
-    if account_username is None and account_name is not None:
-        account_username = _username_from_name(account_name)
 
     return account_name, account_username, owner_platform_user_id

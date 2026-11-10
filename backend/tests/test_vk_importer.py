@@ -100,6 +100,17 @@ def _write_archive(path):
         )
 
 
+def _write_profileless_archive(path, message_text):
+    with ZipFile(path, "w") as archive:
+        archive.writestr(
+            "messages/123/messages0.html",
+            f"""<div class="message" data-id="message-1">
+              <div class="message__header">Unknown sender</div>
+              <div>{message_text}</div>
+            </div>""",
+        )
+
+
 def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'vk.db'}")
     _create_import_tables(engine)
@@ -119,8 +130,9 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
         assert account is not None
         assert account.platform == "vk"
         assert account.name == "Антон Мальков"
-        assert account.username == "AntonMalkov"
-        assert account.platform_user_id is None
+        assert account.username is None
+        assert account.platform_user_id is not None
+        assert account.platform_user_id.startswith("archive:")
         assert chat is not None
         assert chat.title == "Sample Friend"
         messages = session.scalars(
@@ -128,7 +140,7 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
         ).all()
         assert [message.is_outgoing for message in messages] == [False, True]
         assert messages[0].sender_contact_id is not None
-        assert messages[1].sender_contact_id is None
+        assert messages[1].sender_contact_id is not None
         assert messages[1].sender_name == "Антон Мальков"
         assert all(message.source_record_key for message in messages)
 
@@ -139,10 +151,10 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
         second = import_source_export("vk", archive_path, session=session)
         assert second["inserted_messages"] == 0
         assert second["skipped_messages"] == 2
-        assert account.username == "AntonMalkov"
+        assert account.username is None
         assert messages[1].sender_name == "Антон Мальков"
 
-        assert len(session.scalars(select(Contact)).all()) == 1
+        assert len(session.scalars(select(Contact)).all()) == 2
         sessions = session.scalars(
             select(ImportSession).order_by(ImportSession.id)
         ).all()
@@ -156,6 +168,29 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
             )
             for item in sessions
         ] == [("completed", 2, 2, 0), ("completed", 2, 0, 2)]
+
+    engine.dispose()
+
+
+def test_vk_import_keeps_profileless_archive_accounts_separate(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'vk-profileless.db'}")
+    _create_import_tables(engine)
+    first_path = tmp_path / "first-profileless.zip"
+    second_path = tmp_path / "second-profileless.zip"
+    _write_profileless_archive(first_path, "first synthetic message")
+    _write_profileless_archive(second_path, "second synthetic message")
+
+    with Session(engine) as session:
+        first = vk_importer.import_vk_export(first_path, session=session)
+        second = vk_importer.import_vk_export(second_path, session=session)
+
+        assert first["account_id"] != second["account_id"]
+        accounts = session.scalars(select(Account)).all()
+        chats = session.scalars(select(Chat)).all()
+        assert len(accounts) == 2
+        assert len({account.platform_user_id for account in accounts}) == 2
+        assert len(chats) == 2
+        assert len({chat.account_id for chat in chats}) == 2
 
     engine.dispose()
 

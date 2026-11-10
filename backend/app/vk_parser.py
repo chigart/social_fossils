@@ -10,6 +10,7 @@ from typing import Any
 
 from app.vk_parser_helpers import (
     _account_details,
+    _archive_sha256,
     _chat_type,
 )
 from app.vk_parser_html import _Element, _classes, _elements, _element_text, _parse_document
@@ -89,6 +90,8 @@ def parse_vk_archive(archive_path: str | Path) -> ParsedVkExport:
         account_name, account_username, owner_platform_user_id = _account_details(
             archive
         )
+        if owner_platform_user_id is None:
+            owner_platform_user_id = f"archive:{_archive_sha256(archive_path)}"
         account_name = account_name or "VK account"
         chats_by_id: dict[str, ParsedVkChat] = {}
         identical_message_counts: dict[str, Counter[str]] = {}

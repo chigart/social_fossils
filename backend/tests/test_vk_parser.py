@@ -1,3 +1,5 @@
+import base64
+import json
 from zipfile import ZipFile
 
 import pytest
@@ -85,8 +87,9 @@ def test_parse_vk_archive_extracts_profile_conversation_and_messages(tmp_path):
     parsed = parse_vk_archive(archive_path)
 
     assert parsed.account_name == "Антон Мальков"
-    assert parsed.account_username == "AntonMalkov"
-    assert parsed.owner_platform_user_id is None
+    assert parsed.account_username is None
+    assert parsed.owner_platform_user_id is not None
+    assert parsed.owner_platform_user_id.startswith("archive:")
     assert len(parsed.chats) == 1
     chat = parsed.chats[0]
     assert chat.platform_chat_id == "123"
@@ -117,6 +120,74 @@ def test_parse_vk_archive_extracts_profile_conversation_and_messages(tmp_path):
         {"description": "Photo", "label": "Original image"}
     ]
     assert "https://example.test/media" not in repr(chat.messages[2]["raw_payload"])
+
+
+def test_parse_vk_archive_reads_owner_id_and_exported_username_from_jd_metadata(
+    tmp_path,
+):
+    archive_path = tmp_path / "vk-owner-metadata.zip"
+    encoded_metadata = base64.b64encode(
+        json.dumps({"id": 987654}).encode("utf-8")
+    ).decode("ascii")
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile/page-info.html",
+            f"""<meta name="jd" content="{encoded_metadata}">
+            <div class="item">
+              <div class="item__tertiary">Full name</div>
+              <div>Антон Мальков</div>
+            </div>
+            <div class="item">
+              <div class="item__tertiary">Username</div>
+              <div>anton_real</div>
+            </div>""",
+        )
+        archive.writestr(
+            "messages/123/messages0.html",
+            """<div class="message" data-id="owner-message">
+              <div class="message__header">
+                <a href="https://vk.com/id987654">Renamed owner</a>
+                5 мая 2024 в 12:30
+              </div>
+              <div>outgoing text</div>
+            </div>""",
+        )
+
+    parsed = parse_vk_archive(archive_path)
+
+    assert parsed.owner_platform_user_id == "987654"
+    assert parsed.account_username == "anton_real"
+    assert parsed.chats[0].messages[0]["sender_id"] == "987654"
+    assert parsed.chats[0].messages[0]["is_outgoing"] is True
+
+
+def test_profileless_archives_have_distinct_stable_owner_ids(tmp_path):
+    first_path = tmp_path / "first-profileless.zip"
+    second_path = tmp_path / "second-profileless.zip"
+    for path, content in (
+        (first_path, "first synthetic message"),
+        (second_path, "second synthetic message"),
+    ):
+        with ZipFile(path, "w") as archive:
+            archive.writestr(
+                "messages/123/messages0.html",
+                f"""<div class="message" data-id="message-1">
+                  <div class="message__header">Unknown sender</div>
+                  <div>{content}</div>
+                </div>""",
+            )
+
+    first = parse_vk_archive(first_path)
+    repeated_first = parse_vk_archive(first_path)
+    second = parse_vk_archive(second_path)
+
+    assert first.account_username is None
+    assert first.owner_platform_user_id is not None
+    assert repeated_first.owner_platform_user_id is not None
+    assert second.owner_platform_user_id is not None
+    assert first.owner_platform_user_id.startswith("archive:")
+    assert first.owner_platform_user_id == repeated_first.owner_platform_user_id
+    assert first.owner_platform_user_id != second.owner_platform_user_id
 
 
 def test_parse_vk_archive_generates_stable_keys_for_messages_without_ids(tmp_path):
