@@ -40,6 +40,7 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
         "total_messages": 0,
         "total_ordinary_messages": 0,
         "total_service_messages": 0,
+        "imported_accounts": [],
         "earliest_message_timestamp": None,
         "latest_message_timestamp": None,
     }
@@ -78,6 +79,19 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
     assert overview.total_imported_accounts == 1
     assert overview.total_chats == 1
     assert overview.total_messages == 0
+    assert [
+        account.model_dump() for account in overview.imported_accounts
+    ] == [
+        {
+            "id": 1,
+            "platform": "telegram",
+            "name": "Ant Malkov",
+            "username": "anton",
+            "platform_user_id": "user-owner",
+            "total_messages": 0,
+            "total_contacts": 0,
+        }
+    ]
     assert overview.earliest_message_timestamp is None
     assert len(chats) == 1
     assert ChatStatistics.model_validate(chats[0]).model_dump() == {
@@ -130,6 +144,19 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     assert overview.total_messages == 6
     assert overview.total_ordinary_messages == 4
     assert overview.total_service_messages == 2
+    assert [
+        account.model_dump() for account in overview.imported_accounts
+    ] == [
+        {
+            "id": 1,
+            "platform": "telegram",
+            "name": "Account 1",
+            "username": None,
+            "platform_user_id": "user-owner",
+            "total_messages": 6,
+            "total_contacts": 2,
+        }
+    ]
     assert overview.earliest_message_timestamp == first_date
     assert overview.latest_message_timestamp == latest_date
 

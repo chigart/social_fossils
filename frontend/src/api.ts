@@ -6,8 +6,19 @@ export type OverviewStatistics = {
   total_messages: number;
   total_ordinary_messages: number;
   total_service_messages: number;
+  imported_accounts: ImportedAccountStatistics[];
   earliest_message_timestamp: string | null;
   latest_message_timestamp: string | null;
+};
+
+export type ImportedAccountStatistics = {
+  id: number;
+  platform: string;
+  name: string;
+  username: string | null;
+  platform_user_id: string | null;
+  total_messages: number;
+  total_contacts: number;
 };
 
 export type WordFrequency = {

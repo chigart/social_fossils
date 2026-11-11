@@ -8,6 +8,7 @@ from app.models import Account, CanonicalIdentity, Chat, Contact, Message
 from app.schemas.analytics import (
     ChatStatistics,
     ContactStatistics,
+    ImportedAccountStatistics,
     OverviewStatistics,
 )
 
@@ -53,7 +54,43 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
         .select_from(Message)
     ).one()
 
-    return OverviewStatistics(**result._mapping)
+    imported_accounts = [
+        ImportedAccountStatistics(
+            id=row.id,
+            platform=row.platform,
+            name=row.name,
+            username=row.username,
+            platform_user_id=row.platform_user_id,
+            total_messages=row.total_messages,
+            total_contacts=row.total_contacts,
+        )
+        for row in db.execute(
+            select(
+                Account.id,
+                Account.platform,
+                Account.name,
+                Account.username,
+                Account.platform_user_id,
+                (
+                    select(func.count(Message.id))
+                    .select_from(Message)
+                    .join(Chat, Chat.id == Message.chat_id)
+                    .where(Chat.account_id == Account.id)
+                    .scalar_subquery()
+                ).label("total_messages"),
+                (
+                    select(func.count(Contact.id))
+                    .where(Contact.account_id == Account.id)
+                    .scalar_subquery()
+                ).label("total_contacts"),
+            ).order_by(Account.id)
+        )
+    ]
+
+    return OverviewStatistics(
+        **result._mapping,
+        imported_accounts=imported_accounts,
+    )
 
 
 @router.get(

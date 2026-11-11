@@ -4,6 +4,18 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class ImportedAccountStatistics(BaseModel):
+    id: int = Field(description="Internal database ID for the imported account.")
+    platform: str = Field(description="Messaging platform for the imported account.")
+    name: str = Field(description="Imported account name.")
+    username: str | None = Field(description="Username for the imported account.")
+    platform_user_id: str | None = Field(
+        description="Account ID assigned by the messaging platform."
+    )
+    total_messages: int = Field(description="All stored messages for this account.")
+    total_contacts: int = Field(description="Contacts imported for this account.")
+
+
 class OverviewStatistics(BaseModel):
     total_imported_accounts: int = Field(
         description="Number of imported source-account rows in the database."
@@ -17,6 +29,10 @@ class OverviewStatistics(BaseModel):
     )
     total_service_messages: int = Field(
         description="Rows whose message_type is exactly 'service'."
+    )
+    imported_accounts: list[ImportedAccountStatistics] = Field(
+        default_factory=list,
+        description="Per-account message and contact totals, including empty accounts."
     )
     earliest_message_timestamp: datetime | None = Field(
         description="Earliest non-null message timestamp, or null when unavailable."

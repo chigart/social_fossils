@@ -594,6 +594,26 @@ describe("dashboard", () => {
       total_imported_accounts: 2,
       total_chats: 2,
       total_messages: 70,
+      imported_accounts: [
+        {
+          id: 1,
+          platform: "telegram",
+          name: "First account",
+          username: "first",
+          platform_user_id: "platform-1",
+          total_messages: 30,
+          total_contacts: 4,
+        },
+        {
+          id: 2,
+          platform: "telegram",
+          name: "Second account",
+          username: "second",
+          platform_user_id: "platform-2",
+          total_messages: 40,
+          total_contacts: 7,
+        },
+      ],
     });
     api.getChats.mockResolvedValue([
       {
@@ -667,6 +687,27 @@ describe("dashboard", () => {
       .getByRole("heading", { name: "Source accounts" })
       .closest("article");
     expect(sourceAccountsCard).toHaveTextContent("2");
+    const overviewRegion = screen.getByRole("region", { name: "Overview" });
+    expect(within(overviewRegion).getByRole("row", {
+      name: /telegram.*1.*30.*4/,
+    })).toBeInTheDocument();
+    expect(within(overviewRegion).getByRole("row", {
+      name: /telegram.*2.*40.*7/,
+    })).toBeInTheDocument();
+    expect(within(overviewRegion).getByRole("row", {
+      name: /First account.*first.*platform-1/,
+    })).toBeInTheDocument();
+    expect(within(overviewRegion).getByRole("row", {
+      name: /Second account.*second.*platform-2/,
+    })).toBeInTheDocument();
+    expect(
+      within(overviewRegion).getByRole("columnheader", {
+        name: "Platform user ID",
+      }),
+    ).toBeInTheDocument();
+    const metricCards = within(overviewRegion).getByText("Source accounts")
+      .closest("div.grid");
+    expect(metricCards).toHaveClass("grid-cols-6");
   });
 
   it("shows the dashboard content, aggregate metrics, and sender link states", async () => {
@@ -708,8 +749,14 @@ describe("dashboard", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(screen.getByRole("region", { name: "Overview" })).getByText(
+      within(screen.getByRole("region", { name: "Overview" })).queryByText(
         "Service events",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Overview" })).getByRole(
+        "columnheader",
+        { name: "Total contacts" },
       ),
     ).toBeInTheDocument();
 
@@ -735,6 +782,9 @@ describe("dashboard", () => {
       within(contactsRegion).getByRole("columnheader", { name: "Accounts" }),
     ).toBeInTheDocument();
     expect(
+      within(contactsRegion).getByRole("columnheader", { name: "User ID" }),
+    ).toBeInTheDocument();
+    expect(
       within(contactsRegion).queryByRole("columnheader", {
         name: "Link status",
       }),
@@ -749,6 +799,9 @@ describe("dashboard", () => {
         { name: /Avery.*TG@anton/ },
       ),
     ).toBeInTheDocument();
+    expect(
+      within(contactsRegion).getByRole("row", { name: /Avery/ }),
+    ).toHaveTextContent("12345");
     expect(
       within(contactsRegion).queryByText(/Unknown sender|Unidentified contact/),
     ).not.toBeInTheDocument();

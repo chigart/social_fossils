@@ -114,6 +114,7 @@ export function ContactsView({
             <thead className={tableHeadClassName}>
               <tr>
                 <th className={tableHeaderClassName} scope="col">Contact / sender</th>
+                <th className={tableHeaderClassName} scope="col">User ID</th>
                 <th className={tableHeaderClassName} scope="col">Accounts</th>
                 <th className={tableHeaderClassName} scope="col">
                   <SortButton
@@ -134,6 +135,9 @@ export function ContactsView({
                   <th className={tableRowTitleClassName} scope="row">
                     {contact.display_name?.trim() || "Unnamed contact"}
                   </th>
+                  <td className={tableCellClassName}>
+                    {contact.platform_user_ids.join(", ") || "—"}
+                  </td>
                   <td className={tableCellClassName}>
                     {contact.source_accounts
                       .map(({ platform, label }) =>

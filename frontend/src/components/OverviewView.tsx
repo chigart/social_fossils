@@ -1,10 +1,18 @@
 import type { OverviewStatistics } from "../api";
 import { formatDate, formatNumber } from "../format";
 import {
+  numericTableCellClassName,
   sectionClassName,
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
+  tableCellClassName,
+  tableClassName,
+  tableContainerClassName,
+  tableHeadClassName,
+  tableHeaderClassName,
+  tableRowClassName,
+  tableRowTitleClassName,
 } from "../styles";
 import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
@@ -50,7 +58,7 @@ export function OverviewView({
               </span>
             </div>
           )}
-          <div className="grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
+          <div className="grid grid-cols-6 gap-3 max-[1000px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-2">
             <MetricCard
               label="Source accounts"
               value={formatNumber(overview.data.total_imported_accounts)}
@@ -68,10 +76,6 @@ export function OverviewView({
               value={formatNumber(overview.data.total_ordinary_messages)}
             />
             <MetricCard
-              label="Service events"
-              value={formatNumber(overview.data.total_service_messages)}
-            />
-            <MetricCard
               label="Earliest message"
               value={formatDate(overview.data.earliest_message_timestamp)}
             />
@@ -79,6 +83,69 @@ export function OverviewView({
               label="Latest message"
               value={formatDate(overview.data.latest_message_timestamp)}
             />
+          </div>
+          <div className="mt-6">
+            <h3 className="mb-3 text-subheading font-bold text-ink">
+              Imported accounts
+            </h3>
+            {overview.data.imported_accounts.length > 0 ? (
+              <div className={tableContainerClassName}>
+                <table className={tableClassName}>
+                  <thead className={tableHeadClassName}>
+                    <tr>
+                      <th className={tableHeaderClassName} scope="col">
+                        Platform
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Account ID
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Name
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Username
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Platform user ID
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Total messages
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Total contacts
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overview.data.imported_accounts.map((account) => (
+                      <tr className={tableRowClassName} key={account.id}>
+                        <th className={tableRowTitleClassName} scope="row">
+                          {account.platform}
+                        </th>
+                        <td className={tableCellClassName}>{account.id}</td>
+                        <td className={tableCellClassName}>{account.name}</td>
+                        <td className={tableCellClassName}>
+                          {account.username || "—"}
+                        </td>
+                        <td className={tableCellClassName}>
+                          {account.platform_user_id || "—"}
+                        </td>
+                        <td className={numericTableCellClassName}>
+                          {formatNumber(account.total_messages)}
+                        </td>
+                        <td className={numericTableCellClassName}>
+                          {formatNumber(account.total_contacts)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="m-0 text-small text-ink-muted">
+                No imported accounts.
+              </p>
+            )}
           </div>
         </>
       )}

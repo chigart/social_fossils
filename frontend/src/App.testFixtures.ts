@@ -14,6 +14,17 @@ export const overview: OverviewStatistics = {
   total_messages: 35,
   total_ordinary_messages: 31,
   total_service_messages: 4,
+  imported_accounts: [
+    {
+      id: 1,
+      platform: "telegram",
+      name: "Ant Malkov",
+      username: "anton",
+      platform_user_id: "user-owner",
+      total_messages: 35,
+      total_contacts: 3,
+    },
+  ],
   earliest_message_timestamp: "2022-01-01T12:00:00Z",
   latest_message_timestamp: "2024-03-15T12:30:00Z",
 };
