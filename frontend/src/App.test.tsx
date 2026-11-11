@@ -1251,6 +1251,19 @@ describe("dashboard", () => {
     expect(textShare).toHaveTextContent("30 characters · 3.8%");
   });
 
+  it("hides message-type and reaction sections for VK insight chats", async () => {
+    api.getChatInsights.mockResolvedValue({
+      chats: [{ ...chatInsights.chats[0], platform: "vk" }],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Conversation insights");
+
+    expect(screen.getByText("Conversation flow")).toBeInTheDocument();
+    expect(screen.getByText("Most popular words")).toBeInTheDocument();
+    expect(screen.queryByText("Message type breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reaction patterns")).not.toBeInTheDocument();
+  });
+
   it("sorts insight chat choices and applies selection only after choosing one", async () => {
     const user = userEvent.setup();
     api.getChatInsights.mockResolvedValue({

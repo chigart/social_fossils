@@ -111,7 +111,9 @@ def test_parse_vk_archive_extracts_profile_conversation_and_messages(tmp_path):
         "2024-05-05T12:30:00+00:00"
     )
     assert chat.messages[1]["sender_name"] == "Антон Мальков"
+    assert chat.messages[1]["sender_id"] == parsed.owner_platform_user_id
     assert chat.messages[1]["is_outgoing"] is True
+    assert chat.messages[4]["sender_id"] == parsed.owner_platform_user_id
     assert chat.messages[4]["sender_name"] == "Антон Мальков"
     assert chat.messages[4]["is_outgoing"] is True
     assert chat.messages[2]["text_content"] is None

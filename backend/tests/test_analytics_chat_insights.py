@@ -1,4 +1,5 @@
 from collections import Counter
+from sqlalchemy import text
 
 from app.analytics_stop_words import STOP_WORDS
 from app.routers.analytics_chat_insights import (
@@ -417,3 +418,42 @@ def test_conversation_metrics_keep_undated_and_unknown_senders_unattributed(db_s
     assert activity.sender_transition_count == 0
     assert activity.opening_senders[0].sender_id is None
     assert activity.opening_senders[0].display_name == "Unknown sender"
+
+
+def test_vk_owner_messages_are_attributed_in_conversation_openers(db_session):
+    db_session.execute(
+        text(
+            "INSERT INTO account "
+            "(id, platform, name, platform_user_id) "
+            "VALUES (1, 'vk', 'VK owner', 'archive:vk-owner')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats "
+            "(id, account_id, platform, chat_id, chat_type) "
+            "VALUES (10, 1, 'vk', '123', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_name, "
+            "is_outgoing, message_date, message_type, text_content) "
+            "VALUES "
+            "(1, 10, 'vk', 'owner-1', 'archive:vk-owner', 'VK owner', TRUE, "
+            "'2025-01-01 00:00:00', 'message', 'first'), "
+            "(2, 10, 'vk', 'owner-2', 'archive:vk-owner', 'VK owner', TRUE, "
+            "'2025-01-01 13:00:00', 'message', 'second'), "
+            "(3, 10, 'vk', 'owner-3', 'archive:vk-owner', 'VK owner', TRUE, "
+            "'2025-01-02 02:00:00', 'message', 'third')"
+        )
+    )
+
+    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    activity = result.chats[0].conversation_activity
+
+    assert [
+        (sender.sender_id, sender.display_name, sender.count)
+        for sender in activity.opening_senders
+    ] == [("archive:vk-owner", "VK owner", 3)]

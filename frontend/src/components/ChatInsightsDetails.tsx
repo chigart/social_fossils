@@ -90,7 +90,7 @@ export function ChatInsightsDetails({
         <SenderAverageLengthChart senders={chat.senders} />
       </div>
       <ConversationFlow chat={chat} />
-      <MessageTypeBreakdown chat={chat} />
+      {chat.platform !== "vk" && <MessageTypeBreakdown chat={chat} />}
       <div className={chatInsightsGridClassName}>
         <section className={chatInsightsCardClassName}>
           <h3 className={chatInsightsSectionTitleClassName}>
@@ -128,7 +128,7 @@ export function ChatInsightsDetails({
         </section>
       </div>
       <SenderRankings chat={chat} />
-      <ReactionAnalytics chat={chat} />
+      {chat.platform !== "vk" && <ReactionAnalytics chat={chat} />}
     </>
   );
 }

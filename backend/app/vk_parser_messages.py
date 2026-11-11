@@ -129,6 +129,10 @@ def _message_payload(
     ):
         sender_name = account_name
 
+    source_sender_id = sender_id
+    if is_outgoing is True and owner_platform_user_id is not None:
+        sender_id = owner_platform_user_id
+
     source_id = _source_id(raw_message.attrs.get("data-id"))
     normalized_payload = {
         "sender_id": sender_id,
@@ -141,6 +145,7 @@ def _message_payload(
     }
     source_payload = {
         **normalized_payload,
+        "sender_id": source_sender_id,
         "sender_name": source_sender_name,
     }
     source_record_key = _stable_record_key(

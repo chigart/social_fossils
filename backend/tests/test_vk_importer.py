@@ -141,6 +141,8 @@ def test_vk_import_is_idempotent_and_records_import_session(tmp_path):
         assert [message.is_outgoing for message in messages] == [False, True]
         assert messages[0].sender_contact_id is not None
         assert messages[1].sender_contact_id is not None
+        assert messages[1].sender_id == account.platform_user_id
+        assert messages[1].is_outgoing is True
         assert messages[1].sender_name == "Антон Мальков"
         assert all(message.source_record_key for message in messages)
 
