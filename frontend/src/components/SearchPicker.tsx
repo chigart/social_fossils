@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PLATFORM_ACCOUNT_PREFIXES } from "../platforms";
 
 export type SearchPickerOption = {
@@ -30,6 +30,7 @@ export function SearchPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [platformFilter, setPlatformFilter] = useState("");
+  const isInteractingWithOptions = useRef(false);
   const selected = options.find((option) => option.value === value);
   const platforms = [...new Set(options.flatMap((option) => option.platforms))]
     .sort();
@@ -58,6 +59,7 @@ export function SearchPicker({
       <div
         className="relative"
         onBlur={(event) => {
+          if (isInteractingWithOptions.current) return;
           if (
             !(event.relatedTarget instanceof Node) ||
             !event.currentTarget.contains(event.relatedTarget)
@@ -117,6 +119,12 @@ export function SearchPicker({
             <ul
               aria-label={`${label} options`}
               className="max-h-48 overflow-y-auto"
+              onMouseDownCapture={() => {
+                isInteractingWithOptions.current = true;
+                window.setTimeout(() => {
+                  isInteractingWithOptions.current = false;
+                }, 0);
+              }}
               role="listbox"
             >
               {visibleOptions.map((option) => (

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1258,6 +1258,31 @@ describe("dashboard", () => {
     ).toHaveTextContent("5");
 
     expect(chooser).toHaveTextContent("One-to-one chat");
+  });
+
+  it("keeps the insight chat picker open while interacting with its options scrollbar", async () => {
+    const user = userEvent.setup();
+    api.getChatInsights.mockResolvedValue({
+      chats: Array.from({ length: 20 }, (_, index) => ({
+        ...chatInsights.chats[0],
+        chat_id: index + 1,
+        title: `Chat ${index + 1}`,
+      })),
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Conversation insights");
+    await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));
+
+    const options = screen.getByRole("listbox", {
+      name: "Choose an insight chat options",
+    });
+    const search = screen.getByRole("searchbox", {
+      name: "Choose an insight chat search",
+    });
+    fireEvent.mouseDown(options);
+    fireEvent.blur(search, { relatedTarget: null });
+
+    expect(options).toBeInTheDocument();
   });
 
   it("shows loading status while the active overview request is pending", () => {
