@@ -127,9 +127,19 @@ export function UploadView() {
                   </p>
                 )}
                 {item.status === "uploading" && (
-                  <p className="m-0 mt-1 text-caption text-ink-muted" role="status">
-                    Uploading…
-                  </p>
+                  <>
+                    <p className="m-0 mt-1 text-caption text-ink-muted" role="status">
+                      {item.job ? "Retrying pipeline…" : "Uploading…"}
+                    </p>
+                    {!item.job && item.progress !== undefined && (
+                      <progress
+                        className="mt-2 h-2 w-full max-w-sm accent-brand"
+                        aria-label={`Upload progress for ${item.file.name}`}
+                        max={100}
+                        value={item.progress ?? undefined}
+                      />
+                    )}
+                  </>
                 )}
                 {item.status === "accepted" && item.job && (
                   <>
@@ -139,9 +149,46 @@ export function UploadView() {
                       </p>
                     )}
                     {item.job.airflow_dag_run_id ? (
-                      <p className="m-0 mt-1 text-caption text-ink-green">
-                        Pipeline queued · Job #{item.job.id} · {item.job.status}
-                      </p>
+                      <>
+                        <p className="m-0 mt-1 text-caption text-ink-green">
+                          {item.job.status === "pending"
+                            ? "Pipeline queued"
+                            : "Pipeline"}{" "}
+                          · Job #{item.job.id} · {item.job.status}
+                        </p>
+                        {item.airflowStatus?.airflow_run_details?.state && (
+                          <p className="m-0 mt-1 text-caption text-ink-muted">
+                            Airflow run ·{" "}
+                            {item.airflowStatus.airflow_run_details.state}
+                          </p>
+                        )}
+                        {item.airflowStatus?.airflow_tasks &&
+                          item.airflowStatus.airflow_tasks.length > 0 && (
+                            <ul
+                              className="mt-2 space-y-1 p-0 text-caption text-ink-muted"
+                              aria-label={`Pipeline tasks for ${item.file.name}`}
+                            >
+                              {item.airflowStatus.airflow_tasks.map((task) => (
+                                <li
+                                  key={task.task_id}
+                                  className="flex flex-wrap gap-x-2"
+                                >
+                                  <span>{task.task_id}</span>
+                                  <span>{task.state ?? "unknown"}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        {item.airflowRefreshError && (
+                          <p
+                            className="m-0 mt-1 text-caption text-ink-warning"
+                            role="status"
+                          >
+                            Unable to refresh pipeline progress:{" "}
+                            {item.airflowRefreshError}
+                          </p>
+                        )}
+                      </>
                     ) : (
                       <p
                         className="m-0 mt-1 text-caption text-ink-warning"

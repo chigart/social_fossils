@@ -1,15 +1,27 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { retryUploadJob, uploadFile } from "../api";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  getUploadJobStatus,
+  retryUploadJob,
+  uploadFile,
+  type UploadJob,
+  type UploadJobStatus,
+  type UploadProgress,
+} from "../api";
 import { UploadView } from "./UploadView";
 
 vi.mock("../api", () => ({
+  getUploadJobStatus: vi.fn(() => new Promise(() => {})),
   retryUploadJob: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
 describe("UploadView", () => {
+  beforeEach(() => {
+    vi.mocked(getUploadJobStatus).mockImplementation(() => new Promise(() => {}));
+  });
+
   it("requires an explicit platform before choosing an export", () => {
     render(<UploadView />);
 
@@ -69,8 +81,163 @@ describe("UploadView", () => {
       "Invalid Telegram export.",
     );
     expect(uploadMock).toHaveBeenCalledTimes(2);
-    expect(uploadMock).toHaveBeenNthCalledWith(1, validFile, "telegram");
-    expect(uploadMock).toHaveBeenNthCalledWith(2, invalidFile, "telegram");
+    expect(uploadMock).toHaveBeenNthCalledWith(
+      1,
+      validFile,
+      "telegram",
+      expect.any(Function),
+    );
+    expect(uploadMock).toHaveBeenNthCalledWith(
+      2,
+      invalidFile,
+      "telegram",
+      expect.any(Function),
+    );
+  });
+
+  it("shows each file's transfer progress and handles an unknown total", async () => {
+    const user = userEvent.setup();
+    const job: UploadJob = {
+      id: 45,
+      filename: "progress.json",
+      platform: "telegram",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-45",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+    };
+    let resolveUpload: ((result: UploadJob) => void) | undefined;
+    let reportProgress: ((progress: UploadProgress) => void) | undefined;
+    const pendingUpload = new Promise<UploadJob>((resolve) => {
+      resolveUpload = resolve;
+    });
+    vi.mocked(uploadFile).mockImplementation(
+      (_file, _platform, onProgress) => {
+        reportProgress = onProgress;
+        return pendingUpload;
+      },
+    );
+
+    render(<UploadView />);
+    await user.selectOptions(
+      screen.getByLabelText("Messaging platform"),
+      "telegram",
+    );
+    await user.upload(
+      screen.getByLabelText("Choose Telegram JSON files"),
+      new File(["synthetic"], "progress.json", { type: "application/json" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+    const progress = screen.getByRole("progressbar", {
+      name: "Upload progress for progress.json",
+    });
+    act(() => reportProgress?.({ loadedBytes: 25, totalBytes: 100 }));
+    expect(progress).toHaveValue(25);
+
+    act(() => reportProgress?.({ loadedBytes: 50 }));
+    expect(progress).not.toHaveAttribute("value");
+
+    await act(async () => resolveUpload?.(job));
+    expect(await screen.findByText(/Pipeline queued · Job #45/))
+      .toBeInTheDocument();
+  });
+
+  it("polls Airflow task states until the job reaches a terminal state", async () => {
+    vi.useFakeTimers();
+    const job: UploadJob = {
+      id: 46,
+      filename: "tasked.json",
+      platform: "telegram",
+      status: "pending",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "run-46",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+    };
+    const runningStatus: UploadJobStatus = {
+      ...job,
+      status: "processing",
+      airflow_run_details: {
+        state: "running",
+        start_date: "2026-10-22T12:01:00Z",
+        end_date: null,
+      },
+      airflow_tasks: [
+        {
+          task_id: "validate_export",
+          state: "success",
+          start_date: "2026-10-22T12:01:00Z",
+          end_date: "2026-10-22T12:01:01Z",
+        },
+        {
+          task_id: "perform_import",
+          state: "running",
+          start_date: "2026-10-22T12:01:01Z",
+          end_date: null,
+        },
+      ],
+    };
+    const completedStatus: UploadJobStatus = {
+      ...runningStatus,
+      status: "completed",
+      airflow_run_details: {
+        state: "success",
+        start_date: "2026-10-22T12:01:00Z",
+        end_date: "2026-10-22T12:02:00Z",
+      },
+      airflow_tasks: runningStatus.airflow_tasks?.map((task) => ({
+        ...task,
+        state: "success",
+      })),
+    };
+    vi.mocked(getUploadJobStatus).mockClear();
+    vi.mocked(uploadFile).mockResolvedValue(job);
+    vi.mocked(getUploadJobStatus)
+      .mockResolvedValueOnce(runningStatus)
+      .mockResolvedValueOnce(completedStatus);
+
+    const { unmount } = render(<UploadView />);
+    try {
+      fireEvent.change(screen.getByLabelText("Messaging platform"), {
+        target: { value: "telegram" },
+      });
+      fireEvent.change(screen.getByLabelText("Choose Telegram JSON files"), {
+        target: {
+          files: [new File(["synthetic"], "tasked.json", { type: "application/json" })],
+        },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Upload 1 files" }));
+
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(screen.getByText("Airflow run · running")).toBeInTheDocument();
+      expect(getUploadJobStatus).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(screen.getByText("Airflow run · success")).toBeInTheDocument();
+      expect(getUploadJobStatus).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(getUploadJobStatus).toHaveBeenCalledTimes(2);
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
   });
 
   it("offers retry when a job was saved but its pipeline did not start", async () => {
@@ -152,7 +319,11 @@ describe("UploadView", () => {
     await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
 
     expect(await screen.findByText("instagram.zip")).toBeInTheDocument();
-    expect(uploadFile).toHaveBeenCalledWith(archive, "instagram");
+    expect(uploadFile).toHaveBeenCalledWith(
+      archive,
+      "instagram",
+      expect.any(Function),
+    );
   });
 
   it("uploads Facebook JSON archives with the selected platform", async () => {
@@ -185,7 +356,11 @@ describe("UploadView", () => {
     await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
 
     expect(await screen.findByText("facebook.zip")).toBeInTheDocument();
-    expect(uploadFile).toHaveBeenCalledWith(archive, "facebook");
+    expect(uploadFile).toHaveBeenCalledWith(
+      archive,
+      "facebook",
+      expect.any(Function),
+    );
   });
 
   it("uploads VK archives with the selected platform", async () => {
@@ -218,7 +393,11 @@ describe("UploadView", () => {
     await user.click(screen.getByRole("button", { name: "Upload 1 files" }));
 
     expect(await screen.findByText("vk.zip")).toBeInTheDocument();
-    expect(uploadFile).toHaveBeenCalledWith(archive, "vk");
+    expect(uploadFile).toHaveBeenCalledWith(
+      archive,
+      "vk",
+      expect.any(Function),
+    );
   });
 
   it("shows duplicate uploads as an informational warning and still queues them", async () => {

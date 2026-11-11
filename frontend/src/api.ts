@@ -378,6 +378,23 @@ export type UploadJob = {
   created_at: string;
 };
 
+export type AirflowTaskStatus = {
+  task_id: string;
+  state: string | null;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+export type UploadJobStatus = UploadJob & {
+  airflow_run_details?: {
+    state: string | null;
+    start_date: string | null;
+    end_date: string | null;
+  };
+  airflow_tasks?: AirflowTaskStatus[];
+  airflow_error?: string;
+};
+
 async function getJson<T>(path: string): Promise<T> {
   let response: Response;
 
@@ -443,43 +460,67 @@ async function sendJson<T>(
 export async function uploadFile(
   file: File,
   platform: UploadPlatform,
+  onProgress?: (progress: UploadProgress) => void,
 ): Promise<UploadJob> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("platform", platform);
 
-  let response: Response;
-  try {
-    response = await fetch("/api/uploads/upload", {
-      method: "POST",
-      body: formData,
-    });
-  } catch {
-    throw new Error(
-      "Unable to connect to the upload API. Check that the backend is running.",
-    );
-  }
+  return new Promise((resolve, reject) => {
+    try {
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/uploads/upload");
+      request.upload.onprogress = (event) => {
+        onProgress?.({
+          loadedBytes: event.loaded,
+          ...(event.lengthComputable ? { totalBytes: event.total } : {}),
+        });
+      };
+      request.onerror = () => {
+        reject(
+          new Error(
+            "Unable to connect to the upload API. Check that the backend is running.",
+          ),
+        );
+      };
+      request.onload = () => {
+        let body: unknown;
+        try {
+          body = JSON.parse(request.responseText) as unknown;
+        } catch {
+          reject(new Error("The upload API returned an invalid response."));
+          return;
+        }
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    throw new Error("The upload API returned an invalid response.");
-  }
+        if (request.status < 200 || request.status >= 300) {
+          const detail =
+            typeof body === "object" &&
+            body !== null &&
+            "detail" in body &&
+            typeof body.detail === "string"
+              ? body.detail
+              : `The upload API returned an error (HTTP ${request.status}).`;
+          reject(new Error(detail));
+          return;
+        }
 
-  if (!response.ok) {
-    const detail =
-      typeof body === "object" &&
-      body !== null &&
-      "detail" in body &&
-      typeof body.detail === "string"
-        ? body.detail
-        : `The upload API returned an error (HTTP ${response.status}).`;
-    throw new Error(detail);
-  }
-
-  return body as UploadJob;
+        resolve(body as UploadJob);
+      };
+      request.send(formData);
+    } catch {
+      reject(
+        new Error(
+          "Unable to connect to the upload API. Check that the backend is running.",
+        ),
+      );
+    }
+  });
 }
+
+export type UploadProgress = {
+  loadedBytes: number;
+  totalBytes?: number;
+};
 
 export async function retryUploadJob(jobId: number): Promise<UploadJob> {
   let response: Response;
@@ -512,6 +553,39 @@ export async function retryUploadJob(jobId: number): Promise<UploadJob> {
   }
 
   return body as UploadJob;
+}
+
+export async function getUploadJobStatus(
+  jobId: number,
+): Promise<UploadJobStatus> {
+  let response: Response;
+  try {
+    response = await fetch(`/api/uploads/jobs/${jobId}/status`);
+  } catch {
+    throw new Error(
+      "Unable to connect to the upload API. Check that the backend is running.",
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("The upload API returned an invalid response.");
+  }
+
+  if (!response.ok) {
+    const detail =
+      typeof body === "object" &&
+      body !== null &&
+      "detail" in body &&
+      typeof body.detail === "string"
+        ? body.detail
+        : `The upload API returned an error (HTTP ${response.status}).`;
+    throw new Error(detail);
+  }
+
+  return body as UploadJobStatus;
 }
 
 export const getOverview = () =>

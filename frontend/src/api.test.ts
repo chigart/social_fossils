@@ -8,11 +8,37 @@ import {
   getForgottenContacts,
   getIdentityLinks,
   getOverview,
+  getUploadJobStatus,
   linkPlatformIdentities,
   retryUploadJob,
   unlinkPlatformIdentity,
   uploadFile,
 } from "./api";
+
+class MockUploadRequest {
+  upload: {
+    onprogress: ((event: ProgressEvent) => void) | null;
+  } = { onprogress: null };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  status = 200;
+  responseText = "";
+  open = vi.fn();
+  send = vi.fn((_body: FormData) => this.onload?.());
+}
+
+function mockUploadRequest(body: unknown, status = 200) {
+  const request = new MockUploadRequest();
+  request.status = status;
+  request.responseText = JSON.stringify(body);
+  vi.stubGlobal(
+    "XMLHttpRequest",
+    vi.fn(function MockXMLHttpRequest() {
+      return request;
+    }),
+  );
+  return request;
+}
 
 describe("analytics API helpers", () => {
   it("requests each analytics endpoint and returns its JSON data", async () => {
@@ -194,52 +220,59 @@ describe("analytics API helpers", () => {
       type: "application/json",
     });
     const job = { id: 17, filename: "export.json", status: "pending" };
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => job,
+    const request = mockUploadRequest(job);
+    const onProgress = vi.fn();
+
+    await expect(uploadFile(file, "telegram", onProgress)).resolves.toEqual(job);
+
+    expect(request.open).toHaveBeenCalledWith("POST", "/api/uploads/upload");
+    expect(request.send).toHaveBeenCalledTimes(1);
+    const [body] = request.send.mock.calls[0];
+    expect(body).toBeInstanceOf(FormData);
+    expect(body.get("file")).toBe(file);
+    expect(body.get("platform")).toBe("telegram");
+
+    request.upload.onprogress?.(
+      new ProgressEvent("progress", {
+        lengthComputable: true,
+        loaded: 25,
+        total: 100,
+      }),
+    );
+    expect(onProgress).toHaveBeenCalledWith({
+      loadedBytes: 25,
+      totalBytes: 100,
     });
-    vi.stubGlobal("fetch", fetchMock);
 
-    await expect(uploadFile(file, "telegram")).resolves.toEqual(job);
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [path, options] = fetchMock.mock.calls[0];
-    expect(path).toBe("/api/uploads/upload");
-    expect(options.method).toBe("POST");
-    expect(options.body).toBeInstanceOf(FormData);
-    expect((options.body as FormData).get("file")).toBe(file);
-    expect((options.body as FormData).get("platform")).toBe("telegram");
+    request.upload.onprogress?.(
+      new ProgressEvent("progress", {
+        lengthComputable: false,
+        loaded: 50,
+        total: 0,
+      }),
+    );
+    expect(onProgress).toHaveBeenLastCalledWith({ loadedBytes: 50 });
   });
 
   it("includes the selected platform for an Instagram archive", async () => {
     const file = new File(["synthetic archive"], "instagram.zip", {
       type: "application/zip",
     });
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: 18, filename: "instagram.zip" }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
+    const request = mockUploadRequest({ id: 18, filename: "instagram.zip" });
 
     await uploadFile(file, "instagram");
 
-    const [, options] = fetchMock.mock.calls[0];
-    expect((options.body as FormData).get("file")).toBe(file);
-    expect((options.body as FormData).get("platform")).toBe("instagram");
+    const [body] = request.send.mock.calls[0];
+    expect(body.get("file")).toBe(file);
+    expect(body.get("platform")).toBe("instagram");
   });
 
   it("returns the duplicate upload warning with an accepted job", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          id: 42,
-          filename: "duplicate.json",
-          warning_message: "This file has already been uploaded",
-        }),
-      }),
-    );
+    mockUploadRequest({
+      id: 42,
+      filename: "duplicate.json",
+      warning_message: "This file has already been uploaded",
+    });
 
     await expect(
       uploadFile(
@@ -250,6 +283,14 @@ describe("analytics API helpers", () => {
       id: 42,
       warning_message: "This file has already been uploaded",
     });
+  });
+
+  it("preserves upload API error details", async () => {
+    mockUploadRequest({ detail: "Unsupported export format." }, 422);
+
+    await expect(
+      uploadFile(new File(["synthetic export"], "export.json"), "telegram"),
+    ).rejects.toThrow("Unsupported export format.");
   });
 
   it("retries dispatch for a previously accepted upload job", async () => {
@@ -269,5 +310,50 @@ describe("analytics API helpers", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/uploads/jobs/17/retry", {
       method: "POST",
     });
+  });
+
+  it("requests DAG and task-instance status for an upload job", async () => {
+    const status = {
+      id: 17,
+      filename: "export.json",
+      platform: "telegram",
+      status: "processing",
+      source_account_id: null,
+      import_session_id: null,
+      airflow_dag_run_id: "upload_job_17",
+      started_at: null,
+      finished_at: null,
+      error_message: null,
+      warning_message: null,
+      created_at: "2026-10-22T12:00:00Z",
+      airflow_run_details: {
+        state: "running",
+        start_date: "2026-10-22T12:01:00Z",
+        end_date: null,
+      },
+      airflow_tasks: [
+        {
+          task_id: "validate_export",
+          state: "success",
+          start_date: "2026-10-22T12:01:00Z",
+          end_date: "2026-10-22T12:01:01Z",
+        },
+        {
+          task_id: "perform_import",
+          state: "running",
+          start_date: "2026-10-22T12:01:01Z",
+          end_date: null,
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => status,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getUploadJobStatus(17)).resolves.toEqual(status);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/uploads/jobs/17/status");
   });
 });
