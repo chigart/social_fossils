@@ -36,17 +36,33 @@ export const PLATFORM_ACCOUNT_PREFIXES: Record<string, string> = {
   vk: "VK",
 };
 
+const PLATFORM_ACCOUNT_BADGE_CLASS_NAMES: Record<string, string> = {
+  facebook: "bg-platform-facebook-background text-platform-facebook-foreground",
+  instagram: "bg-platform-instagram-background text-platform-instagram-foreground",
+  telegram: "bg-platform-telegram-background text-platform-telegram-foreground",
+  vk: "bg-platform-vk-background text-platform-vk-foreground",
+};
+
 export function formatPlatformAccountLabel(
   platform: string,
   accountLabel: string,
 ): string {
-  const prefix =
+  const prefix = platformAccountPrefix(platform);
+  return accountLabel.startsWith("@")
+    ? `${prefix}${accountLabel}`
+    : `${prefix}: ${accountLabel}`;
+}
+
+export function platformAccountPrefix(platform: string): string {
+  return (
     PLATFORM_ACCOUNT_PREFIXES[platform.toLowerCase()] ??
-    platform.slice(0, 2).toUpperCase();
-  return `${prefix}${accountLabel.startsWith("@") ? "" : " "}${accountLabel}`;
+    platform.slice(0, 2).toUpperCase()
+  );
 }
 
 export function platformAccountBadgeClassName(platform: string): string {
-  const normalizedPlatform = platform.toLowerCase();
-  return `bg-platform-${normalizedPlatform}-background text-platform-${normalizedPlatform}-foreground`;
+  return (
+    PLATFORM_ACCOUNT_BADGE_CLASS_NAMES[platform.toLowerCase()] ??
+    "bg-surface-neutral text-ink-neutral"
+  );
 }

@@ -1,4 +1,5 @@
 import type { IdentityLinksResponse } from "../api";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -152,16 +153,14 @@ export function IdentityLinksView({
                     <ul className="flex flex-wrap items-center gap-3">
                       {members.map(({ identity, label, platformLabel }) => (
                         <li
-                          className="flex flex-wrap items-center gap-2 rounded-md border border-border-muted px-3 py-2"
+                          className="flex flex-wrap items-center gap-2"
                           key={identity.identity_id}
                         >
-                          <span className="text-small text-ink">
-                            <strong>{platformLabel}</strong>:{" "}
-                            {label}{" "}
-                            <span className="font-mono text-caption text-ink-muted">
-                              ({identity.platform_user_id})
-                            </span>
-                          </span>
+                          <PlatformAccountBadge
+                            platform={identity.platform}
+                            accountLabel={`${label} (${identity.platform_user_id})`}
+                            className="inline-block whitespace-nowrap rounded px-2 py-1 text-small font-normal"
+                          />
                           <Button
                             variant="danger"
                             type="button"
@@ -200,12 +199,19 @@ export function IdentityLinksView({
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-muted bg-surface p-3"
                     key={`${suggestion.first.identity_id}-${suggestion.second.identity_id}`}
                   >
-                    <span className="text-small text-ink">
-                      <strong>{suggestion.reason}:</strong>{" "}
-                      {suggestion.firstPlatformLabel}: {suggestion.firstLabel}{" "}
-                      ({suggestion.first.platform_user_id}) ↔{" "}
-                      {suggestion.secondPlatformLabel}: {suggestion.secondLabel}{" "}
-                      ({suggestion.second.platform_user_id})
+                    <span className="flex flex-wrap items-center gap-2 text-small text-ink">
+                      <strong>{suggestion.reason}:</strong>
+                      <PlatformAccountBadge
+                        platform={suggestion.first.platform}
+                        accountLabel={`${suggestion.firstLabel} (${suggestion.first.platform_user_id})`}
+                        className="inline-block whitespace-nowrap rounded px-2 py-1 text-small font-normal"
+                      />
+                      <span aria-hidden="true">↔</span>
+                      <PlatformAccountBadge
+                        platform={suggestion.second.platform}
+                        accountLabel={`${suggestion.secondLabel} (${suggestion.second.platform_user_id})`}
+                        className="inline-block whitespace-nowrap rounded px-2 py-1 text-small font-normal"
+                      />
                     </span>
                     <Button
                       variant="positive"

@@ -6,13 +6,15 @@ import {
 export function PlatformAccountBadge({
   platform,
   accountLabel,
+  className = "inline-block whitespace-nowrap rounded px-[7px] py-1 text-label font-semibold",
 }: {
   platform: string;
   accountLabel: string;
+  className?: string;
 }) {
   return (
     <span
-      className={`inline-block whitespace-nowrap rounded px-[7px] py-1 text-label font-semibold ${platformAccountBadgeClassName(platform)}`}
+      className={`${className} ${platformAccountBadgeClassName(platform)}`}
     >
       {formatPlatformAccountLabel(platform, accountLabel)}
     </span>

@@ -1,6 +1,5 @@
 import type { ContactStatistics } from "../api";
 import { formatNumber } from "../format";
-import { formatPlatformAccountLabel } from "../platforms";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -19,6 +18,7 @@ import {
   tableRowTitleClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import { LoadingMessage, SectionError, SortButton } from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
 
@@ -139,11 +139,19 @@ export function ContactsView({
                     {contact.platform_user_ids.join(", ") || "—"}
                   </td>
                   <td className={tableCellClassName}>
-                    {contact.source_accounts
-                      .map(({ platform, label }) =>
-                        formatPlatformAccountLabel(platform, label),
-                      )
-                      .join(", ") || "—"}
+                    {contact.source_accounts.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {contact.source_accounts.map(({ platform, label }, accountIndex) => (
+                          <PlatformAccountBadge
+                            key={`${platform}:${label}:${accountIndex}`}
+                            platform={platform}
+                            accountLabel={label}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className={numericTableCellClassName}>
                     {formatNumber(contact.total_messages_sent)}

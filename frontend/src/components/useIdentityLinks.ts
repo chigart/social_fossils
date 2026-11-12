@@ -3,7 +3,7 @@ import type {
   IdentityLinksResponse,
   PlatformIdentity,
 } from "../api";
-import { PLATFORM_ACCOUNT_PREFIXES } from "../platforms";
+import { platformAccountPrefix } from "../platforms";
 import type { Resource } from "../types";
 import type { SearchPickerOption } from "./SearchPicker";
 
@@ -111,10 +111,7 @@ export function useIdentityLinks(
 
   const identityOptions = identities.map((identity) => ({
     value: String(identity.identity_id),
-    label: `${
-      PLATFORM_ACCOUNT_PREFIXES[identity.platform.toLowerCase()] ??
-      identity.platform.slice(0, 2).toUpperCase()
-    }: ${identityLabel(identity)} (${identity.platform_user_id})`,
+    label: `${identityLabel(identity)} (${identity.platform_user_id})`,
     platforms: [identity.platform],
     searchTerms: [
       identity.platform_user_id,
@@ -138,14 +135,8 @@ export function useIdentityLinks(
         ? [{
             first: identity,
             firstLabel: fullName,
-            firstPlatformLabel:
-              PLATFORM_ACCOUNT_PREFIXES[identity.platform.toLowerCase()] ??
-              identity.platform.slice(0, 2).toUpperCase(),
             second: candidate,
             secondLabel: candidateName,
-            secondPlatformLabel:
-              PLATFORM_ACCOUNT_PREFIXES[candidate.platform.toLowerCase()] ??
-              candidate.platform.slice(0, 2).toUpperCase(),
             reason: match.reason,
             rank: match.rank,
             sortLength: Math.max(
@@ -168,9 +159,7 @@ export function useIdentityLinks(
     members: members.map((identity) => ({
       identity,
       label: identityLabel(identity),
-      platformLabel:
-        PLATFORM_ACCOUNT_PREFIXES[identity.platform.toLowerCase()] ??
-        identity.platform.slice(0, 2).toUpperCase(),
+      platformLabel: platformAccountPrefix(identity.platform),
     })),
   }));
   const historyEvents = (identityLinks.data?.events ?? []).map((event) => {

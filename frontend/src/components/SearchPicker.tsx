@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { PLATFORM_ACCOUNT_PREFIXES } from "../platforms";
+import { platformAccountPrefix } from "../platforms";
+import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
 export type SearchPickerOption = {
   value: string;
@@ -7,6 +8,29 @@ export type SearchPickerOption = {
   platforms: string[];
   searchTerms?: string[];
 };
+
+function PickerOptionLabel({
+  label,
+  platforms,
+}: {
+  label: string;
+  platforms: string[];
+}) {
+  if (platforms.length === 0) return <span>{label}</span>;
+
+  return (
+    <span className="flex flex-wrap gap-1">
+      {platforms.map((platform) => (
+        <PlatformAccountBadge
+          key={platform}
+          platform={platform}
+          accountLabel={label}
+          className="inline-block max-w-full whitespace-normal break-words rounded px-2 py-1 text-small font-normal"
+        />
+      ))}
+    </span>
+  );
+}
 
 export function SearchPicker({
   label,
@@ -79,7 +103,14 @@ export function SearchPicker({
             if (event.key === "Escape") close();
           }}
         >
-          {selected?.label ?? placeholder}
+          {selected ? (
+            <PickerOptionLabel
+              label={selected.label}
+              platforms={selected.platforms}
+            />
+          ) : (
+            placeholder
+          )}
         </button>
         {open && (
           <div className="absolute z-10 mt-1 w-full rounded-md border border-border bg-surface p-2 shadow-lg">
@@ -101,8 +132,7 @@ export function SearchPicker({
               <option value="">All platforms</option>
               {platforms.map((platform) => (
                 <option key={platform} value={platform}>
-                  {PLATFORM_ACCOUNT_PREFIXES[platform.toLowerCase()] ??
-                    platform.slice(0, 2).toUpperCase()}
+                  {platformAccountPrefix(platform)}
                 </option>
               ))}
             </select>
@@ -139,14 +169,10 @@ export function SearchPicker({
                       close();
                     }}
                   >
-                    <span className="block">{option.label}</span>
-                    <span className="block text-caption text-ink-muted">
-                      {option.platforms.map(
-                        (platform) =>
-                          PLATFORM_ACCOUNT_PREFIXES[platform.toLowerCase()] ??
-                          platform.slice(0, 2).toUpperCase(),
-                      ).join(", ")}
-                    </span>
+                    <PickerOptionLabel
+                      label={option.label}
+                      platforms={option.platforms}
+                    />
                   </button>
                 </li>
               ))}

@@ -241,12 +241,6 @@ describe("dashboard", () => {
       await within(identityPanel).findByText("Linked person group 3"),
     ).toBeInTheDocument();
     expect(
-      within(identityPanel).getAllByText("TG:", { exact: false }),
-    ).toHaveLength(2);
-    expect(
-      within(identityPanel).getAllByText("IG:", { exact: false }),
-    ).toHaveLength(2);
-    expect(
       within(identityPanel).queryByText("Unidentified message participant"),
     ).not.toBeInTheDocument();
     expect(
@@ -258,6 +252,16 @@ describe("dashboard", () => {
     const linkedGroup = within(identityPanel).getByText(
       "Linked person group 3",
     ).parentElement;
+    expect(
+      within(linkedGroup as HTMLElement).getByText(
+        "TG: telegram-user-1 (telegram-user-1)",
+      ),
+    ).toHaveClass("bg-platform-telegram-background");
+    expect(
+      within(linkedGroup as HTMLElement).getByText(
+        "IG: instagram-user-1 (instagram-user-1)",
+      ),
+    ).toHaveClass("bg-platform-instagram-background");
     expect(linkedGroup?.querySelector("ul")).toHaveClass(
       "flex",
       "flex-wrap",
@@ -477,6 +481,17 @@ describe("dashboard", () => {
     const suggestionItems = within(suggestions).getAllByRole("listitem");
     expect(suggestionItems[0]).toHaveTextContent("Grace Moonrise");
     expect(suggestionItems[1]).toHaveTextContent("Mira Moon");
+    expect(suggestionItems[0]).toHaveTextContent(
+      "TG: Grace Moonrise (telegram-3)",
+    );
+    expect(suggestionItems[0]).toHaveTextContent(
+      "IG: Grace Moonrise (instagram-4)",
+    );
+    expect(
+      suggestionItems[0].querySelectorAll(
+        ".bg-platform-telegram-background, .bg-platform-instagram-background",
+      ),
+    ).toHaveLength(2);
     expect(suggestionItems[2]).toHaveTextContent("Alexandria Starling");
     expect(suggestionItems[3]).toHaveTextContent("Alex Star");
     expect(suggestionItems[4]).toHaveTextContent("Quentin Earth");
@@ -589,6 +604,7 @@ describe("dashboard", () => {
   });
 
   it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
+    const user = userEvent.setup();
     api.getOverview.mockResolvedValue({
       ...overview,
       total_imported_accounts: 2,
@@ -664,9 +680,29 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(
       within(chatRegion).getByRole("row", {
-        name: /Second account chat.*TG Anton Malkov/,
+        name: /Second account chat.*TG: Anton Malkov/,
       }),
     ).toBeInTheDocument();
+    const chatPicker = within(chatRegion).getByRole("button", {
+      name: "Choose a chat",
+    });
+    await user.click(chatPicker);
+    const chatOptions = screen.getByRole("listbox", {
+      name: "Choose a chat options",
+    });
+    const secondChatOption = within(chatOptions).getByRole("option", {
+      name: /TG: Second account chat/,
+    });
+    expect(
+      secondChatOption.querySelector(".bg-platform-telegram-background"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", {
+        name: "Choose a chat platform filter",
+      }).querySelector('option[value="telegram"]'),
+    ).not.toHaveClass("bg-platform-telegram-background");
+    await user.click(secondChatOption);
+    expect(chatPicker).toHaveTextContent("TG: Second account chat");
 
     await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", {
@@ -676,9 +712,15 @@ describe("dashboard", () => {
       name: /Avery/,
     });
     expect(combinedContactRows).toHaveLength(1);
-    expect(combinedContactRows[0]).toHaveTextContent(
-      "TG@anton, TG Anton Malkov",
-    );
+    expect(within(combinedContactRows[0]).getByText("TG@anton")).toBeInTheDocument();
+    expect(
+      within(combinedContactRows[0]).getByText("TG: Anton Malkov"),
+    ).toBeInTheDocument();
+    expect(
+      combinedContactRows[0].querySelectorAll(
+        ".bg-platform-telegram-background",
+      ),
+    ).toHaveLength(2);
     expect(combinedContactRows[0]).toHaveTextContent("24");
     await selectDashboardTab("Overview");
     const sourceAccountsCard = within(
@@ -821,6 +863,7 @@ describe("dashboard", () => {
   });
 
   it("shows one combined contact row for explicitly linked platform identities", async () => {
+    const user = userEvent.setup();
     api.getContacts.mockResolvedValue([
       {
         ...contacts[0],
@@ -846,15 +889,41 @@ describe("dashboard", () => {
     const contactsRegion = screen.getByRole("region", {
       name: "Contacts & senders",
     });
+    const contactPicker = within(contactsRegion).getByRole("button", {
+      name: "Choose a contact",
+    });
+    await user.click(contactPicker);
+    const contactOptions = screen.getByRole("listbox", {
+      name: "Choose a contact options",
+    });
+    const sharedPersonOption = within(contactOptions).getByRole("option", {
+      name: /IG: Shared person.*TG: Shared person/,
+    });
+    expect(
+      sharedPersonOption.querySelectorAll(
+        ".bg-platform-instagram-background, .bg-platform-telegram-background",
+      ),
+    ).toHaveLength(2);
+    await user.click(sharedPersonOption);
+    expect(contactPicker).toHaveTextContent("IG: Shared person");
+    expect(contactPicker).toHaveTextContent("TG: Shared person");
     expect(
       within(contactsRegion).getAllByRole("row", { name: /Shared person/ }),
     ).toHaveLength(1);
     expect(
       within(contactsRegion).getByRole("row", { name: /Shared person/ }),
     ).toHaveTextContent("17");
-    expect(
-      within(contactsRegion).getByRole("row", { name: /Shared person/ }),
-    ).toHaveTextContent("IG@instagram-account, TG@telegram-account");
+    const sharedPersonRow = within(contactsRegion).getByRole("row", {
+      name: /Shared person/,
+    });
+    expect(within(sharedPersonRow).getByText("IG@instagram-account"))
+      .toBeInTheDocument();
+    expect(within(sharedPersonRow).getByText("TG@telegram-account"))
+      .toBeInTheDocument();
+    const contactAccountBadges = within(contactsRegion)
+      .getByRole("row", { name: /Shared person/ })
+      .querySelectorAll(".bg-platform-instagram-background, .bg-platform-telegram-background");
+    expect(contactAccountBadges).toHaveLength(2);
     expect(
       within(contactsRegion).getByText(
         /Explicitly linked identities are combined across messaging accounts/,
