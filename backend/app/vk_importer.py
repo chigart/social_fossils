@@ -11,20 +11,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.import_utils import file_sha256, insert_message_batch
 from app.models import Account, CanonicalIdentity, Chat, Contact, ImportSession, Message
 from app.platforms import VK_PLATFORM_ID
 from app.vk_parser import ParsedVkChat, parse_vk_archive
 
 logger = logging.getLogger(__name__)
 MESSAGE_INSERT_BATCH_SIZE = 50
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source_file:
-        while chunk := source_file.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _get_or_create_account(
@@ -299,13 +292,6 @@ def _message_values(
     )
 
 
-def _insert_message_batch(session: Session, values: list[dict[str, Any]]) -> int:
-    statement = insert(Message).values(values).on_conflict_do_nothing().returning(
-        Message.id
-    )
-    return len(session.execute(statement).scalars().all())
-
-
 def _update_existing_outgoing_sender_names(
     session: Session,
     chat: Chat,
@@ -367,7 +353,7 @@ def _insert_messages_for_chat(
             batch,
             account.name,
         )
-        inserted = _insert_message_batch(session, values)
+        inserted = insert_message_batch(session, values)
         inserted_messages += inserted
         skipped_messages += len(values) - inserted
     return inserted_messages, skipped_messages, inserted_contacts
@@ -410,7 +396,7 @@ def import_vk_export(
             account_id=account.id,
             platform=VK_PLATFORM_ID,
             source_filename=source_path.name,
-            file_sha256=_file_sha256(source_path),
+            file_sha256=file_sha256(source_path),
             status="running",
             started_at=datetime.now(timezone.utc),
             total_messages=0,

@@ -206,7 +206,7 @@ def test_vk_import_rolls_back_after_database_failure(tmp_path, monkeypatch):
     def fail_insert(*_args):
         raise RuntimeError("synthetic database failure")
 
-    monkeypatch.setattr(vk_importer, "_insert_message_batch", fail_insert)
+    monkeypatch.setattr(vk_importer, "insert_message_batch", fail_insert)
     with Session(engine) as session:
         try:
             vk_importer.import_vk_export(archive_path, session=session)

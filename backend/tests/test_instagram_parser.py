@@ -49,7 +49,6 @@ def test_parse_instagram_archive_preserves_messages_and_generates_stable_keys(tm
     assert len(parsed.chats) == 1
     chat = parsed.chats[0]
     assert chat.platform_chat_id == "123"
-    assert chat.legacy_platform_chat_id == "inbox/friend_123"
     assert chat.correspondent_platform_user_id == "123"
     assert chat.correspondent_username == "friend"
     assert chat.title == "Example conversation"

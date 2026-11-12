@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
+from app.import_utils import file_sha256, insert_message_batch
 from app.instagram_parser import (
     ParsedInstagramChat,
     normalize_instagram_text,
@@ -35,14 +35,6 @@ def _is_placeholder_contact_name(name: str | None) -> bool:
         isinstance(name, str)
         and normalize_instagram_text(name).strip().casefold() == "instagram user"
     )
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source_file:
-        while chunk := source_file.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _get_or_create_account(
@@ -88,17 +80,7 @@ def _ensure_chat(
             Chat.chat_id == parsed_chat.platform_chat_id,
         )
     )
-    if chat is None and parsed_chat.legacy_platform_chat_id != parsed_chat.platform_chat_id:
-        chat = session.scalar(
-            select(Chat).where(
-                Chat.account_id == account_id,
-                Chat.platform == INSTAGRAM_PLATFORM_ID,
-                Chat.chat_id == parsed_chat.legacy_platform_chat_id,
-            )
-        )
     if chat is not None:
-        if chat.chat_id != parsed_chat.platform_chat_id:
-            chat.chat_id = parsed_chat.platform_chat_id
         if parsed_chat.title is not None:
             chat.title = parsed_chat.title
         chat.chat_type = parsed_chat.chat_type
@@ -394,16 +376,6 @@ def _existing_messages(
     }
 
 
-def _insert_message_batch(session: Session, values: list[dict[str, Any]]) -> int:
-    statement = (
-        insert(Message)
-        .values(values)
-        .on_conflict_do_nothing()
-        .returning(Message.id)
-    )
-    return len(session.execute(statement).scalars().all())
-
-
 def _insert_messages_for_chat(
     session: Session,
     chat: Chat,
@@ -446,7 +418,7 @@ def _insert_messages_for_chat(
                 pending_values.append(values)
 
         if pending_values:
-            inserted = _insert_message_batch(session, pending_values)
+            inserted = insert_message_batch(session, pending_values)
             inserted_count += inserted
             skipped_count += len(pending_values) - inserted
 
@@ -498,7 +470,7 @@ def import_instagram_export(
             parsed_export.account_username,
             parsed_export.owner_platform_user_id,
         )
-        file_digest = _file_sha256(source_path)
+        file_digest = file_sha256(source_path)
         import_session = ImportSession(
             account_id=account.id,
             platform=INSTAGRAM_PLATFORM_ID,

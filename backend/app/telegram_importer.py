@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import SessionLocal
+from app.import_utils import insert_message_batch
 from app.models import (
     CanonicalIdentity,
     Chat,
@@ -189,16 +190,6 @@ def _message_values(
     }
 
 
-def _insert_message_batch(session, values: list[dict[str, Any]]) -> int:
-    statement = (
-        insert(Message)
-        .values(values)
-        .on_conflict_do_nothing(index_elements=["chat_id", "message_id"])
-        .returning(Message.id)
-    )
-    return len(session.execute(statement).scalars().all())
-
-
 def _existing_message_ids(session, chat: Chat, message_ids: list[str]) -> set[str]:
     if not message_ids:
         return set()
@@ -236,7 +227,11 @@ def insert_messages(
             if values is not None:
                 pending_values.append(values)
         if pending_values:
-            inserted_count += _insert_message_batch(session, pending_values)
+            inserted_count += insert_message_batch(
+                session,
+                pending_values,
+                conflict_columns=["chat_id", "message_id"],
+            )
     return inserted_count
 
 

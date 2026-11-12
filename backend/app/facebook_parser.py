@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from app.parser_utils import (
+    chat_type as _chat_type,
+    source_id as _source_id,
+    stable_record_key as _stable_record_key,
+    timestamp_from_message as _timestamp_from_message,
+)
 
 
 MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
@@ -110,43 +115,10 @@ def _normalize_text(value: str) -> str:
     return decoded if decoded != value else value
 
 
-def _source_id(value: Any) -> str | None:
-    if isinstance(value, bool) or not isinstance(value, (str, int)):
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
 def _folder_user_id(thread_path: str) -> str | None:
     folder_name = thread_path.rsplit("/", 1)[-1]
     match = USER_FOLDER_PATTERN.fullmatch(folder_name)
     return match.group("user_id") if match is not None else None
-
-
-def _timestamp_from_message(message: dict[str, Any]) -> datetime | None:
-    value = message.get("timestamp_ms")
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()):
-        return None
-    try:
-        return datetime.fromtimestamp(int(value) / 1000, tz=timezone.utc)
-    except (OverflowError, OSError, TypeError, ValueError):
-        return None
-
-
-def _stable_record_key(
-    chat_id: str,
-    raw_message: dict[str, Any],
-    occurrence: int,
-) -> str:
-    serialized = json.dumps(
-        [chat_id, raw_message, occurrence],
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _message_payload(
@@ -195,12 +167,6 @@ def _message_payload(
         ),
         "raw_payload": raw_message,
     }
-
-
-def _chat_type(participants: Any) -> str:
-    if not isinstance(participants, list) or len(participants) < 2:
-        return "unknown"
-    return "private_group" if len(participants) > 2 else "personal_chat"
 
 
 def _is_owner_participant(

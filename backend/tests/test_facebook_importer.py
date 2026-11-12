@@ -7,11 +7,8 @@ from sqlalchemy.orm import Session
 from app import facebook_importer
 from app.models import (
     Account,
-    CanonicalIdentity,
-    CanonicalIdentityGroup,
     Chat,
     Contact,
-    IdentityLinkEvent,
     ImportSession,
     Message,
 )
@@ -33,20 +30,6 @@ def _create_import_tables(engine):
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, platform VARCHAR(50), "
                 "platform_user_id VARCHAR(100), identity_group_id INTEGER, "
                 "created_at DATETIME, UNIQUE(platform, platform_user_id))"
-            )
-        )
-        connection.execute(
-            text(
-                "CREATE TABLE identity_link_events ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, group_id INTEGER, "
-                "identity_id INTEGER, peer_identity_id INTEGER, action VARCHAR(20), "
-                "source VARCHAR(50), occurred_at DATETIME)"
-            )
-        )
-        connection.execute(
-            text(
-                "CREATE TABLE canonical_identity_groups ("
-                "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at DATETIME)"
             )
         )
         connection.execute(
@@ -183,91 +166,6 @@ def test_facebook_import_is_idempotent_and_classifies_outgoing_messages(tmp_path
         ] == [("completed", 2, 2, 0), ("completed", 2, 0, 2)]
 
 
-def test_facebook_reimport_migrates_legacy_name_contact_to_folder_id(tmp_path):
-    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-legacy.db'}")
-    _create_import_tables(engine)
-    archive_path = tmp_path / "facebook.zip"
-    _write_archive(archive_path)
-    legacy_id = "name:" + "a" * 64
-
-    with Session(engine) as session:
-        facebook_importer.import_facebook_export(archive_path, session=session)
-        old_contact = session.scalar(
-            select(Contact).where(Contact.platform_user_id == "456")
-        )
-        old_identity = session.scalar(
-            select(CanonicalIdentity).where(
-                CanonicalIdentity.platform_user_id == "456"
-            )
-        )
-        assert old_contact is not None
-        assert old_identity is not None
-        group = CanonicalIdentityGroup()
-        peer_identity = CanonicalIdentity(
-            platform="instagram",
-            platform_user_id="instagram-peer-123",
-        )
-        session.add_all([group, peer_identity])
-        session.flush()
-        old_contact.platform_user_id = legacy_id
-        old_identity.platform_user_id = legacy_id
-        old_identity.identity_group_id = group.id
-        link_event = IdentityLinkEvent(
-            group_id=group.id,
-            identity_id=old_identity.id,
-            peer_identity_id=peer_identity.id,
-            action="linked",
-            source="dashboard",
-        )
-        session.add(link_event)
-        session.execute(
-            text("UPDATE messages SET sender_id = :legacy_id"),
-            {"legacy_id": legacy_id},
-        )
-        session.commit()
-
-        result = facebook_importer.import_facebook_export(
-            archive_path,
-            session=session,
-        )
-
-        assert result["inserted_messages"] == 0
-        contacts = session.scalars(select(Contact)).all()
-        friend_contacts = [
-            contact
-            for contact in contacts
-            if contact.display_name == "Synthetic Friend"
-        ]
-        assert [contact.platform_user_id for contact in friend_contacts] == ["456"]
-        identities = session.scalars(
-            select(CanonicalIdentity).where(
-                CanonicalIdentity.platform_user_id == legacy_id
-            )
-        ).all()
-        assert identities == []
-        new_identity = session.scalar(
-            select(CanonicalIdentity).where(
-                CanonicalIdentity.platform_user_id == "456"
-            )
-        )
-        assert new_identity is not None
-        assert new_identity.identity_group_id == group.id
-        session.refresh(link_event)
-        assert link_event.identity_id == new_identity.id
-        assert link_event.peer_identity_id == peer_identity.id
-        messages = session.scalars(
-            select(Message).where(Message.sender_name == "Synthetic Friend")
-        ).all()
-        assert messages
-        assert all(message.sender_id == "456" for message in messages)
-        assert all(
-            message.sender_contact_id == friend_contacts[0].id
-            for message in messages
-        )
-
-    engine.dispose()
-
-
 def test_facebook_import_rolls_back_after_database_failure(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-rollback.db'}")
     _create_import_tables(engine)
@@ -278,7 +176,7 @@ def test_facebook_import_rolls_back_after_database_failure(tmp_path, monkeypatch
         assert len(args) == 2
         raise RuntimeError("synthetic database failure")
 
-    monkeypatch.setattr(facebook_importer, "_insert_message_batch", fail_insert)
+    monkeypatch.setattr(facebook_importer, "insert_message_batch", fail_insert)
     with Session(engine) as session:
         try:
             facebook_importer.import_facebook_export(archive_path, session=session)

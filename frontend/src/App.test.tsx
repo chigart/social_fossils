@@ -1385,25 +1385,6 @@ describe("dashboard", () => {
     expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
   });
 
-  it("maps legacy insight and timeline hashes to the combined destination", async () => {
-    window.history.replaceState(null, "", "/#communication-timeline");
-    render(<App />);
-    await screen.findByRole("button", { name: "Choose an insight chat" });
-
-    expect(
-      screen.getByRole("tab", { name: "Conversation insights" }),
-    ).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("tabpanel", { name: "Conversation insights" }),
-    ).not.toHaveAttribute("hidden");
-
-    window.history.replaceState(null, "", "/#chat-insights");
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-    expect(
-      screen.getByRole("tab", { name: "Conversation insights" }),
-    ).toHaveAttribute("aria-selected", "true");
-  });
-
   it("shows the no-import guidance when analytics contain no imported data", async () => {
     api.getOverview.mockResolvedValue({
       ...overview,

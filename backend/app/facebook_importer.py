@@ -15,12 +15,12 @@ from app.facebook_parser import (
     ParsedFacebookChat,
     parse_facebook_archive,
 )
+from app.import_utils import file_sha256, insert_message_batch
 from app.models import (
     Account,
     CanonicalIdentity,
     Chat,
     Contact,
-    IdentityLinkEvent,
     ImportSession,
     Message,
 )
@@ -28,14 +28,6 @@ from app.platforms import FACEBOOK_PLATFORM_ID
 
 logger = logging.getLogger(__name__)
 MESSAGE_INSERT_BATCH_SIZE = 50
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source_file:
-        while chunk := source_file.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _get_or_create_account(
@@ -238,147 +230,6 @@ def _contact_for_chat(
     )
 
 
-def _merge_legacy_contact(
-    session: Session,
-    legacy_contact: Contact,
-    target_contact: Contact,
-) -> None:
-    legacy_identity = (
-        session.get(CanonicalIdentity, legacy_contact.canonical_identity_id)
-        if legacy_contact.canonical_identity_id is not None
-        else None
-    )
-    target_identity = (
-        session.get(CanonicalIdentity, target_contact.canonical_identity_id)
-        if target_contact.canonical_identity_id is not None
-        else None
-    )
-    if target_identity is None:
-        raise RuntimeError("Facebook contact does not have a canonical identity.")
-    if (
-        legacy_identity is not None
-        and legacy_identity.id != target_identity.id
-        and legacy_identity.identity_group_id is not None
-        and target_identity.identity_group_id is not None
-        and legacy_identity.identity_group_id != target_identity.identity_group_id
-    ):
-        raise RuntimeError(
-            "Facebook contact IDs cannot be normalized because they belong "
-            "to different identity groups."
-        )
-
-    old_platform_user_id = legacy_contact.platform_user_id
-    if old_platform_user_id is None:
-        raise RuntimeError("Legacy Facebook contact does not have a platform ID.")
-    if legacy_identity is not None and legacy_identity.id != target_identity.id:
-        if target_identity.identity_group_id is None:
-            target_identity.identity_group_id = legacy_identity.identity_group_id
-        session.execute(
-            update(IdentityLinkEvent)
-            .where(IdentityLinkEvent.identity_id == legacy_identity.id)
-            .values(identity_id=target_identity.id)
-        )
-        session.execute(
-            update(IdentityLinkEvent)
-            .where(IdentityLinkEvent.peer_identity_id == legacy_identity.id)
-            .values(peer_identity_id=target_identity.id)
-        )
-        legacy_contacts = session.scalars(
-            select(Contact).where(
-                Contact.canonical_identity_id == legacy_identity.id
-            )
-        ).all()
-    else:
-        legacy_contacts = [legacy_contact]
-
-    session.execute(
-        update(Message)
-        .where(
-            Message.platform == FACEBOOK_PLATFORM_ID,
-            Message.sender_id == old_platform_user_id,
-        )
-        .values(sender_id=target_contact.platform_user_id)
-    )
-    for contact in legacy_contacts:
-        if contact.id == target_contact.id:
-            continue
-        replacement = session.scalar(
-            select(Contact).where(
-                Contact.account_id == contact.account_id,
-                Contact.platform == FACEBOOK_PLATFORM_ID,
-                Contact.platform_user_id == target_contact.platform_user_id,
-            )
-        )
-        if replacement is not None and replacement.id != contact.id:
-            session.execute(
-                update(Message)
-                .where(Message.sender_contact_id == contact.id)
-                .values(sender_contact_id=replacement.id)
-            )
-            session.delete(contact)
-        else:
-            contact.platform_user_id = target_contact.platform_user_id
-            contact.canonical_identity_id = target_identity.id
-    session.flush()
-    if legacy_identity is not None and legacy_identity.id != target_identity.id:
-        session.delete(legacy_identity)
-        session.flush()
-
-
-def _normalize_legacy_chat_contacts(
-    session: Session,
-    persisted_chat: Chat,
-    target_contact: Contact | None,
-) -> None:
-    if (
-        persisted_chat.chat_type != "personal_chat"
-        or target_contact is None
-        or target_contact.platform_user_id is None
-        or not target_contact.display_name
-    ):
-        return
-
-    legacy_contact_ids = set(
-        session.scalars(
-            select(Message.sender_contact_id)
-            .where(
-                Message.chat_id == persisted_chat.id,
-                Message.platform == FACEBOOK_PLATFORM_ID,
-                Message.sender_contact_id.is_not(None),
-            )
-            .distinct()
-        ).all()
-    )
-    generated_legacy_id = _contact_identity(
-        target_contact.display_name,
-        persisted_chat.chat_id,
-    )
-    generated_legacy_contact = session.scalar(
-        select(Contact).where(
-            Contact.account_id == target_contact.account_id,
-            Contact.platform == FACEBOOK_PLATFORM_ID,
-            Contact.platform_user_id == generated_legacy_id,
-        )
-    )
-    if generated_legacy_contact is not None:
-        legacy_contact_ids.add(generated_legacy_contact.id)
-    expected_name = target_contact.display_name.strip().casefold()
-    for contact_id in sorted(legacy_contact_ids):
-        legacy_contact = session.get(Contact, contact_id)
-        if (
-            legacy_contact is None
-            or legacy_contact.id == target_contact.id
-            or legacy_contact.account_id != target_contact.account_id
-            or legacy_contact.platform != FACEBOOK_PLATFORM_ID
-            or legacy_contact.platform_user_id is None
-            or not legacy_contact.platform_user_id.startswith("name:")
-            or legacy_contact.display_name is None
-            or legacy_contact.display_name.strip().casefold() != expected_name
-        ):
-            continue
-        _merge_legacy_contact(session, legacy_contact, target_contact)
-
-
 def _message_values(
     session: Session,
     chat: Chat,
@@ -468,16 +319,6 @@ def _message_values(
     )
 
 
-def _insert_message_batch(session: Session, values: list[dict[str, Any]]) -> int:
-    statement = (
-        insert(Message)
-        .values(values)
-        .on_conflict_do_nothing()
-        .returning(Message.id)
-    )
-    return len(session.execute(statement).scalars().all())
-
-
 def _insert_messages_for_chat(
     session: Session,
     chat: Chat,
@@ -507,7 +348,7 @@ def _insert_messages_for_chat(
             )
             values.append(message_values)
             inserted_contacts += int(contact_inserted)
-        inserted = _insert_message_batch(session, values)
+        inserted = insert_message_batch(session, values)
         inserted_count += inserted
         skipped_count += len(values) - inserted
     return inserted_count, skipped_count, inserted_contacts
@@ -550,7 +391,7 @@ def import_facebook_export(
             account_id=account.id,
             platform=FACEBOOK_PLATFORM_ID,
             source_filename=source_path.name,
-            file_sha256=_file_sha256(source_path),
+            file_sha256=file_sha256(source_path),
             status="running",
             started_at=datetime.now(timezone.utc),
             total_messages=0,
@@ -576,11 +417,6 @@ def import_facebook_export(
                 session,
                 account.id,
                 parsed_chat,
-            )
-            _normalize_legacy_chat_contacts(
-                session,
-                persisted_chat,
-                chat_contact,
             )
             if contact_inserted:
                 inserted_contacts += 1

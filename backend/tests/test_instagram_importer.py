@@ -164,15 +164,6 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         )
         session.add(account)
         session.flush()
-        session.add(
-            Chat(
-                account_id=account.id,
-                platform="instagram",
-                chat_id="inbox/example_123",
-                chat_type="personal_chat",
-                title=None,
-            )
-        )
         preserved_contact = Contact(
             account_id=account.id,
             platform="instagram",
@@ -406,7 +397,7 @@ def test_instagram_import_rolls_back_on_database_failure(tmp_path, monkeypatch):
     def fail_insert(*_args):
         raise RuntimeError("synthetic database failure")
 
-    monkeypatch.setattr(instagram_importer, "_insert_message_batch", fail_insert)
+    monkeypatch.setattr(instagram_importer, "insert_message_batch", fail_insert)
     with Session(engine) as session:
         try:
             instagram_importer.import_instagram_export(
