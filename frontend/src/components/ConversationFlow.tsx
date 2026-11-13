@@ -1,9 +1,9 @@
 import type { ChatInsightsStatistics } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   MINIMUM_HANDOFF_COUNT,
   PERCENTAGE_DECIMAL_PLACES,
-} from "./chatInsightsConstants";
+} from "../constants";
 import {
   chatInsightsCardClassName,
   chatInsightsDescriptionClassName,
@@ -16,9 +16,9 @@ import {
   chatInsightsSectionTitleClassName,
   chatInsightsSubheadingClassName,
   sectionEyebrowClassName,
-} from "../styles";
+} from "../constants";
 import { MetricCard } from "./Feedback";
-import { formatResponseTime } from "./formatResponseTime";
+import { formatResponseTime } from "../utils/formatResponseTime";
 
 export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
   const activity = chat.conversation_activity;

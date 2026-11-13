@@ -1,6 +1,5 @@
-import { useMemo } from "react";
 import type { ContactStatistics, PaginatedItems } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -17,7 +16,7 @@ import {
   tableHeaderClassName,
   tableRowClassName,
   tableRowTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import {
@@ -26,12 +25,13 @@ import {
   SectionError,
   SortButton,
 } from "./Feedback";
-import { SearchPicker } from "./SearchPicker";
+import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function ContactsView({
   contacts,
   visibleContacts,
   search,
+  searchOptions,
   onSearchChange,
   sortDirection,
   onSort,
@@ -42,6 +42,7 @@ export function ContactsView({
   contacts: Resource<PaginatedItems<ContactStatistics>>;
   visibleContacts: ContactStatistics[];
   search: string;
+  searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
   sortDirection: SortDirection;
   onSort: () => void;
@@ -49,33 +50,6 @@ export function ContactsView({
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
-  const contactOptions = useMemo(
-    () =>
-      contacts.data?.options?.length
-        ? contacts.data.options.map((option) => ({
-            value: option.value,
-            label: option.label,
-            platforms: option.platforms,
-            searchTerms: option.search_terms,
-          }))
-        : (contacts.data?.items ?? [])
-            .map((contact, index) => ({ contact, index }))
-            .filter(({ contact }) =>
-              contact.display_name?.trim() ||
-              contact.platform_user_ids.length > 0
-            )
-            .map(({ contact, index }) => ({
-              value: String(index),
-              label: contact.display_name?.trim() || "Unnamed contact",
-              platforms: contact.platforms,
-              searchTerms: [
-                ...contact.platform_user_ids,
-                ...contact.source_account_labels,
-              ],
-            })),
-    [contacts.data?.options, contacts.data?.items],
-  );
-
   return (
     <section
       id="contacts"
@@ -93,7 +67,7 @@ export function ContactsView({
           <SearchPicker
             label="Choose a contact"
             value={search}
-            options={contactOptions}
+            options={searchOptions}
             onChange={onSearchChange}
             placeholder="All contacts"
             searchPlaceholder="Search contact name or ID"

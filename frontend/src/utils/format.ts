@@ -1,8 +1,4 @@
-const numberFormat = new Intl.NumberFormat();
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+import { dateFormat, numberFormat } from "../constants";
 
 export function formatNumber(value: number) {
   return numberFormat.format(value);

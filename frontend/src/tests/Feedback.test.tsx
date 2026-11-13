@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { PaginationControls } from "./components/Feedback";
-import { DEFAULT_PAGE_SIZE } from "./constants";
+import { PaginationControls } from "../components/Feedback";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 
 describe("PaginationControls", () => {
   it("shows page numbers, ellipses, and the final pages", () => {

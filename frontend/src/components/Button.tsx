@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes } from "react";
+import { actionVariantClassName } from "../constants";
 
 type ButtonVariant = "positive" | "danger" | "tab";
 
@@ -6,11 +7,6 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   active?: boolean;
   variant?: ButtonVariant;
 };
-
-const actionVariantClassName = {
-  positive: "bg-surface-brand",
-  danger: "bg-border-warning",
-} as const;
 
 export function Button({
   active = false,

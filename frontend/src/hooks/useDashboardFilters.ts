@@ -10,7 +10,7 @@ import {
 import {
   sortCommunicationBalanceContacts,
   type BalanceSortKey,
-} from "../components/communicationBalanceUtils";
+} from "../utils/communicationBalance";
 import type { Resource, SortDirection } from "../types";
 
 type ForgottenSortKey =

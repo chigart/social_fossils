@@ -13,8 +13,8 @@ import {
   retryUploadJob,
   unlinkPlatformIdentity,
   uploadFile,
-} from "./api";
-import { DEFAULT_PAGE_SIZE } from "./constants";
+} from "../api";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 
 class MockUploadRequest {
   upload: {

@@ -1,7 +1,7 @@
 import {
   formatPlatformAccountLabel,
   platformAccountBadgeClassName,
-} from "../platforms";
+} from "../utils/platforms";
 
 export function PlatformAccountBadge({
   platform,

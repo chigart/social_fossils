@@ -5,9 +5,9 @@ import type {
   PlatformIdentity,
 } from "../api";
 import { DEFAULT_PAGE_SIZE } from "../constants";
-import { platformAccountPrefix } from "../platforms";
+import { platformAccountPrefix } from "../utils/platforms";
 import type { Resource } from "../types";
-import type { SearchPickerOption } from "./SearchPicker";
+import type { SearchPickerOption } from "../components/SearchPicker";
 
 function paginate<T>(items: T[], page: number) {
   const start = (page - 1) * DEFAULT_PAGE_SIZE;

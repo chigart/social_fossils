@@ -5,7 +5,7 @@ import {
   filterChatInsightsChats,
   getSelectedChatInsights,
   sortChatInsightsChats,
-} from "./chatInsightsUtils";
+} from "../utils/chatInsights";
 
 export function useChatInsights(
   insights: Resource<ChatInsightsResponse>,

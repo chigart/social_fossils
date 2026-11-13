@@ -1,11 +1,11 @@
 import type { ChatInsightsStatistics } from "../api";
-import { formatNumber } from "../format";
-import { chatInsightsCardClassName, chatInsightsEmptyTextClassName } from "../styles";
+import { formatNumber } from "../utils/format";
+import { chatInsightsCardClassName, chatInsightsEmptyTextClassName } from "../constants";
 import {
   PERCENTAGE_DECIMAL_PLACES,
   TOP_SENDER_COUNT,
-} from "./chatInsightsConstants";
-import { buildSenderShareChart, type SenderShareMetric } from "./chatInsightsUtils";
+} from "../constants";
+import { buildSenderShareChart, type SenderShareMetric } from "../utils/chatInsights";
 
 export function SenderShareChart({
   title,

@@ -1,5 +1,5 @@
 import type { EmojiFrequency, WordFrequency } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 
 export function RankingChips<T extends WordFrequency | EmojiFrequency>({
   items,

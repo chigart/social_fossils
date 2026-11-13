@@ -1,10 +1,12 @@
 import type { CommunicationBalanceClassification } from "../api";
 import {
-  classifications,
-  classificationLabels,
+  communicationBalanceClassificationLabels,
+  communicationBalanceClassifications,
+} from "../constants";
+import {
   type BalanceSortKey,
-} from "./communicationBalanceUtils";
-import { screenReaderOnlyClassName } from "../styles";
+} from "../utils/communicationBalance";
+import { screenReaderOnlyClassName } from "../constants";
 import type { SortDirection } from "../types";
 import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
@@ -55,9 +57,9 @@ export function CommunicationBalanceControls({
           }
         >
           <option value="all">All classifications</option>
-          {classifications.map((value) => (
+          {communicationBalanceClassifications.map((value) => (
             <option key={value} value={value}>
-              {classificationLabels[value]}
+              {communicationBalanceClassificationLabels[value]}
             </option>
           ))}
         </select>

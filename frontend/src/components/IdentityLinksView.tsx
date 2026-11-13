@@ -8,7 +8,7 @@ import {
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource } from "../types";
 import { Button } from "./Button";
 import {
@@ -17,7 +17,7 @@ import {
   SectionError,
 } from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
-import { useIdentityLinks } from "./useIdentityLinks";
+import { useIdentityLinks } from "../hooks/useIdentityLinks";
 
 export function IdentityLinksView({
   identityLinks,

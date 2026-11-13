@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatNumber } from "./format";
+import { formatDate, formatNumber } from "../utils/format";
 
 describe("formatNumber", () => {
   it("formats values using the runtime locale", () => {

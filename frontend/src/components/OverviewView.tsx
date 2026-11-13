@@ -1,5 +1,5 @@
 import type { OverviewStatistics } from "../api";
-import { formatDate, formatNumber } from "../format";
+import { formatDate, formatNumber } from "../utils/format";
 import {
   numericTableCellClassName,
   sectionClassName,
@@ -13,7 +13,7 @@ import {
   tableHeaderClassName,
   tableRowClassName,
   tableRowTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
 

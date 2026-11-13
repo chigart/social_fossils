@@ -1,9 +1,8 @@
-import { useMemo } from "react";
 import type {
   ForgottenContact,
   ForgottenContactsStatistics,
 } from "../api";
-import { formatDate, formatNumber } from "../format";
+import { formatDate, formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -19,156 +18,35 @@ import {
   tableHeaderClassName,
   tableRowClassName,
   tableRowTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource, SortDirection } from "../types";
 import {
   LoadingMessage,
-  MetricCard,
   PaginationControls,
   SectionError,
   SortButton,
 } from "./Feedback";
-import { SearchPicker } from "./SearchPicker";
-
-export const forgottenClassificationLabels = {
-  inactive: "Inactive",
-  activity_declined: "Declining",
-  active: "Active",
-  insufficient_data: "Insufficient data",
-} as const;
-
-export const forgottenEvidenceLabels = {
-  reliable_baseline: "Reliable baseline",
-  insufficient_history: "Insufficient history",
-  insufficient_baseline: "Insufficient baseline",
-  ambiguous_direction: "Ambiguous direction",
-} as const;
-
-function StatusBadge({ status }: { status: ForgottenContact["classification"] }) {
-  const className =
-    status === "active"
-      ? "border border-border-brand bg-surface-green text-ink-green"
-      : status === "activity_declined"
-        ? "border border-border-warning bg-surface-warning text-ink-warning"
-        : status === "inactive"
-          ? "border border-border-subtle bg-surface-muted text-ink"
-          : "border border-border-input bg-surface-neutral text-ink-neutral";
-
-  return (
-    <span className={`inline-block whitespace-nowrap rounded px-[7px] py-1 text-label font-semibold ${className}`}>
-      {forgottenClassificationLabels[status]}
-    </span>
-  );
-}
-
-function EvidenceBadge({
-  status,
-}: {
-  status: ForgottenContact["evidence_status"];
-}) {
-  return (
-    <span className="inline-block whitespace-nowrap rounded border border-border-input bg-surface-neutral px-[7px] py-1 text-label font-semibold text-ink-neutral">
-      {forgottenEvidenceLabels[status]}
-    </span>
-  );
-}
-
-function TrendCell({ contact }: { contact: ForgottenContact }) {
-  if (contact.activity_decline_percentage === null) {
-    return <span className="text-ink-muted">—</span>;
-  }
-
-  const label = `${formatNumber(Math.round(contact.activity_decline_percentage))}%`;
-  return <span className="tabular-nums">{label}</span>;
-}
-
-function MonthlyActivity({
-  label,
-  months,
-}: {
-  label: string;
-  months: ForgottenContact["historical_activity_by_month"];
-}) {
-  const visibleMonths = months.slice(-6);
-  const maxCount = Math.max(...visibleMonths.map((month) => month.total_message_count), 1);
-
-  if (visibleMonths.length === 0) {
-    return (
-      <p className="m-0 text-caption text-ink-muted">
-        {label}: no dated activity
-      </p>
-    );
-  }
-
-  const description = visibleMonths
-    .map((month) => `${month.month}: ${month.total_message_count} messages`)
-    .join(", ");
-
-  return (
-    <div
-      className="mb-2 last:mb-0"
-      role="img"
-      aria-label={`${label} monthly activity: ${description}`}
-    >
-      <p className="mb-1 m-0 text-caption font-semibold text-ink-muted">{label}</p>
-      <div className="flex min-w-[250px] items-end gap-1">
-        {visibleMonths.map((month) => (
-          <div
-            className="flex min-w-0 flex-1 flex-col items-center gap-1"
-            key={month.month}
-          >
-            <span className="text-caption tabular-nums text-ink-muted">
-              {formatNumber(month.total_message_count)}
-            </span>
-            <span
-              className="w-full rounded-t bg-brand"
-              style={{
-                height: `${Math.max(4, (month.total_message_count / maxCount) * 28)}px`,
-              }}
-            />
-            <span className="text-[10px] text-ink-muted">{month.month}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SummaryCards({ data }: { data: ForgottenContactsStatistics }) {
-  const { summary } = data;
-  return (
-    <div className="mb-5 grid grid-cols-5 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
-      <MetricCard label="Eligible contacts" value={formatNumber(summary.eligible_contacts)} />
-      <MetricCard
-        label="Meaningful history"
-        value={formatNumber(summary.meaningful_historical_contacts)}
-      />
-      <MetricCard
-        label="Inactive"
-        value={formatNumber(summary.currently_inactive_contacts)}
-      />
-      <MetricCard
-        label="Declining"
-        value={formatNumber(summary.declining_activity_contacts)}
-      />
-      <MetricCard
-        label="Insufficient data"
-        value={formatNumber(summary.insufficient_data_contacts)}
-      />
-    </div>
-  );
-}
+import {
+  ForgottenEvidenceBadge,
+  ForgottenMonthlyActivity,
+  ForgottenStatusBadge,
+  ForgottenSummaryCards,
+  ForgottenTrend,
+} from "./ForgottenContactsParts";
+import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function ForgottenContactsView({
   forgotten,
   noImportedData,
   visibleContacts,
   search,
+  searchOptions,
   onSearchChange,
   sortKey,
   sortDirection,
-  onSortKeyChange,
-  onSortDirectionChange,
+  onSortByRank,
+  onSortByLastSeen,
+  onSortByName,
   onRetry,
   onPageChange,
 }: {
@@ -176,50 +54,16 @@ export function ForgottenContactsView({
   noImportedData: boolean;
   visibleContacts: ForgottenContact[];
   search: string;
+  searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
   sortKey: "ranking_score" | "display_name" | "days_since_last_communication";
   sortDirection: SortDirection;
-  onSortKeyChange: (
-    value: "ranking_score" | "display_name" | "days_since_last_communication",
-  ) => void;
-  onSortDirectionChange: (value: SortDirection) => void;
+  onSortByRank: () => void;
+  onSortByLastSeen: () => void;
+  onSortByName: () => void;
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
-  const searchOptions = useMemo(
-    () =>
-      forgotten.data?.options?.length
-        ? forgotten.data.options.map((option) => ({
-            value: option.value,
-            label: option.label,
-            platforms: option.platforms,
-            searchTerms: option.search_terms,
-          }))
-        : (forgotten.data?.contacts ?? []).map((contact, index) => ({
-            value: String(index),
-            label: contact.display_name || "Unnamed contact",
-            platforms: contact.platforms,
-            searchTerms: [
-              ...contact.platform_user_ids,
-              ...contact.source_account_labels,
-            ],
-          })),
-    [forgotten.data?.options, forgotten.data?.contacts],
-  );
-
-  const toggleSort = (
-    key: "ranking_score" | "display_name" | "days_since_last_communication",
-    defaultDirection: SortDirection,
-  ) => {
-    if (sortKey === key) {
-      onSortDirectionChange(sortDirection === "asc" ? "desc" : "asc");
-      return;
-    }
-
-    onSortKeyChange(key);
-    onSortDirectionChange(defaultDirection);
-  };
-
   return (
     <section
       id="forgotten-contacts"
@@ -250,19 +94,19 @@ export function ForgottenContactsView({
                 label="Rank"
                 active={sortKey === "ranking_score"}
                 direction={sortDirection}
-                onClick={() => toggleSort("ranking_score", "desc")}
+                onClick={onSortByRank}
               />
               <SortButton
                 label="Last seen"
                 active={sortKey === "days_since_last_communication"}
                 direction={sortDirection}
-                onClick={() => toggleSort("days_since_last_communication", "desc")}
+                onClick={onSortByLastSeen}
               />
               <SortButton
                 label="Name"
                 active={sortKey === "display_name"}
                 direction={sortDirection}
-                onClick={() => toggleSort("display_name", "asc")}
+                onClick={onSortByName}
               />
             </div>
           </div>
@@ -287,7 +131,7 @@ export function ForgottenContactsView({
       {forgotten.error && <SectionError message={forgotten.error} onRetry={onRetry} />}
       {forgotten.data && (
         <>
-          <SummaryCards data={forgotten.data} />
+          <ForgottenSummaryCards data={forgotten.data} />
           {noImportedData ? (
             <div className={`${emptyStateClassName} p-[23px]`}>
               <h3 className={emptyStateTitleClassName}>No imported data yet</h3>
@@ -356,24 +200,24 @@ export function ForgottenContactsView({
                         </span>
                       </td>
                       <td className={tableCellClassName}>
-                        <MonthlyActivity
+                        <ForgottenMonthlyActivity
                           label="Historical"
                           months={contact.historical_activity_by_month}
                         />
-                        <MonthlyActivity
+                        <ForgottenMonthlyActivity
                           label="Recent"
                           months={contact.recent_activity_by_month}
                         />
                       </td>
                       <td className={tableCellClassName}>
-                        <StatusBadge status={contact.classification} />
+                        <ForgottenStatusBadge status={contact.classification} />
                       </td>
                       <td className={tableCellClassName}>
                         <div className="flex flex-wrap items-center gap-2">
-                          <EvidenceBadge status={contact.evidence_status} />
+                          <ForgottenEvidenceBadge status={contact.evidence_status} />
                           {contact.activity_decline_percentage !== null && (
                             <span className="text-caption text-ink-muted">
-                              <TrendCell contact={contact} />
+                              <ForgottenTrend contact={contact} />
                             </span>
                           )}
                         </div>

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { chatInsights } from "../App.testFixtures";
-import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
+import { chatInsights } from "./App.testFixtures";
+import { SenderAverageLengthChart } from "../components/SenderAverageLengthChart";
 
 describe("SenderAverageLengthChart", () => {
   it("wraps multi-word sender names onto two lines", () => {

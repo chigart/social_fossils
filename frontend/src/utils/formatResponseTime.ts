@@ -3,7 +3,7 @@ import {
   SECONDS_PER_DAY,
   SECONDS_PER_HOUR,
   SECONDS_PER_MINUTE,
-} from "./chatInsightsConstants";
+} from "../constants";
 
 export function formatResponseTime(seconds: number | null) {
   if (seconds === null) return "Not available";

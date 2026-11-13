@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { timeline } from "../App.testFixtures";
+import { timeline } from "./App.testFixtures";
 import type { Resource } from "../types";
-import { CommunicationTimelineView } from "./CommunicationTimelineView";
+import { CommunicationTimelineView } from "../components/CommunicationTimelineView";
 
 function renderTimeline(
   resource: Resource<typeof timeline> = {

@@ -1,5 +1,5 @@
 import type { ChatInsightsStatistics, MessageTypeCount } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsDescriptionClassName,
@@ -8,12 +8,12 @@ import {
   chatInsightsSectionHeaderClassName,
   chatInsightsSubheadingClassName,
   sectionEyebrowClassName,
-} from "../styles";
+} from "../constants";
 import {
   PERCENTAGE_DECIMAL_PLACES,
   TOP_MESSAGE_TYPE_SENDER_COUNT,
-} from "./chatInsightsConstants";
-import { buildMessageTypeShareChart } from "./chatInsightsUtils";
+} from "../constants";
+import { buildMessageTypeShareChart } from "../utils/chatInsights";
 
 function MessageTypeChart({ item }: { item: MessageTypeCount }) {
   const { slices, pieBackground, chartDescription } =

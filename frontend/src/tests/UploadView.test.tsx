@@ -9,7 +9,7 @@ import {
   type UploadJobStatus,
   type UploadProgress,
 } from "../api";
-import { UploadView } from "./UploadView";
+import { UploadView } from "../components/UploadView";
 
 vi.mock("../api", () => ({
   getUploadJobStatus: vi.fn(() => new Promise(() => {})),

@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { PLATFORM_CONFIG, type UploadPlatform } from "../platforms";
+import { PLATFORM_CONFIG } from "../constants";
+import type { UploadPlatform } from "../utils/platforms";
 import { useUploadQueue } from "../hooks/useUploadQueue";
 import {
   sectionClassName,
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-} from "../styles";
+} from "../constants";
 
 const isUploadPlatform = (value: string): value is UploadPlatform =>
   Object.prototype.hasOwnProperty.call(PLATFORM_CONFIG, value);

@@ -2,13 +2,13 @@ import type {
   ChatInsightsStatistics,
   CommunicationTimelineStatistics,
 } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsEmptyTextClassName,
   chatInsightsGridClassName,
   chatInsightsSectionTitleClassName,
-} from "../styles";
+} from "../constants";
 import { MetricCard } from "./Feedback";
 import { SenderRankings } from "./SenderRankings";
 import { ConversationFlow } from "./ConversationFlow";
@@ -17,7 +17,7 @@ import { ReactionAnalytics } from "./ReactionAnalytics";
 import { RankingChips } from "./RankingChips";
 import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
 import { SenderShareChart } from "./SenderShareChart";
-import { filterRepeatedItems } from "./chatInsightsUtils";
+import { filterRepeatedItems } from "../utils/chatInsights";
 
 export function ChatInsightsDetails({
   chat,

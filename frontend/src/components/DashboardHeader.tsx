@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { Button } from "./Button";
-import { dashboardTabs, type DashboardTab } from "./dashboardTabs";
+import { dashboardTabs } from "../constants";
+import type { DashboardTab } from "../utils/dashboardTabs";
 
 export function DashboardHeader({
   selectedTab,

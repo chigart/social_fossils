@@ -1,6 +1,5 @@
-import { useMemo } from "react";
 import type { ChatStatistics, PaginatedItems } from "../api";
-import { formatDate, formatNumber } from "../format";
+import { formatDate, formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -17,7 +16,7 @@ import {
   tableRowClassName,
   tableRowTitleClassName,
   numericTableCellClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import {
@@ -26,17 +25,13 @@ import {
   SectionError,
   SortButton,
 } from "./Feedback";
-import { SearchPicker } from "./SearchPicker";
-
-type ChatSort = {
-  key: "title" | "total_messages";
-  direction: SortDirection;
-};
+import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function ChatsView({
   chats,
   visibleChats,
   search,
+  searchOptions,
   onSearchChange,
   sort,
   onSort,
@@ -47,35 +42,14 @@ export function ChatsView({
   chats: Resource<PaginatedItems<ChatStatistics>>;
   visibleChats: ChatStatistics[];
   search: string;
+  searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
-  sort: ChatSort;
-  onSort: (key: ChatSort["key"]) => void;
+  sort: { key: "title" | "total_messages"; direction: SortDirection };
+  onSort: (key: "title" | "total_messages") => void;
   hasImportedAccounts: boolean;
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
-  const chatOptions = useMemo(
-    () =>
-      chats.data?.options?.length
-        ? chats.data.options.map((option) => ({
-            value: option.value,
-            label: option.label,
-            platforms: option.platforms,
-            searchTerms: option.search_terms,
-          }))
-        : (chats.data?.items ?? []).map((chat) => ({
-            value: String(chat.chat_id),
-            label: chat.title || "Untitled chat",
-            platforms: [chat.platform],
-            searchTerms: [
-              chat.platform_chat_id,
-              chat.chat_type,
-              chat.source_account_label,
-            ],
-          })),
-    [chats.data?.options, chats.data?.items],
-  );
-
   return (
     <section
       id="chats"
@@ -91,7 +65,7 @@ export function ChatsView({
           <SearchPicker
             label="Choose a chat"
             value={search}
-            options={chatOptions}
+            options={searchOptions}
             onChange={onSearchChange}
             placeholder="All chats"
             searchPlaceholder="Search chat title or ID"

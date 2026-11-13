@@ -1,5 +1,6 @@
 import type { CommunicationBalanceContact } from "../api";
-import { formatDate, formatNumber } from "../format";
+import { communicationBalanceClassificationLabels } from "../constants";
+import { formatDate, formatNumber } from "../utils/format";
 import {
   numericTableCellClassName,
   screenReaderOnlyClassName,
@@ -9,8 +10,7 @@ import {
   tableHeaderClassName,
   tableRowClassName,
   tableRowTitleClassName,
-} from "../styles";
-import { classificationLabels } from "./communicationBalanceUtils";
+} from "../constants";
 
 function formatShare(value: number | null) {
   return value === null
@@ -128,7 +128,7 @@ export function CommunicationBalanceTable({
                           : "bg-surface-tag text-ink-tag"
                       }`}
                     >
-                      {classificationLabels[contact.classification]}
+                      {communicationBalanceClassificationLabels[contact.classification]}
                     </span>
                     {insufficient && (
                       <p className="mt-1 mb-0 max-w-[180px] text-caption text-ink-muted">

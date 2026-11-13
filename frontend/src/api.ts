@@ -1,4 +1,4 @@
-import type { UploadPlatform } from "./platforms";
+import type { UploadPlatform } from "./utils/platforms";
 import { DEFAULT_PAGE_SIZE } from "./constants";
 
 export type OverviewStatistics = {
@@ -397,7 +397,7 @@ export type CommunicationTimelineStatistics = {
   months: CommunicationTimelineMonth[];
 };
 
-export type { UploadPlatform } from "./platforms";
+export type { UploadPlatform } from "./utils/platforms";
 
 export type UploadJob = {
   id: number;

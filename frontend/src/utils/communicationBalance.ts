@@ -1,26 +1,7 @@
-import type {
-  CommunicationBalanceClassification,
-  CommunicationBalanceContact,
-} from "../api";
+import type { CommunicationBalanceContact } from "../api";
 import type { SortDirection } from "../types";
 
 export type BalanceSortKey = "text_volume" | "owner_share" | "recent_activity";
-
-export const classificationLabels: Record<
-  CommunicationBalanceClassification,
-  string
-> = {
-  balanced: "Balanced",
-  mostly_owner: "Mostly owner",
-  mostly_contact: "Mostly contact",
-  strongly_owner: "Strongly owner",
-  strongly_contact: "Strongly contact",
-  insufficient_data: "Insufficient data",
-};
-
-export const classifications = Object.keys(
-  classificationLabels,
-) as CommunicationBalanceClassification[];
 
 function compareNullable(
   left: number | null,

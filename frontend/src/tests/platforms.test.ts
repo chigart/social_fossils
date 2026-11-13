@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatPlatformAccountLabel,
   platformAccountBadgeClassName,
-} from "./platforms";
+} from "../utils/platforms";
 
 describe("platform account labels", () => {
   it("uses compact usernames and colon-separated named accounts", () => {

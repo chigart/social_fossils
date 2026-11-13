@@ -1,12 +1,12 @@
 import type { ChatInsightsStatistics } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsEmptyTextClassName,
   chatInsightsGridClassName,
   chatInsightsSectionTitleClassName,
-} from "../styles";
-import { filterRepeatedItems } from "./chatInsightsUtils";
+} from "../constants";
+import { filterRepeatedItems } from "../utils/chatInsights";
 import { RankingChips } from "./RankingChips";
 
 export function SenderRankings({ chat }: { chat: ChatInsightsStatistics }) {

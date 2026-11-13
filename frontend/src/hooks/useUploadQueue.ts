@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { airflowPollIntervalMs } from "../constants";
 import {
   getUploadJobStatus,
   retryUploadJob,
@@ -20,8 +21,6 @@ export type UploadItem = {
   airflowRefreshError?: string;
   error?: string;
 };
-
-const airflowPollIntervalMs = 3000;
 
 function uploadError(error: unknown): string {
   return error instanceof Error ? error.message : "Unable to upload this file.";

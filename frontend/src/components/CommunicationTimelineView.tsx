@@ -2,7 +2,7 @@ import type {
   CommunicationTimelineMonth,
   CommunicationTimelineStatistics,
 } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -12,7 +12,7 @@ import {
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource } from "../types";
 import { LoadingMessage, SectionError } from "./Feedback";
 

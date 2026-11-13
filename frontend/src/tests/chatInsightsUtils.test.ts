@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chatInsights } from "../App.testFixtures";
+import { chatInsights } from "./App.testFixtures";
 import {
   buildMessageTypeShareChart,
   buildSenderAverageLengthChart,
@@ -8,7 +8,7 @@ import {
   filterChatInsightsChats,
   getSelectedChatInsights,
   sortChatInsightsChats,
-} from "./chatInsightsUtils";
+} from "../utils/chatInsights";
 
 describe("chat insights utilities", () => {
   it("filters word and emoji frequencies that appear only once", () => {

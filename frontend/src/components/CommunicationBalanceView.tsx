@@ -1,10 +1,8 @@
-import { useMemo } from "react";
 import type {
   CommunicationBalanceClassification,
   CommunicationBalanceContact,
   CommunicationBalanceStatistics,
 } from "../api";
-import { formatNumber } from "../format";
 import {
   emptyStateClassName,
   emptyStateTextClassName,
@@ -13,52 +11,24 @@ import {
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource, SortDirection } from "../types";
 import {
   LoadingMessage,
-  MetricCard,
   PaginationControls,
   SectionError,
 } from "./Feedback";
 import { CommunicationBalanceControls } from "./CommunicationBalanceControls";
+import { CommunicationBalanceSummary } from "./CommunicationBalanceSummary";
 import { CommunicationBalanceTable } from "./CommunicationBalanceTable";
-import {
-  type BalanceSortKey,
-  sortCommunicationBalanceContacts,
-} from "./communicationBalanceUtils";
+import type { BalanceSortKey } from "../utils/communicationBalance";
 import type { SearchPickerOption } from "./SearchPicker";
-
-export { sortCommunicationBalanceContacts };
-export type { BalanceSortKey };
-
-function SummaryCards({ data }: { data: CommunicationBalanceStatistics }) {
-  const { summary } = data;
-  return (
-    <div className="mb-5 grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
-      <MetricCard label="Eligible contacts" value={formatNumber(summary.eligible_contacts)} />
-      <MetricCard label="Balanced" value={formatNumber(summary.balanced_contacts)} />
-      <MetricCard label="Mostly owner" value={formatNumber(summary.mostly_owner_contacts)} />
-      <MetricCard label="Mostly contact" value={formatNumber(summary.mostly_contact_contacts)} />
-      <MetricCard label="Strongly owner" value={formatNumber(summary.strongly_owner_contacts)} />
-      <MetricCard label="Strongly contact" value={formatNumber(summary.strongly_contact_contacts)} />
-      <MetricCard
-        label="Insufficient data"
-        value={formatNumber(summary.insufficient_data_contacts)}
-      />
-      <MetricCard
-        label="Total text exchanged"
-        value={formatNumber(summary.total_text_length)}
-        detail="characters"
-      />
-    </div>
-  );
-}
 
 export function CommunicationBalanceView({
   balance,
   visibleContacts,
   search,
+  searchOptions,
   onSearchChange,
   classification,
   onClassificationChange,
@@ -72,6 +42,7 @@ export function CommunicationBalanceView({
   balance: Resource<CommunicationBalanceStatistics>;
   visibleContacts: CommunicationBalanceContact[];
   search: string;
+  searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
   classification: CommunicationBalanceClassification | "all";
   onClassificationChange: (
@@ -84,27 +55,6 @@ export function CommunicationBalanceView({
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
-  const searchOptions = useMemo(
-    () =>
-      balance.data?.options?.length
-        ? balance.data.options.map((option) => ({
-            value: option.value,
-            label: option.label,
-            platforms: option.platforms,
-            searchTerms: option.search_terms,
-          } satisfies SearchPickerOption))
-        : (balance.data?.contacts ?? []).map((contact, index) => ({
-            value: String(index),
-            label: contact.display_name || "Unnamed contact",
-            platforms: contact.platforms,
-            searchTerms: [
-              ...contact.platform_user_ids,
-              ...contact.source_account_labels,
-            ],
-          } satisfies SearchPickerOption)),
-    [balance.data?.options, balance.data?.contacts],
-  );
-
   return (
     <section
       id="communication-balance"
@@ -146,7 +96,7 @@ export function CommunicationBalanceView({
       )}
       {balance.data && (
         <>
-          <SummaryCards data={balance.data} />
+          <CommunicationBalanceSummary data={balance.data} />
           {balance.data.contacts.length === 0 ? (
             <div className={`${emptyStateClassName} p-[23px]`}>
               <h3 className={emptyStateTitleClassName}>

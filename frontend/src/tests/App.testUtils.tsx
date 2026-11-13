@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import App from "./App";
+import App from "../App";
 
 export async function renderLoadedDashboard() {
   render(<App />);

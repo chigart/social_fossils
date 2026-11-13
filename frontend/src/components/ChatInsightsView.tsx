@@ -10,7 +10,7 @@ import {
   sectionEyebrowClassName,
   sectionHeaderClassName,
   sectionTitleClassName,
-} from "../styles";
+} from "../constants";
 import type { Resource } from "../types";
 import {
   LoadingMessage,
@@ -21,7 +21,7 @@ import { CommunicationTimelineView } from "./CommunicationTimelineView";
 import {
   getSelectedChatInsights,
   sortChatInsightsChats,
-} from "./chatInsightsUtils";
+} from "../utils/chatInsights";
 import { SearchPicker } from "./SearchPicker";
 
 export function ChatInsightsView({

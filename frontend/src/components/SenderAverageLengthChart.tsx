@@ -1,22 +1,21 @@
 import { useId } from "react";
 import type { ChatInsightsStatistics } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsEmptyTextClassName,
-} from "../styles";
-import { buildSenderAverageLengthChart } from "./chatInsightsUtils";
-
-const MINIMUM_CHART_WIDTH = 620;
-const CHART_HEIGHT = 240;
-const CHART_TOP_PADDING = 16;
-const CHART_BOTTOM_PADDING = 58;
-const Y_AXIS_WIDTH = 46;
-const CHART_RIGHT_PADDING = 18;
-const SLOT_WIDTH = 88;
-const BAR_WIDTH = 36;
-const PLOT_BOTTOM = CHART_HEIGHT - CHART_BOTTOM_PADDING;
-const PLOT_HEIGHT = PLOT_BOTTOM - CHART_TOP_PADDING;
+} from "../constants";
+import {
+  BAR_WIDTH,
+  CHART_HEIGHT,
+  CHART_RIGHT_PADDING,
+  MINIMUM_CHART_WIDTH,
+  PLOT_BOTTOM,
+  PLOT_HEIGHT,
+  SLOT_WIDTH,
+  Y_AXIS_WIDTH,
+} from "../constants";
+import { buildSenderAverageLengthChart } from "../utils/chatInsights";
 
 function splitSenderLabel(label: string) {
   const midpoint = Math.ceil(label.length / 2);

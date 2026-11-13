@@ -1,5 +1,5 @@
 import type { ChatInsightsStatistics } from "../api";
-import { formatNumber } from "../format";
+import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsCompactCellClassName,
@@ -16,8 +16,8 @@ import {
   chatInsightsSubheadingClassName,
   chatInsightsTableWrapperClassName,
   sectionEyebrowClassName,
-} from "../styles";
-import { PERCENTAGE_DECIMAL_PLACES } from "./chatInsightsConstants";
+} from "../constants";
+import { PERCENTAGE_DECIMAL_PLACES } from "../constants";
 import { RankingChips } from "./RankingChips";
 
 export function ReactionAnalytics({ chat }: { chat: ChatInsightsStatistics }) {

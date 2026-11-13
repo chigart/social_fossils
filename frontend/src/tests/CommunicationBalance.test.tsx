@@ -15,8 +15,8 @@ import {
   rowTitles,
   selectDashboardTab,
 } from "./App.testUtils";
-import App from "./App";
-import { DEFAULT_PAGE_SIZE } from "./constants";
+import App from "../App";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
@@ -30,7 +30,7 @@ const api = vi.hoisted(() => ({
   getCommunicationTimeline: vi.fn(),
 }));
 
-vi.mock("./api", () => api);
+vi.mock("../api", () => api);
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");

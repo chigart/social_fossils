@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { platformAccountPrefix } from "../platforms";
+import { SEARCH_PICKER_OPTION_LIMIT } from "../constants";
+import { platformAccountPrefix } from "../utils/platforms";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
 export type SearchPickerOption = {
@@ -8,8 +9,6 @@ export type SearchPickerOption = {
   platforms: string[];
   searchTerms?: string[];
 };
-
-const SEARCH_PICKER_OPTION_LIMIT = 100;
 
 function PickerOptionLabel({
   label,
