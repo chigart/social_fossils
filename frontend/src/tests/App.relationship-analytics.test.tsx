@@ -41,9 +41,8 @@ describe("dashboard", () => {
     await renderLoadedDashboard();
 
     expect(
-      screen.getByRole("heading", { name: "Your communication, in context." }),
+      screen.getByRole("heading", { name: "PERSONAL DATA ANALYTICS" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Combined account data")).toBeInTheDocument();
     expect(
       screen.queryByText(/All imported Telegram exports are included/),
     ).not.toBeInTheDocument();
@@ -54,7 +53,7 @@ describe("dashboard", () => {
       "true",
     );
     expect(
-      screen.getByRole("tab", { name: "Conversation insights" }),
+      screen.getByRole("tab", { name: "Insights" }),
     ).toHaveAttribute(
       "aria-controls",
       "conversation-insights-panel",
@@ -63,9 +62,6 @@ describe("dashboard", () => {
       "aria-controls",
       "uploads-panel",
     );
-    expect(
-      screen.queryByRole("tab", { name: /^Insights$/ }),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("tab", { name: /^Timeline$/ }),
     ).not.toBeInTheDocument();
@@ -245,7 +241,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     expect(
       screen.getByRole("heading", { name: "Who reopens after a pause" }),
@@ -317,7 +313,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     expect(screen.getByText("Frequent opener")).toBeInTheDocument();
     expect(screen.getByText("Frequent closer")).toBeInTheDocument();

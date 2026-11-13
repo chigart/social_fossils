@@ -172,7 +172,7 @@ describe("dashboard", () => {
       .mockResolvedValueOnce(linked)
       .mockResolvedValueOnce(unlinked);
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const identityPanel = screen.getByRole("region", {
       name: "Identity links",
@@ -291,7 +291,7 @@ describe("dashboard", () => {
     });
 
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const linkedGroup = screen.getByText("Linked person group 7").parentElement;
     expect(linkedGroup?.querySelectorAll("li")).toHaveLength(5);
@@ -354,7 +354,7 @@ describe("dashboard", () => {
       events: [],
     });
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     await user.click(screen.getByRole("button", {
       name: "First platform identity",

@@ -53,7 +53,7 @@ describe("dashboard", () => {
     await user.click(screen.getByRole("button", { name: "Aurora group" }));
 
     expect(
-      screen.getByRole("tab", { name: "Conversation insights" }),
+      screen.getByRole("tab", { name: "Insights" }),
     ).toHaveAttribute("aria-selected", "true");
     expect(window.location.hash).toBe("#conversation-insights");
     expect(api.getChatInsights).toHaveBeenLastCalledWith(2);
@@ -105,7 +105,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     expect(
       screen.getByRole("heading", { name: "Chat insights" }),
@@ -321,7 +321,7 @@ describe("dashboard", () => {
       ],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     const messageShare = screen.getByRole("region", {
       name: "Share of messages by person",
@@ -344,7 +344,7 @@ describe("dashboard", () => {
       chats: [{ ...chatInsights.chats[0], platform: "vk" }],
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     expect(screen.getByText("Conversation flow")).toBeInTheDocument();
     expect(screen.getByText("Most popular words")).toBeInTheDocument();
@@ -386,7 +386,7 @@ describe("dashboard", () => {
       .mockResolvedValueOnce({ chats: [mostActiveChat], options: insightOptions })
       .mockResolvedValueOnce({ chats: [oneToOneChat], options: insightOptions });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     expect(
       screen.queryByRole("navigation", { name: "Pagination" }),
@@ -442,7 +442,7 @@ describe("dashboard", () => {
       })),
     });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
     await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));
 
     const options = screen.getByRole("listbox", {

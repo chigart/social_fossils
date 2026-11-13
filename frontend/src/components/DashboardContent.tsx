@@ -241,7 +241,6 @@ export function DashboardContent({
           id="conversation-insights-panel"
           role="tabpanel"
           aria-labelledby="conversation-insights-tab"
-          aria-label="Conversation insights"
           tabIndex={0}
           hidden={selectedTab !== "conversation-insights"}
         >
@@ -342,7 +341,6 @@ export function DashboardContent({
           id="identity-links-panel"
           role="tabpanel"
           aria-labelledby="identity-links-tab"
-          aria-label="Identity links"
           tabIndex={0}
           hidden={selectedTab !== "identity-links"}
         >

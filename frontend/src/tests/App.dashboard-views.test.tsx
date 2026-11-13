@@ -90,14 +90,14 @@ describe("dashboard", () => {
     await user.keyboard("{ArrowRight}");
 
     expect(
-      screen.getByRole("tab", { name: "Conversation insights" }),
+      screen.getByRole("tab", { name: "Insights" }),
     ).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(window.location.hash).toBe("#conversation-insights");
     expect(
-      screen.getByRole("tabpanel", { name: "Conversation insights" }),
+      screen.getByRole("tabpanel", { name: "Insights" }),
     ).not.toHaveAttribute(
       "hidden",
     );

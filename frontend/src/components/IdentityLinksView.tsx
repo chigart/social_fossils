@@ -175,6 +175,7 @@ export function IdentityLinksView({
                           <Button
                             variant="danger"
                             type="button"
+                            aria-label={`Unlink ${platformLabel}: ${label}`}
                             disabled={saving}
                             onClick={() => void performUnlink(identity)}
                           >

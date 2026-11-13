@@ -108,7 +108,7 @@ describe("dashboard", () => {
       events: [],
     });
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const suggestions = screen.getByRole("list", {
       name: "Suggested identity links",
@@ -171,7 +171,7 @@ describe("dashboard", () => {
       events: [],
     });
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const currentLinks = screen.getByLabelText("Current identity links");
     const renderedLinks = currentLinks.textContent ?? "";
@@ -235,7 +235,7 @@ describe("dashboard", () => {
       events: [],
     });
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const suggestions = screen.getByRole("list", {
       name: "Suggested identity links",
@@ -354,7 +354,7 @@ describe("dashboard", () => {
       events: [],
     });
     render(<App />);
-    await selectDashboardTab("Identity links");
+    await selectDashboardTab("Links");
 
     const currentLinks = screen.getByLabelText("Current identity links");
     expect(currentLinks).toHaveClass("max-h-[600px]", "overflow-y-auto");

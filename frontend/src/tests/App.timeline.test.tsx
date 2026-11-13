@@ -89,7 +89,7 @@ describe("dashboard", () => {
         })),
       });
     await renderLoadedDashboard();
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     const region = screen.getByRole("region", {
       name: "Communication timeline",
@@ -170,7 +170,7 @@ describe("dashboard", () => {
         months: [],
       });
     render(<App />);
-    await selectDashboardTab("Conversation insights");
+    await selectDashboardTab("Insights");
 
     const region = screen.getByRole("region", {
       name: "Communication timeline",
