@@ -74,3 +74,29 @@
   --text-metric: clamp(20px, 2vw, 25px);
   --text-page-title: clamp(28px, 3.4vw, 38px);
 }
+
+:where(
+  a[href],
+  button,
+  select,
+  summary,
+  [role="button"],
+  [role="link"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="switch"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="range"]
+) {
+  cursor: pointer;
+}
+
+:where(button:disabled, select:disabled, input:disabled, [aria-disabled="true"]) {
+  cursor: not-allowed;
+}
