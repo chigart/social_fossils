@@ -31,7 +31,7 @@ def _create_identity_tables(engine) -> None:
     )
 
 
-def test_identity_links_reject_conflicts_and_preserve_link_history(tmp_path):
+def test_identity_links_merge_groups_and_preserve_link_history(tmp_path):
     engine = create_engine(
         f"sqlite+pysqlite:///{tmp_path / 'identity-links.db'}",
         connect_args={"check_same_thread": False},
@@ -100,14 +100,14 @@ def test_identity_links_reject_conflicts_and_preserve_link_history(tmp_path):
                 != second_link.json()["identity_group_id"]
             )
 
-            conflict = client.post(
+            merged_link = client.post(
                 "/api/identity-links",
                 json={
                     "first_identity_id": identity_ids[0],
                     "second_identity_id": identity_ids[3],
                 },
             )
-            assert conflict.status_code == 409
+            assert merged_link.status_code == 201
 
             unlink = client.delete(f"/api/identity-links/{identity_ids[0]}")
             assert unlink.status_code == 200
@@ -119,23 +119,76 @@ def test_identity_links_reject_conflicts_and_preserve_link_history(tmp_path):
                 for identity in linked_state["identities"]
             }
             assert groups_by_id[identity_ids[0]] is None
-            assert groups_by_id[identity_ids[1]] is None
             assert (
-                groups_by_id[identity_ids[2]]
+                groups_by_id[identity_ids[1]]
+                == groups_by_id[identity_ids[2]]
                 == groups_by_id[identity_ids[3]]
             )
             assert [event["action"] for event in linked_state["events"]].count(
                 "linked"
-            ) == 2
+            ) == 3
             assert linked_state["events"][0]["action"] == "unlinked"
             assert linked_state["events"][0]["source"] == "dashboard"
 
             history = session.scalars(
                 select(IdentityLinkEvent).order_by(IdentityLinkEvent.id)
             ).all()
-            assert len(history) == 3
+            assert len(history) == 4
             assert history[0].peer_identity_id == identity_ids[1]
             assert history[-1].action == "unlinked"
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+            session.close()
+            engine.dispose()
+
+
+def test_identity_links_mark_and_reject_owner_accounts(tmp_path):
+    engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'owner-identity-links.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    _create_identity_tables(engine)
+    session = Session(engine)
+    owner_account = Account(
+        platform="telegram",
+        name="Synthetic owner account",
+        platform_user_id="owner-telegram-id",
+    )
+    owner_identity = CanonicalIdentity(
+        platform="telegram",
+        platform_user_id="owner-telegram-id",
+    )
+    contact_identity = CanonicalIdentity(
+        platform="instagram",
+        platform_user_id="contact-instagram-id",
+    )
+    session.add_all([owner_account, owner_identity, contact_identity])
+    session.commit()
+
+    def override_get_db():
+        yield session
+
+    with TestClient(app) as client:
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            response = client.get("/api/identity-links")
+            assert response.status_code == 200
+            identities_by_id = {
+                identity["identity_id"]: identity
+                for identity in response.json()["identities"]
+            }
+            assert identities_by_id[owner_identity.id]["is_owner"] is True
+            assert identities_by_id[contact_identity.id]["is_owner"] is False
+
+            link = client.post(
+                "/api/identity-links",
+                json={
+                    "first_identity_id": owner_identity.id,
+                    "second_identity_id": contact_identity.id,
+                },
+            )
+            assert link.status_code == 409
+            assert link.json()["detail"] == "Owner accounts cannot be linked to contacts."
         finally:
             app.dependency_overrides.pop(get_db, None)
             session.close()

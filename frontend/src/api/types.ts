@@ -191,6 +191,7 @@ export type PlatformIdentity = {
   platform: string;
   platform_user_id: string;
   identity_group_id: number | null;
+  is_owner: boolean;
   contacts: IdentityContactSource[];
 };
 

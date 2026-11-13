@@ -38,6 +38,151 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
+  it("suggests extending and merging linked groups but excludes the owner account", async () => {
+    const user = userEvent.setup();
+    const identities = [
+      {
+        identity_id: 1,
+        platform: "telegram",
+        platform_user_id: "telegram-group-one",
+        identity_group_id: 10,
+        is_owner: false,
+        contacts: [{
+          contact_id: 1,
+          account_id: 1,
+          account_label: "Telegram",
+          platform: "telegram",
+          display_name: "Jordan Pine",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 2,
+        platform: "instagram",
+        platform_user_id: "instagram-group-two",
+        identity_group_id: 20,
+        is_owner: false,
+        contacts: [{
+          contact_id: 2,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Jordan Pine",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 3,
+        platform: "discord",
+        platform_user_id: "discord-unlinked",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 3,
+          account_id: 3,
+          account_label: "Discord",
+          platform: "discord",
+          display_name: "Jordan Pine",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 4,
+        platform: "facebook",
+        platform_user_id: "owner-facebook-id",
+        identity_group_id: null,
+        is_owner: true,
+        contacts: [{
+          contact_id: 4,
+          account_id: 4,
+          account_label: "Facebook",
+          platform: "facebook",
+          display_name: "Jordan Pine",
+          username: null,
+        }],
+      },
+    ];
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const suggestions = screen.getByRole("list", {
+      name: "Suggested identity links",
+    });
+    expect(within(suggestions).getAllByRole("button", {
+      name: "Link identities",
+    })).toHaveLength(3);
+    expect(suggestions).not.toHaveTextContent("owner-facebook-id");
+
+    await user.click(screen.getByRole("button", {
+      name: /First platform identity/,
+    }));
+    expect(screen.queryByRole("option", {
+      name: /owner-facebook-id/,
+    })).not.toBeInTheDocument();
+
+    await user.click(within(suggestions).getAllByRole("button", {
+      name: "Link identities",
+    })[0]);
+    expect(api.linkPlatformIdentities).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("sorts current identity groups by full name", async () => {
+    const groups: Array<[string, number]> = [
+      ["Zoe Harbor", 30],
+      ["Ada Meadow", 20],
+      ["Milo Forest", 10],
+    ];
+    const identities = groups.flatMap(([name, group], index) => {
+      const id = index * 2 + 1;
+      return [
+        {
+          identity_id: id,
+          platform: "telegram",
+          platform_user_id: `telegram-${id}`,
+          identity_group_id: group,
+          is_owner: false,
+          contacts: [{
+            contact_id: id,
+            account_id: id,
+            account_label: "Telegram",
+            platform: "telegram",
+            display_name: name,
+            username: null,
+          }],
+        },
+        {
+          identity_id: id + 1,
+          platform: "instagram",
+          platform_user_id: `instagram-${id + 1}`,
+          identity_group_id: group,
+          is_owner: false,
+          contacts: [],
+        },
+      ];
+    });
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Identity links");
+
+    const currentLinks = screen.getByLabelText("Current identity links");
+    const renderedLinks = currentLinks.textContent ?? "";
+    expect(renderedLinks.indexOf("Ada Meadow")).toBeLessThan(
+      renderedLinks.indexOf("Milo Forest"),
+    );
+    expect(renderedLinks.indexOf("Milo Forest")).toBeLessThan(
+      renderedLinks.indexOf("Zoe Harbor"),
+    );
+  });
+
   it("orders suggestions by match rank, then name length", async () => {
     const user = userEvent.setup();
     const pairs = [

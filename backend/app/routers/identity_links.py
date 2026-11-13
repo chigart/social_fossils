@@ -24,6 +24,18 @@ from app.schemas.identity_links import (
 router = APIRouter(prefix="/api/identity-links", tags=["identity links"])
 
 
+def _owner_identity_keys(db: Session) -> set[tuple[str, str]]:
+    return {
+        (platform, platform_user_id)
+        for platform, platform_user_id in db.execute(
+            select(Account.platform, Account.platform_user_id).where(
+                Account.platform_user_id.is_not(None)
+            )
+        ).all()
+        if platform_user_id is not None
+    }
+
+
 def _contact_source(contact: Contact, account: Account) -> IdentityContactSource:
     return IdentityContactSource(
         contact_id=contact.id,
@@ -36,6 +48,7 @@ def _contact_source(contact: Contact, account: Account) -> IdentityContactSource
 
 
 def _identity_links_response(db: Session) -> IdentityLinksResponse:
+    owner_identity_keys = _owner_identity_keys(db)
     identities = db.scalars(
         select(CanonicalIdentity).order_by(
             CanonicalIdentity.platform,
@@ -80,6 +93,10 @@ def _identity_links_response(db: Session) -> IdentityLinksResponse:
                 platform=identity.platform,
                 platform_user_id=identity.platform_user_id,
                 identity_group_id=identity.identity_group_id,
+                is_owner=(
+                    identity.platform,
+                    identity.platform_user_id,
+                ) in owner_identity_keys,
                 contacts=sources_by_identity.get(identity.id, []),
             )
             for identity in identities
@@ -127,6 +144,15 @@ def link_identities(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Platform identity not found.",
         )
+    owner_identity_keys = _owner_identity_keys(db)
+    if any(
+        (identity.platform, identity.platform_user_id) in owner_identity_keys
+        for identity in (first, second)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Owner accounts cannot be linked to contacts.",
+        )
     if (
         first.identity_group_id is not None
         and first.identity_group_id == second.identity_group_id
@@ -135,15 +161,6 @@ def link_identities(
             status="linked",
             identity_group_id=first.identity_group_id,
         )
-    if (
-        first.identity_group_id is not None
-        and second.identity_group_id is not None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="These identities are already assigned to different people. Unlink first.",
-        )
-
     group_id = first.identity_group_id or second.identity_group_id
     if group_id is None:
         group = CanonicalIdentityGroup()
@@ -152,6 +169,19 @@ def link_identities(
         group_id = group.id
 
     first_was_grouped = first.identity_group_id is not None
+    second_group_id = second.identity_group_id
+    if second_group_id is not None and second_group_id != group_id:
+        members_to_merge = db.scalars(
+            select(CanonicalIdentity).where(
+                CanonicalIdentity.identity_group_id == second_group_id
+            )
+        ).all()
+        for member in members_to_merge:
+            member.identity_group_id = group_id
+        group_to_remove = db.get(CanonicalIdentityGroup, second_group_id)
+        if group_to_remove is not None:
+            db.delete(group_to_remove)
+
     first.identity_group_id = group_id
     second.identity_group_id = group_id
     db.add(

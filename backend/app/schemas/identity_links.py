@@ -18,6 +18,7 @@ class PlatformIdentityView(BaseModel):
     platform: str
     platform_user_id: str
     identity_group_id: int | None
+    is_owner: bool = False
     contacts: list[IdentityContactSource] = Field(default_factory=list)
 
 

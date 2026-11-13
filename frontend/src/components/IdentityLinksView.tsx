@@ -69,9 +69,9 @@ export function IdentityLinksView({
       <p className="mb-5 text-small leading-[1.5] text-ink-muted">
         Group any number of accounts that belong to the same person, including
         multiple accounts on one platform. Suggestions are based on normalized
-        Full Name matches or a one-symbol difference, but no identity is linked
-        until you review and confirm it.
-        Conflicting links must be removed before accounts can be linked.
+        Full Name matches or a one-symbol difference, and include opportunities
+        to extend or merge linked groups. Owner accounts are excluded, and no
+        identity is linked until you review and confirm it.
       </p>
       {identityLinks.loading && identityLinks.data === null && <LoadingMessage />}
       {identityLinks.error && (
@@ -178,7 +178,7 @@ export function IdentityLinksView({
                             disabled={saving}
                             onClick={() => void performUnlink(identity)}
                           >
-                            Unlink {platformLabel}: {label}
+                            Unlink
                           </Button>
                         </li>
                       ))}
@@ -206,7 +206,7 @@ export function IdentityLinksView({
             {suggestedLinks.length === 0 ? (
               <p className="text-small text-ink-muted">
                 No normalized Full Name matches or one-symbol differences found
-                among unlinked identities.
+                between identities that can be linked.
               </p>
             ) : (
               <ul

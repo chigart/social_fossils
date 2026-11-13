@@ -103,15 +103,17 @@ export function useIdentityLinks(
     [identities],
   );
   const identityOptions = useMemo(
-    () => identities.map((identity) => ({
-      value: String(identity.identity_id),
-      label: `${identityLabel(identity)} (${identity.platform_user_id})`,
-      platforms: [identity.platform],
-      searchTerms: [
-        identity.platform_user_id,
-        ...identity.contacts.map((contact) => contact.username ?? ""),
-      ],
-    })) satisfies SearchPickerOption[],
+    () => identities
+      .filter((identity) => !identity.is_owner)
+      .map((identity) => ({
+        value: String(identity.identity_id),
+        label: `${identityLabel(identity)} (${identity.platform_user_id})`,
+        platforms: [identity.platform],
+        searchTerms: [
+          identity.platform_user_id,
+          ...identity.contacts.map((contact) => contact.username ?? ""),
+        ],
+      })) satisfies SearchPickerOption[],
     [identities],
   );
   const linkedGroups = useMemo(() => {
@@ -122,14 +124,35 @@ export function useIdentityLinks(
       group.push(identity);
       groups.set(identity.identity_group_id, group);
     }
-    return [...groups.entries()].map(([groupId, members]) => ({
-      groupId,
-      members: members.map((identity) => ({
-        identity,
-        label: identityLabel(identity),
-        platformLabel: platformAccountPrefix(identity.platform),
-      })),
-    }));
+    const compareNames = (first: string, second: string) =>
+      first.localeCompare(second, undefined, { sensitivity: "base", numeric: true });
+    return [...groups.entries()].map(([groupId, groupMembers]) => {
+      const members = [...groupMembers].sort((first, second) =>
+        Number(identityFullName(first) === null) -
+          Number(identityFullName(second) === null) ||
+        compareNames(
+          identityFullName(first) ?? identityLabel(first),
+          identityFullName(second) ?? identityLabel(second),
+        ) ||
+        first.identity_id - second.identity_id,
+      );
+      const fullNames = members
+        .map(identityFullName)
+        .filter((name): name is string => name !== null);
+      return {
+        groupId,
+        sortName: fullNames.sort(compareNames)[0] ??
+          members.map(identityLabel).sort(compareNames)[0] ?? "",
+        members: members.map((identity) => ({
+          identity,
+          label: identityLabel(identity),
+          platformLabel: platformAccountPrefix(identity.platform),
+        })),
+      };
+    }).sort((first, second) =>
+      compareNames(first.sortName, second.sortName) ||
+      first.groupId - second.groupId,
+    );
   }, [identities]);
   const suggestedLinks = useMemo(() => {
     const identitiesByName = new Map<
@@ -137,7 +160,7 @@ export function useIdentityLinks(
       { identity: PlatformIdentity; label: string }[]
     >();
     for (const identity of identities) {
-      if (identity.identity_group_id !== null) continue;
+      if (identity.is_owner) continue;
       const label = identityFullName(identity);
       if (!label) continue;
       const name = normalizedName(label);
@@ -196,6 +219,11 @@ export function useIdentityLinks(
           .slice(firstName === secondName ? index + 1 : 0)
           .flatMap((second) => {
             if (first.identity.platform === second.identity.platform) return [];
+            if (
+              first.identity.identity_group_id !== null &&
+              first.identity.identity_group_id ===
+                second.identity.identity_group_id
+            ) return [];
             return [{
               first: first.identity,
               firstLabel: first.label,
@@ -287,7 +315,7 @@ export function useIdentityLinks(
     actionMessage,
     identities,
     identityOptions,
-    canLink: identities.length >= 2,
+    canLink: identityOptions.length >= 2,
     suggestedLinks,
     linkedGroups,
     historyEvents,
