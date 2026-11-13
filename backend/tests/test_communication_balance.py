@@ -355,9 +355,30 @@ def test_communication_balance_applies_exact_share_boundaries(db_session):
 
 def test_communication_balance_sorts_by_requested_metric(db_session):
     add_account(db_session, 1, "user-owner")
-    for contact_id, telegram_user_id, name, owner_text, contact_texts in (
-        (20, "user-alex", "Alex", "o" * 800, ["c" * 67, "c" * 67, "c" * 66]),
-        (21, "user-zed", "Zed", "o" * 200, ["c" * 800]),
+    for (
+        contact_id,
+        telegram_user_id,
+        name,
+        owner_text,
+        contact_texts,
+        activity_date,
+    ) in (
+        (
+            20,
+            "user-alex",
+            "Alex",
+            "o" * 800,
+            ["c" * 67, "c" * 67, "c" * 66],
+            datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ),
+        (
+            21,
+            "user-zed",
+            "Zed",
+            "o" * 200,
+            ["c" * 800],
+            datetime(2026, 1, 2, tzinfo=timezone.utc),
+        ),
     ):
         add_contact(db_session, contact_id, 1, telegram_user_id, name)
         add_chat(
@@ -373,6 +394,7 @@ def test_communication_balance_sorts_by_requested_metric(db_session):
             contact_id,
             "message",
             "user-owner",
+            message_date=activity_date,
             is_outgoing=True,
             text_content=owner_text,
         )
@@ -383,21 +405,38 @@ def test_communication_balance_sorts_by_requested_metric(db_session):
                 contact_id,
                 "message",
                 telegram_user_id,
+                message_date=activity_date,
                 is_outgoing=False,
                 sender_contact_id=contact_id,
                 text_content=contact_text,
             )
 
     by_owner_share = get_communication_balance(db_session, sort_by="owner_share")
-    by_message_count = get_communication_balance(db_session, sort_by="message_count")
-    by_name = get_communication_balance(db_session, sort_by="display_name")
+    by_text_volume = get_communication_balance(db_session, sort_by="text_volume")
+    by_recent_activity = get_communication_balance(
+        db_session,
+        sort_by="recent_activity",
+    )
+    second_page = get_communication_balance(
+        db_session,
+        sort_by="recent_activity",
+        page=2,
+        page_size=1,
+    )
 
     assert [contact.display_name for contact in by_owner_share.contacts] == [
         "Zed",
         "Alex",
     ]
-    assert [contact.display_name for contact in by_message_count.contacts] == [
+    assert [contact.display_name for contact in by_text_volume.contacts] == [
         "Alex",
         "Zed",
     ]
-    assert [contact.display_name for contact in by_name.contacts] == ["Alex", "Zed"]
+    assert [contact.display_name for contact in by_recent_activity.contacts] == [
+        "Alex",
+        "Zed",
+    ]
+    assert [contact.display_name for contact in second_page.contacts] == ["Zed"]
+    assert second_page.summary.eligible_contacts == 2
+    assert second_page.pagination.total == 2
+    assert len(second_page.options) == 2

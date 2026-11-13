@@ -1,7 +1,31 @@
 from datetime import datetime
-from typing import Literal
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
+
+T = TypeVar("T")
+
+
+class PaginationMetadata(BaseModel):
+    page: int = Field(description="One-based result page.")
+    page_size: int = Field(description="Maximum number of rows in this page.")
+    total: int = Field(description="Total matching rows across all pages.")
+
+
+class SearchOption(BaseModel):
+    value: str
+    label: str
+    platforms: list[str]
+    search_terms: list[str] = Field(default_factory=list)
+
+
+class PaginatedItems(BaseModel, Generic[T]):
+    items: list[T]
+    pagination: PaginationMetadata
+    options: list[SearchOption] = Field(
+        default_factory=list,
+        description="Lightweight options for searching the complete result set.",
+    )
 
 
 class ImportedAccountStatistics(BaseModel):
@@ -244,6 +268,8 @@ class ForgottenContactsSummary(BaseModel):
 class ForgottenContactsStatistics(BaseModel):
     summary: ForgottenContactsSummary
     contacts: list[ForgottenContact]
+    pagination: PaginationMetadata
+    options: list[SearchOption] = Field(default_factory=list)
 
 
 class CommunicationBalanceContact(BaseModel):
@@ -350,6 +376,8 @@ class CommunicationBalanceSummary(BaseModel):
 class CommunicationBalanceStatistics(BaseModel):
     summary: CommunicationBalanceSummary
     contacts: list[CommunicationBalanceContact]
+    pagination: PaginationMetadata
+    options: list[SearchOption] = Field(default_factory=list)
 
 
 class CommunicationTimelineMonth(BaseModel):
@@ -581,3 +609,4 @@ class ChatInsightsStatistics(BaseModel):
 
 class ChatInsightsResponse(BaseModel):
     chats: list[ChatInsightsStatistics]
+    options: list[SearchOption] = Field(default_factory=list)

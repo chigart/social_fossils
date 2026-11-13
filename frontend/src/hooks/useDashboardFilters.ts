@@ -5,6 +5,7 @@ import {
   type CommunicationBalanceStatistics,
   type ContactStatistics,
   type ForgottenContactsStatistics,
+  type PaginatedItems,
 } from "../api";
 import {
   sortCommunicationBalanceContacts,
@@ -25,8 +26,8 @@ export function useDashboardFilters({
   balance,
   forgottenContacts,
 }: {
-  chats: Resource<ChatStatistics[]>;
-  contacts: Resource<ContactStatistics[]>;
+  chats: Resource<PaginatedItems<ChatStatistics>>;
+  contacts: Resource<PaginatedItems<ContactStatistics>>;
   balance: Resource<CommunicationBalanceStatistics>;
   forgottenContacts: Resource<ForgottenContactsStatistics>;
 }) {
@@ -62,7 +63,7 @@ export function useDashboardFilters({
 
   const visibleChats = useMemo(
     () =>
-      (chats.data ?? [])
+      (chats.data?.items ?? [])
         .filter((chat) => chatSearch === "" || String(chat.chat_id) === chatSearch)
         .sort((left, right) => {
           const comparison =
@@ -71,13 +72,16 @@ export function useDashboardFilters({
               : left.total_messages - right.total_messages;
           return chatSort.direction === "asc" ? comparison : -comparison;
         }),
-    [chats.data, chatSearch, chatSort],
+    [chats.data?.items, chatSearch, chatSort],
   );
 
   const visibleContacts = useMemo(
-    () =>
-      (contacts.data ?? [])
-        .map((contact, index) => ({ contact, index }))
+    () => {
+      const offset =
+        ((contacts.data?.pagination.page ?? 1) - 1) *
+        (contacts.data?.pagination.page_size ?? 0);
+      return (contacts.data?.items ?? [])
+        .map((contact, index) => ({ contact, index: offset + index }))
         .filter(
           ({ contact }) =>
             contact.display_name?.trim() || contact.platform_user_ids.length > 0,
@@ -90,16 +94,20 @@ export function useDashboardFilters({
           (left, right) =>
             (contactSortDirection === "asc" ? 1 : -1) *
             (left.total_messages_sent - right.total_messages_sent),
-        ),
-    [contacts.data, contactSearch, contactSortDirection],
+        );
+    },
+    [contacts.data?.items, contactSearch, contactSortDirection],
   );
 
   const visibleBalanceContacts = useMemo(
-    () =>
-      sortCommunicationBalanceContacts(
+    () => {
+      const offset =
+        ((balance.data?.pagination.page ?? 1) - 1) *
+        (balance.data?.pagination.page_size ?? 0);
+      return sortCommunicationBalanceContacts(
         (balance.data?.contacts ?? [])
           .filter((_, index) =>
-            balanceSearch === "" || String(index) === balanceSearch,
+            balanceSearch === "" || String(offset + index) === balanceSearch,
           )
           .filter(
             (contact) =>
@@ -108,7 +116,8 @@ export function useDashboardFilters({
           ),
         balanceSortKey,
         balanceSortDirection,
-      ),
+      );
+    },
     [
       balance.data,
       balanceSearch,
@@ -119,10 +128,13 @@ export function useDashboardFilters({
   );
 
   const visibleForgottenContacts = useMemo(
-    () =>
-      (forgottenContacts.data?.contacts ?? [])
+    () => {
+      const offset =
+        ((forgottenContacts.data?.pagination.page ?? 1) - 1) *
+        (forgottenContacts.data?.pagination.page_size ?? 0);
+      return (forgottenContacts.data?.contacts ?? [])
         .filter((_, index) =>
-          forgottenSearch === "" || String(index) === forgottenSearch,
+          forgottenSearch === "" || String(offset + index) === forgottenSearch,
         )
         .sort((left, right) => {
           const direction = forgottenSortDirection === "asc" ? 1 : -1;
@@ -145,7 +157,8 @@ export function useDashboardFilters({
           if (rightValue === null) return -1;
 
           return direction * (leftValue - rightValue);
-        }),
+        });
+    },
     [
       forgottenContacts.data,
       forgottenSearch,

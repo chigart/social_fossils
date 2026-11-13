@@ -1,15 +1,22 @@
 
-from fastapi import APIRouter, Depends
+from typing import Annotated, Literal, TypedDict
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from app.constants import DEFAULT_PAGE_SIZE
 from app.db import get_db
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
 from app.schemas.analytics import (
     ChatStatistics,
+    ContactAccountSource,
     ContactStatistics,
     ImportedAccountStatistics,
     OverviewStatistics,
+    PaginatedItems,
+    PaginationMetadata,
+    SearchOption,
 )
 
 from .analytics_constants import (
@@ -18,6 +25,21 @@ from .analytics_constants import (
 )
 
 router = APIRouter()
+
+
+class ContactGroup(TypedDict):
+    platforms: set[str]
+    identity_ids: set[int]
+    identity_group_id: int | None
+    platform_user_ids: set[str]
+    display_names: set[str]
+    source_account_ids: set[int]
+    source_account_labels: set[str]
+    source_accounts: set[tuple[str, str]]
+    source_contact_ids: set[int]
+    total_messages_sent: int
+    ordinary_messages_sent: int
+    service_events_attributed: int
 
 
 @router.get(
@@ -95,16 +117,24 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
 
 @router.get(
     "/chats",
-    response_model=list[ChatStatistics],
+    response_model=PaginatedItems[ChatStatistics],
     summary="Get communication statistics by chat",
     description=(
-        "Returns every chat, including chats with no messages. Counts include "
+        "Returns a page of chats, including chats with no messages. The response "
+        "also includes the total row count and lightweight options for searching "
+        "all chats. Counts include "
         "all stored message types; ordinary and service counts use the exact "
         "'message' and 'service' values. Distinct senders count non-null "
         "platform-scoped sender IDs as normalized and stored by the importer."
     ),
 )
-def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
+def get_chat_statistics(
+    db: Session = Depends(get_db),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
+    sort_by: Literal["title", "total_messages"] = "total_messages",
+    sort_direction: Literal["asc", "desc"] = "desc",
+) -> PaginatedItems[ChatStatistics]:
     statement = (
         select(
             Chat.id.label("chat_id"),
@@ -150,8 +180,20 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
         .where(
             Chat.platform == Account.platform,
         )
-        .order_by(Chat.id)
     )
+    primary_sort = (
+        func.lower(func.coalesce(Chat.title, ""))
+        if sort_by == "title"
+        else func.count(Message.id)
+    )
+    primary_order = (
+        primary_sort.asc()
+        if sort_direction == "asc"
+        else primary_sort.desc()
+    )
+    statement = statement.order_by(primary_order, Chat.id.asc()).offset(
+        (page - 1) * page_size
+    ).limit(page_size)
     chats = []
     for row in db.execute(statement):
         source_account_label = (
@@ -167,15 +209,75 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
                 source_account_label=source_account_label,
             )
         )
-    return chats
+    total = int(
+        db.scalar(
+            select(func.count(Chat.id))
+            .join(Account, Account.id == Chat.account_id)
+            .where(Chat.platform == Account.platform)
+        )
+        or 0
+    )
+    option_statement = (
+        select(
+            Chat.id,
+            Chat.platform,
+            Chat.chat_id.label("platform_chat_id"),
+            Chat.title,
+            Chat.chat_type,
+            Account.username,
+            Account.name,
+            func.count(Message.id).label("total_messages"),
+        )
+        .join(Account, Account.id == Chat.account_id)
+        .outerjoin(
+            Message,
+            and_(
+                Message.chat_id == Chat.id,
+                Message.platform == Chat.platform,
+            ),
+        )
+        .where(Chat.platform == Account.platform)
+        .group_by(
+            Chat.id,
+            Chat.platform,
+            Chat.chat_id,
+            Chat.title,
+            Chat.chat_type,
+            Account.username,
+            Account.name,
+        )
+        .order_by(primary_order, Chat.id.asc())
+    )
+    return PaginatedItems(
+        items=chats,
+        pagination=PaginationMetadata(
+            page=page,
+            page_size=page_size,
+            total=total,
+        ),
+        options=[
+            SearchOption(
+                value=str(row.id),
+                label=row.title or "Untitled chat",
+                platforms=[row.platform],
+                search_terms=[
+                    row.platform_chat_id,
+                    row.chat_type,
+                    f"@{row.username}" if row.username else row.name,
+                ],
+            )
+            for row in db.execute(option_statement)
+        ],
+    )
 
 
 @router.get(
     "/contacts",
-    response_model=list[ContactStatistics],
+    response_model=PaginatedItems[ContactStatistics],
     summary="Get communication statistics by sender/contact",
     description=(
-        "Combines contacts across source accounts and explicitly linked "
+        "Returns a page of contacts and lightweight options for searching all "
+        "contacts. Contacts are combined across source accounts and explicitly linked "
         "platform identities. Unlinked identities remain separate and "
         "unidentified senders remain account-local. Contacts without messages "
         "are included with zero counts. Incoming counts require reliable "
@@ -183,7 +285,12 @@ def get_chat_statistics(db: Session = Depends(get_db)) -> list[ChatStatistics]:
         "separately."
     ),
 )
-def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatistics]:
+def get_contact_statistics(
+    db: Session = Depends(get_db),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
+    sort_direction: Literal["asc", "desc"] = "desc",
+) -> PaginatedItems[ContactStatistics]:
     owner_account = aliased(Account)
     sender_id = Message.sender_id
     is_owner = (
@@ -194,17 +301,12 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         )
         .exists()
     )
-    statement = (
+    message_groups = (
         select(
             Chat.account_id.label("account_id"),
-            Account.platform.label("platform"),
-            Account.username.label("account_username"),
-            Account.name.label("account_name"),
-            Contact.id.label("contact_id"),
-            CanonicalIdentity.id.label("canonical_identity_id"),
-            CanonicalIdentity.identity_group_id.label("identity_group_id"),
-            sender_id.label("platform_user_id"),
-            Contact.display_name.label("display_name"),
+            Message.platform.label("platform"),
+            Message.sender_contact_id.label("sender_contact_id"),
+            Message.sender_id.label("platform_user_id"),
             func.count(Message.id).label("total_messages_sent"),
             func.count(
                 case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
@@ -216,17 +318,48 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         .select_from(Message)
         .join(Chat, Message.chat_id == Chat.id)
         .join(Account, Chat.account_id == Account.id)
+        .where(
+            Chat.platform == Account.platform,
+            Message.platform == Account.platform,
+            Message.is_outgoing.is_(False),
+            or_(sender_id.is_(None), ~is_owner),
+        )
+        .group_by(
+            Chat.account_id,
+            Message.platform,
+            Message.sender_contact_id,
+            Message.sender_id,
+        )
+        .subquery()
+    )
+    statement = (
+        select(
+            message_groups.c.account_id,
+            message_groups.c.platform,
+            Account.username.label("account_username"),
+            Account.name.label("account_name"),
+            Contact.id.label("contact_id"),
+            CanonicalIdentity.id.label("canonical_identity_id"),
+            CanonicalIdentity.identity_group_id.label("identity_group_id"),
+            message_groups.c.platform_user_id,
+            Contact.display_name.label("display_name"),
+            message_groups.c.total_messages_sent,
+            message_groups.c.ordinary_messages_sent,
+            message_groups.c.service_events_attributed,
+        )
+        .select_from(message_groups)
+        .join(Account, Account.id == message_groups.c.account_id)
         .outerjoin(
             Contact,
             and_(
-                Contact.account_id == Chat.account_id,
-                Contact.platform == Message.platform,
+                Contact.account_id == message_groups.c.account_id,
+                Contact.platform == message_groups.c.platform,
                 or_(
-                    Contact.id == Message.sender_contact_id,
+                    Contact.id == message_groups.c.sender_contact_id,
                     and_(
-                        Message.sender_contact_id.is_(None),
-                        sender_id.is_not(None),
-                        Contact.platform_user_id == sender_id,
+                        message_groups.c.sender_contact_id.is_(None),
+                        message_groups.c.platform_user_id.is_not(None),
+                        Contact.platform_user_id == message_groups.c.platform_user_id,
                     ),
                 ),
             ),
@@ -235,34 +368,8 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             CanonicalIdentity,
             CanonicalIdentity.id == Contact.canonical_identity_id,
         )
-        .where(
-            Chat.platform == Account.platform,
-            Message.platform == Account.platform,
-            Message.is_outgoing.is_(False),
-            or_(
-                sender_id.is_(None),
-                ~is_owner,
-            ),
-        )
-        .group_by(
-            Chat.account_id,
-            Account.platform,
-            Contact.id,
-            CanonicalIdentity.id,
-            CanonicalIdentity.identity_group_id,
-            Account.username,
-            Account.name,
-            sender_id,
-            Contact.display_name,
-        )
-        .order_by(
-            Account.platform,
-            Chat.account_id,
-            Contact.display_name,
-            sender_id,
-        )
     )
-    groups: dict[tuple[object, ...], dict[str, object]] = {}
+    groups: dict[tuple[object, ...], ContactGroup] = {}
 
     def contact_key(
         platform: str,
@@ -291,7 +398,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
         identity_group_id: int | None,
         platform_user_id: str | None,
         display_name: str | None,
-    ) -> dict[str, object]:
+    ) -> ContactGroup:
         group = groups.setdefault(
             key,
             {
@@ -356,7 +463,8 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             Account.platform_user_id.is_not(None)
         )
     ):
-        owner_ids_by_platform.setdefault(platform, set()).add(user_id)
+        if user_id is not None:
+            owner_ids_by_platform.setdefault(platform, set()).add(user_id)
 
     for contact, account, identity_group_id in db.execute(
         select(Contact, Account, CanonicalIdentity.identity_group_id)
@@ -410,7 +518,7 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
                 source_account_ids=source_account_ids,
                 source_account_labels=sorted(group["source_account_labels"]),
                 source_accounts=[
-                    {"platform": platform, "label": label}
+                    ContactAccountSource(platform=platform, label=label)
                     for platform, label in sorted(group["source_accounts"])
                 ],
                 source_contact_ids=source_contact_ids,
@@ -429,4 +537,30 @@ def get_contact_statistics(db: Session = Depends(get_db)) -> list[ContactStatist
             contact.source_account_ids,
         )
     )
-    return contacts
+    contacts.sort(
+        key=lambda contact: contact.total_messages_sent,
+        reverse=sort_direction == "desc",
+    )
+    offset = (page - 1) * page_size
+    return PaginatedItems(
+        items=contacts[offset : offset + page_size],
+        pagination=PaginationMetadata(
+            page=page,
+            page_size=page_size,
+            total=len(contacts),
+        ),
+        options=[
+            SearchOption(
+                value=str(index),
+                label=(contact.display_name or "").strip() or "Unnamed contact",
+                platforms=contact.platforms,
+                search_terms=[
+                    *contact.platform_user_ids,
+                    *contact.source_account_labels,
+                ],
+            )
+            for index, contact in enumerate(contacts)
+            if (contact.display_name and contact.display_name.strip())
+            or contact.platform_user_ids
+        ],
+    )

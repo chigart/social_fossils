@@ -44,8 +44,8 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
         "earliest_message_timestamp": None,
         "latest_message_timestamp": None,
     }
-    assert get_chat_statistics(db_session) == []
-    assert get_contact_statistics(db_session) == []
+    assert get_chat_statistics(db_session).items == []
+    assert get_contact_statistics(db_session).items == []
     balance = CommunicationBalanceStatistics.model_validate(
         get_communication_balance(db_session)
     )
@@ -63,6 +63,45 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
     ]["get"]["parameters"]
     assert all(parameter["name"] != "account_id" for parameter in forgotten_parameters)
 
+
+def test_chat_and_contact_pages_are_bounded_and_keep_all_picker_options(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10", "First")
+    add_chat(db_session, 20, 1, "chat-20", "Second")
+    add_chat(db_session, 30, 1, "chat-30", "Third")
+    add_contact(db_session, 40, 1, "peer-1", "Ada")
+    add_contact(db_session, 50, 1, "peer-2", "Bea")
+    add_contact(db_session, 60, 1, "peer-3", "Cleo")
+
+    chat_page = get_chat_statistics(db_session, page=2, page_size=1)
+    contact_page = get_contact_statistics(db_session, page=2, page_size=1)
+
+    assert [chat.chat_id for chat in chat_page.items] == [20]
+    assert chat_page.pagination.total == 3
+    assert len(chat_page.options) == 3
+    assert [contact.display_name for contact in contact_page.items] == ["Bea"]
+    assert contact_page.pagination.total == 3
+    assert len(contact_page.options) == 3
+
+
+def test_contact_options_exclude_hidden_contacts_and_keep_original_indices(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_contact(db_session, 40, 1, "peer-1", "Ada")
+    add_contact(db_session, 50, 1, "peer-2", "Bea")
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, display_name) "
+            "VALUES (60, 1, 'telegram', NULL, '   ')"
+        )
+    )
+
+    result = get_contact_statistics(db_session)
+
+    assert [option.value for option in result.options] == ["1", "2"]
+    assert [option.label for option in result.options] == ["Ada", "Bea"]
+
+
 def test_account_without_messages_and_empty_chat_are_included(db_session):
     add_account(
         db_session,
@@ -74,7 +113,7 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
     add_chat(db_session, 10, 1, "telegram-chat-10", "No messages")
 
     overview = get_overview(db_session)
-    chats = get_chat_statistics(db_session)
+    chats = get_chat_statistics(db_session).items
 
     assert overview.total_imported_accounts == 1
     assert overview.total_chats == 1
@@ -133,10 +172,13 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     add_message(db_session, 6, 11, "message", "user-alex", second_date, is_outgoing=False)
 
     overview = OverviewStatistics.model_validate(get_overview(db_session))
-    chats = [ChatStatistics.model_validate(chat) for chat in get_chat_statistics(db_session)]
+    chats = [
+        ChatStatistics.model_validate(chat)
+        for chat in get_chat_statistics(db_session).items
+    ]
     contacts = [
         ContactStatistics.model_validate(contact)
-        for contact in get_contact_statistics(db_session)
+        for contact in get_contact_statistics(db_session).items
     ]
 
     assert overview.total_imported_accounts == 1
@@ -190,7 +232,7 @@ def test_nonstandard_message_type_only_contributes_to_total(db_session):
     add_message(db_session, 1, 10, "unknown_event", "user-other", is_outgoing=False)
 
     overview = get_overview(db_session)
-    contact = get_contact_statistics(db_session)[0]
+    contact = get_contact_statistics(db_session).items[0]
 
     assert overview.total_messages == 1
     assert overview.total_ordinary_messages == 0
@@ -219,7 +261,7 @@ def test_unidentified_sender_is_not_multiplied_by_idless_contacts(db_session):
         is_outgoing=False,
     )
 
-    contacts = get_contact_statistics(db_session)
+    contacts = get_contact_statistics(db_session).items
 
     assert sum(contact.total_messages_sent for contact in contacts) == 1
     assert len([contact for contact in contacts if contact.source_contact_ids]) == 2
@@ -283,9 +325,9 @@ def test_instagram_records_are_included_in_unified_analytics(db_session):
     assert overview.total_imported_accounts == 1
     assert overview.total_chats == 1
     assert overview.total_messages == 1
-    chat = ChatStatistics.model_validate(get_chat_statistics(db_session)[0])
+    chat = ChatStatistics.model_validate(get_chat_statistics(db_session).items[0])
     assert chat.platform == "instagram"
-    instagram_contacts = get_contact_statistics(db_session)
+    instagram_contacts = get_contact_statistics(db_session).items
     assert len(instagram_contacts) == 2
     by_name = {contact.display_name: contact for contact in instagram_contacts}
     assert by_name["Synthetic Instagram peer"].platforms == ["instagram"]
@@ -404,7 +446,7 @@ def test_explicitly_linked_contact_aggregates_across_platforms(db_session):
         },
     )
 
-    all_contacts = get_contact_statistics(db_session)
+    all_contacts = get_contact_statistics(db_session).items
     contact = next(
         item
         for item in all_contacts
@@ -475,7 +517,7 @@ def test_contacts_merge_canonical_peers_but_keep_unlinked_senders_local(db_sessi
         is_outgoing=False,
     )
 
-    contacts = get_contact_statistics(db_session)
+    contacts = get_contact_statistics(db_session).items
     shared = next(
         contact
         for contact in contacts

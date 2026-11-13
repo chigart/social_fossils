@@ -266,6 +266,13 @@ def test_forgotten_contacts_splits_partial_cutoff_month_and_orders_ties(db_sessi
         as_of=FORGOTTEN_AS_OF,
         limit=1,
     )
+    second_page = build_forgotten_contacts_statistics(
+        db_session,
+        as_of=FORGOTTEN_AS_OF,
+        sort_by="historical_message_count",
+        limit=1,
+        offset=1,
+    )
     first = next(c for c in full_result.contacts if c.contact_id == 20)
 
     assert [contact.contact_id for contact in full_result.contacts] == [20, 21]
@@ -275,6 +282,9 @@ def test_forgotten_contacts_splits_partial_cutoff_month_and_orders_ties(db_sessi
     assert first.recent_activity_by_month[0].total_message_count == 2
     assert limited_result.summary.eligible_contacts == 2
     assert [contact.contact_id for contact in limited_result.contacts] == [20]
+    assert [contact.contact_id for contact in second_page.contacts] == [21]
+    assert second_page.pagination.total == 2
+    assert len(second_page.options) == 2
 
 def test_forgotten_contacts_does_not_use_missing_timestamps_as_baseline(db_session):
     add_account(db_session, 1, "user-owner")

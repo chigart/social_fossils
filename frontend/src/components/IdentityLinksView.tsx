@@ -11,7 +11,11 @@ import {
 } from "../styles";
 import type { Resource } from "../types";
 import { Button } from "./Button";
-import { LoadingMessage, SectionError } from "./Feedback";
+import {
+  LoadingMessage,
+  PaginationControls,
+  SectionError,
+} from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
 import { useIdentityLinks } from "./useIdentityLinks";
 
@@ -39,6 +43,12 @@ export function IdentityLinksView({
     suggestedLinks,
     linkedGroups,
     historyEvents,
+    linkedGroupsPage,
+    setLinkedPage,
+    suggestedLinksPage,
+    setSuggestedPage,
+    historyEventsPage,
+    setHistoryPage,
     performLink,
     performUnlink,
   } = useIdentityLinks(identityLinks, onLink, onUnlink);
@@ -58,8 +68,9 @@ export function IdentityLinksView({
       </div>
       <p className="mb-5 text-small leading-[1.5] text-ink-muted">
         Group any number of accounts that belong to the same person, including
-        multiple accounts on one platform. Suggestions are based on Full Name
-        matches, but no identity is linked until you review and confirm it.
+        multiple accounts on one platform. Suggestions are based on normalized
+        Full Name matches or a one-symbol difference, but no identity is linked
+        until you review and confirm it.
         Conflicting links must be removed before accounts can be linked.
       </p>
       {identityLinks.loading && identityLinks.data === null && <LoadingMessage />}
@@ -142,7 +153,7 @@ export function IdentityLinksView({
                 aria-label="Current identity links"
                 className="max-h-[600px] space-y-3 overflow-y-auto pr-2"
               >
-                {linkedGroups.map(({ groupId, members }) => (
+                {linkedGroupsPage.items.map(({ groupId, members }) => (
                   <div
                     className="rounded-lg border border-border-muted bg-surface p-4"
                     key={groupId}
@@ -176,6 +187,13 @@ export function IdentityLinksView({
                 ))}
               </div>
             )}
+            {linkedGroups.length > 0 && (
+              <PaginationControls
+                pagination={linkedGroupsPage.pagination}
+                onPageChange={setLinkedPage}
+                label="Current links pagination"
+              />
+            )}
           </section>
 
           <section className="mb-7" aria-labelledby="suggested-links-title">
@@ -187,14 +205,15 @@ export function IdentityLinksView({
             </h3>
             {suggestedLinks.length === 0 ? (
               <p className="text-small text-ink-muted">
-                No Full Name matches found among unlinked identities.
+                No normalized Full Name matches or one-symbol differences found
+                among unlinked identities.
               </p>
             ) : (
               <ul
                 aria-label="Suggested identity links"
                 className="max-h-[600px] space-y-2 overflow-y-auto pr-2"
               >
-                {suggestedLinks.map((suggestion) => (
+                {suggestedLinksPage.items.map((suggestion) => (
                   <li
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-muted bg-surface p-3"
                     key={`${suggestion.first.identity_id}-${suggestion.second.identity_id}`}
@@ -230,6 +249,13 @@ export function IdentityLinksView({
                 ))}
               </ul>
             )}
+            {suggestedLinks.length > 0 && (
+              <PaginationControls
+                pagination={suggestedLinksPage.pagination}
+                onPageChange={setSuggestedPage}
+                label="Suggested links pagination"
+              />
+            )}
           </section>
 
           <section aria-labelledby="identity-link-history-title">
@@ -245,7 +271,7 @@ export function IdentityLinksView({
               </p>
             ) : (
               <ul className="space-y-2">
-                {historyEvents.map((event) => (
+                {historyEventsPage.items.map((event) => (
                   <li
                     className="text-small text-ink-muted"
                     key={event.id}
@@ -254,6 +280,13 @@ export function IdentityLinksView({
                   </li>
                 ))}
               </ul>
+            )}
+            {historyEvents.length > 0 && (
+              <PaginationControls
+                pagination={historyEventsPage.pagination}
+                onPageChange={setHistoryPage}
+                label="Link history pagination"
+              />
             )}
           </section>
         </>

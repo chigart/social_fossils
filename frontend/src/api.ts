@@ -1,4 +1,5 @@
 import type { UploadPlatform } from "./platforms";
+import { DEFAULT_PAGE_SIZE } from "./constants";
 
 export type OverviewStatistics = {
   total_imported_accounts: number;
@@ -9,6 +10,25 @@ export type OverviewStatistics = {
   imported_accounts: ImportedAccountStatistics[];
   earliest_message_timestamp: string | null;
   latest_message_timestamp: string | null;
+};
+
+export type PaginationMetadata = {
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+export type SearchOption = {
+  value: string;
+  label: string;
+  platforms: string[];
+  search_terms: string[];
+};
+
+export type PaginatedItems<T> = {
+  items: T[];
+  pagination: PaginationMetadata;
+  options: SearchOption[];
 };
 
 export type ImportedAccountStatistics = {
@@ -123,6 +143,7 @@ export type ChatInsightsStatistics = {
 
 export type ChatInsightsResponse = {
   chats: ChatInsightsStatistics[];
+  options?: SearchOption[];
 };
 
 export type ChatStatistics = {
@@ -261,6 +282,8 @@ export type CommunicationBalanceSummary = {
 export type CommunicationBalanceStatistics = {
   summary: CommunicationBalanceSummary;
   contacts: CommunicationBalanceContact[];
+  pagination: PaginationMetadata;
+  options: SearchOption[];
 };
 
 export type ForgottenContactClassification =
@@ -333,6 +356,8 @@ export type ForgottenContactsSummary = {
 export type ForgottenContactsStatistics = {
   summary: ForgottenContactsSummary;
   contacts: ForgottenContact[];
+  pagination: PaginationMetadata;
+  options: SearchOption[];
 };
 
 export type CommunicationTimelineMonth = {
@@ -602,13 +627,50 @@ export async function getUploadJobStatus(
 export const getOverview = () =>
   getJson<OverviewStatistics>("/api/analytics/overview");
 
-export const getChatInsights = () =>
-  getJson<ChatInsightsResponse>("/api/analytics/chat-insights");
+export const getChatInsights = (chatId?: number) => {
+  const query =
+    chatId === undefined ? "" : `?chat_id=${encodeURIComponent(chatId)}`;
+  return getJson<ChatInsightsResponse>(
+    `/api/analytics/chat-insights${query}`,
+  );
+};
 
-export const getChats = () => getJson<ChatStatistics[]>("/api/analytics/chats");
+function pageQuery(
+  page: number,
+  pageSize: number,
+  filters: Record<string, string> = {},
+): string {
+  const parameters = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+    ...filters,
+  });
+  return `?${parameters.toString()}`;
+}
 
-export const getContacts = () =>
-  getJson<ContactStatistics[]>("/api/analytics/contacts");
+export const getChats = (
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortBy: "title" | "total_messages" = "total_messages",
+  sortDirection: "asc" | "desc" = "desc",
+) =>
+  getJson<PaginatedItems<ChatStatistics>>(
+    `/api/analytics/chats${pageQuery(page, pageSize, {
+      sort_by: sortBy,
+      sort_direction: sortDirection,
+    })}`,
+  );
+
+export const getContacts = (
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortDirection: "asc" | "desc" = "desc",
+) =>
+  getJson<PaginatedItems<ContactStatistics>>(
+    `/api/analytics/contacts${pageQuery(page, pageSize, {
+      sort_direction: sortDirection,
+    })}`,
+  );
 
 export const getIdentityLinks = () =>
   getJson<IdentityLinksResponse>("/api/identity-links");
@@ -628,13 +690,38 @@ export const unlinkPlatformIdentity = (identityId: number) =>
     "DELETE",
   );
 
-export const getCommunicationBalance = () =>
+export const getCommunicationBalance = (
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortBy: "text_volume" | "owner_share" | "recent_activity" = "text_volume",
+  sortDirection: "asc" | "desc" = "desc",
+  classification?: CommunicationBalanceClassification | "all",
+) =>
   getJson<CommunicationBalanceStatistics>(
-    "/api/analytics/communication-balance",
+    `/api/analytics/communication-balance${pageQuery(page, pageSize, {
+      sort_by: sortBy,
+      sort_direction: sortDirection,
+      ...(classification && classification !== "all"
+        ? { classification }
+        : {}),
+    })}`,
   );
 
-export const getForgottenContacts = () =>
-  getJson<ForgottenContactsStatistics>("/api/analytics/forgotten-contacts");
+export const getForgottenContacts = (
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortBy:
+    | "ranking_score"
+    | "display_name"
+    | "days_since_last_communication" = "ranking_score",
+  sortDirection: "asc" | "desc" = "desc",
+) =>
+  getJson<ForgottenContactsStatistics>(
+    `/api/analytics/forgotten-contacts${pageQuery(page, pageSize, {
+      sort_by: sortBy,
+      sort_direction: sortDirection,
+    })}`,
+  );
 
 export const getCommunicationTimeline = (
   canonicalIdentityId?: number,

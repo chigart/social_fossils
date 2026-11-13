@@ -1,4 +1,5 @@
-import type { ContactStatistics } from "../api";
+import { useMemo } from "react";
+import type { ContactStatistics, PaginatedItems } from "../api";
 import { formatNumber } from "../format";
 import {
   emptyStateClassName,
@@ -19,7 +20,12 @@ import {
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
-import { LoadingMessage, SectionError, SortButton } from "./Feedback";
+import {
+  LoadingMessage,
+  PaginationControls,
+  SectionError,
+  SortButton,
+} from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
 
 export function ContactsView({
@@ -31,8 +37,9 @@ export function ContactsView({
   onSort,
   hasMessages,
   onRetry,
+  onPageChange,
 }: {
-  contacts: Resource<ContactStatistics[]>;
+  contacts: Resource<PaginatedItems<ContactStatistics>>;
   visibleContacts: ContactStatistics[];
   search: string;
   onSearchChange: (value: string) => void;
@@ -40,7 +47,35 @@ export function ContactsView({
   onSort: () => void;
   hasMessages: boolean;
   onRetry: () => void;
+  onPageChange: (page: number) => void;
 }) {
+  const contactOptions = useMemo(
+    () =>
+      contacts.data?.options?.length
+        ? contacts.data.options.map((option) => ({
+            value: option.value,
+            label: option.label,
+            platforms: option.platforms,
+            searchTerms: option.search_terms,
+          }))
+        : (contacts.data?.items ?? [])
+            .map((contact, index) => ({ contact, index }))
+            .filter(({ contact }) =>
+              contact.display_name?.trim() ||
+              contact.platform_user_ids.length > 0
+            )
+            .map(({ contact, index }) => ({
+              value: String(index),
+              label: contact.display_name?.trim() || "Unnamed contact",
+              platforms: contact.platforms,
+              searchTerms: [
+                ...contact.platform_user_ids,
+                ...contact.source_account_labels,
+              ],
+            })),
+    [contacts.data?.options, contacts.data?.items],
+  );
+
   return (
     <section
       id="contacts"
@@ -54,24 +89,11 @@ export function ContactsView({
             Contacts &amp; senders
           </h2>
         </div>
-        {contacts.data && contacts.data.length > 0 && (
+        {contacts.data && contacts.data.items.length > 0 && (
           <SearchPicker
             label="Choose a contact"
             value={search}
-            options={contacts.data
-              .map((contact, index) => ({ contact, index }))
-              .filter(({ contact }) =>
-                contact.display_name?.trim() || contact.platform_user_ids.length > 0
-              )
-              .map(({ contact, index }) => ({
-                value: String(index),
-                label: contact.display_name?.trim() || "Unnamed contact",
-                platforms: contact.platforms,
-                searchTerms: [
-                  ...contact.platform_user_ids,
-                  ...contact.source_account_labels,
-                ],
-              }))}
+            options={contactOptions}
             onChange={onSearchChange}
             placeholder="All contacts"
             searchPlaceholder="Search contact name or ID"
@@ -89,7 +111,7 @@ export function ContactsView({
       {contacts.error && (
         <SectionError message={contacts.error} onRetry={onRetry} />
       )}
-      {contacts.data && contacts.data.length === 0 && (
+      {contacts.data && contacts.data.items.length === 0 && (
         <div className={`${emptyStateClassName} p-[23px]`}>
           <h3 className={emptyStateTitleClassName}>
             No contact communication available
@@ -101,7 +123,7 @@ export function ContactsView({
           </p>
         </div>
       )}
-      {contacts.data && contacts.data.length > 0 && visibleContacts.length === 0 && (
+      {contacts.data && contacts.data.items.length > 0 && visibleContacts.length === 0 && (
         <div className={`${emptyStateClassName} p-4`}>
           <p className={emptyStateTextClassName}>
             No contacts match the selected contact.
@@ -109,58 +131,72 @@ export function ContactsView({
         </div>
       )}
       {contacts.data && visibleContacts.length > 0 && (
-        <div className={tableContainerClassName}>
-          <table className={tableClassName}>
-            <thead className={tableHeadClassName}>
-              <tr>
-                <th className={tableHeaderClassName} scope="col">Contact / sender</th>
-                <th className={tableHeaderClassName} scope="col">User ID</th>
-                <th className={tableHeaderClassName} scope="col">Accounts</th>
-                <th className={tableHeaderClassName} scope="col">
-                  <SortButton
-                    label="Messages sent"
-                    active
-                    direction={sortDirection}
-                    onClick={onSort}
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleContacts.map((contact, index) => (
-                <tr
-                  className={tableRowClassName}
-                  key={`${contact.identity_group_id ?? contact.canonical_identity_id ?? contact.source_contact_ids[0] ?? contact.account_id ?? "sources"}-${index}`}
-                >
-                  <th className={tableRowTitleClassName} scope="row">
-                    {contact.display_name?.trim() || "Unnamed contact"}
+        <>
+          <PaginationControls
+            pagination={contacts.data.pagination}
+            onPageChange={onPageChange}
+            label="Contacts pagination above table"
+          />
+          <div className={tableContainerClassName}>
+            <table className={tableClassName}>
+              <thead className={tableHeadClassName}>
+                <tr>
+                  <th className={tableHeaderClassName} scope="col">Contact / sender</th>
+                  <th className={tableHeaderClassName} scope="col">User ID</th>
+                  <th className={tableHeaderClassName} scope="col">Accounts</th>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="Messages sent"
+                      active
+                      direction={sortDirection}
+                      onClick={onSort}
+                    />
                   </th>
-                  <td className={tableCellClassName}>
-                    {contact.platform_user_ids.join(", ") || "—"}
-                  </td>
-                  <td className={tableCellClassName}>
-                    {contact.source_accounts.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {contact.source_accounts.map(({ platform, label }, accountIndex) => (
-                          <PlatformAccountBadge
-                            key={`${platform}:${label}:${accountIndex}`}
-                            platform={platform}
-                            accountLabel={label}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td className={numericTableCellClassName}>
-                    {formatNumber(contact.total_messages_sent)}
-                  </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {visibleContacts.map((contact, index) => (
+                  <tr
+                    className={tableRowClassName}
+                    key={`${contact.identity_group_id ?? contact.canonical_identity_id ?? contact.source_contact_ids[0] ?? contact.account_id ?? "sources"}-${index}`}
+                  >
+                    <th className={tableRowTitleClassName} scope="row">
+                      {contact.display_name?.trim() || "Unnamed contact"}
+                    </th>
+                    <td className={tableCellClassName}>
+                      {contact.platform_user_ids.join(", ") || "—"}
+                    </td>
+                    <td className={tableCellClassName}>
+                      {contact.source_accounts.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {contact.source_accounts.map(({ platform, label }, accountIndex) => (
+                            <PlatformAccountBadge
+                              key={`${platform}:${label}:${accountIndex}`}
+                              platform={platform}
+                              accountLabel={label}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(contact.total_messages_sent)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {contacts.data && (
+        <PaginationControls
+          pagination={contacts.data.pagination}
+          onPageChange={onPageChange}
+          label="Contacts pagination below table"
+        />
       )}
     </section>
   );

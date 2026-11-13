@@ -1,4 +1,5 @@
-import type { ChatStatistics } from "../api";
+import { useMemo } from "react";
+import type { ChatStatistics, PaginatedItems } from "../api";
 import { formatDate, formatNumber } from "../format";
 import {
   emptyStateClassName,
@@ -19,7 +20,12 @@ import {
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
-import { LoadingMessage, SectionError, SortButton } from "./Feedback";
+import {
+  LoadingMessage,
+  PaginationControls,
+  SectionError,
+  SortButton,
+} from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
 
 type ChatSort = {
@@ -36,8 +42,9 @@ export function ChatsView({
   onSort,
   hasImportedAccounts,
   onRetry,
+  onPageChange,
 }: {
-  chats: Resource<ChatStatistics[]>;
+  chats: Resource<PaginatedItems<ChatStatistics>>;
   visibleChats: ChatStatistics[];
   search: string;
   onSearchChange: (value: string) => void;
@@ -45,7 +52,30 @@ export function ChatsView({
   onSort: (key: ChatSort["key"]) => void;
   hasImportedAccounts: boolean;
   onRetry: () => void;
+  onPageChange: (page: number) => void;
 }) {
+  const chatOptions = useMemo(
+    () =>
+      chats.data?.options?.length
+        ? chats.data.options.map((option) => ({
+            value: option.value,
+            label: option.label,
+            platforms: option.platforms,
+            searchTerms: option.search_terms,
+          }))
+        : (chats.data?.items ?? []).map((chat) => ({
+            value: String(chat.chat_id),
+            label: chat.title || "Untitled chat",
+            platforms: [chat.platform],
+            searchTerms: [
+              chat.platform_chat_id,
+              chat.chat_type,
+              chat.source_account_label,
+            ],
+          })),
+    [chats.data?.options, chats.data?.items],
+  );
+
   return (
     <section
       id="chats"
@@ -57,20 +87,11 @@ export function ChatsView({
           <p className={sectionEyebrowClassName}>CONVERSATIONS</p>
           <h2 id="chats-title" className={sectionTitleClassName}>Chats</h2>
         </div>
-        {chats.data && (
+        {chats.data && chats.data.items.length > 0 && (
           <SearchPicker
             label="Choose a chat"
             value={search}
-            options={chats.data.map((chat) => ({
-              value: String(chat.chat_id),
-              label: chat.title || "Untitled chat",
-              platforms: [chat.platform],
-              searchTerms: [
-                chat.platform_chat_id,
-                chat.chat_type,
-                chat.source_account_label,
-              ],
-            }))}
+            options={chatOptions}
             onChange={onSearchChange}
             placeholder="All chats"
             searchPlaceholder="Search chat title or ID"
@@ -81,7 +102,7 @@ export function ChatsView({
       </div>
       {chats.loading && chats.data === null && <LoadingMessage />}
       {chats.error && <SectionError message={chats.error} onRetry={onRetry} />}
-      {chats.data && chats.data.length === 0 && (
+      {chats.data && chats.data.items.length === 0 && (
         <div className={`${emptyStateClassName} p-[23px]`}>
           <h3 className={emptyStateTitleClassName}>No chats available</h3>
           <p className={emptyStateTextClassName}>
@@ -91,7 +112,7 @@ export function ChatsView({
           </p>
         </div>
       )}
-      {chats.data && chats.data.length > 0 && visibleChats.length === 0 && (
+      {chats.data && chats.data.items.length > 0 && visibleChats.length === 0 && (
         <div className={`${emptyStateClassName} p-4`}>
           <p className={emptyStateTextClassName}>
             No chats match the selected chat.
@@ -99,71 +120,85 @@ export function ChatsView({
         </div>
       )}
       {chats.data && visibleChats.length > 0 && (
-        <div className={tableContainerClassName}>
-          <table className={tableClassName}>
-            <thead className={tableHeadClassName}>
-              <tr>
-                <th className={tableHeaderClassName} scope="col">
-                  <SortButton
-                    label="Chat title"
-                    active={sort.key === "title"}
-                    direction={sort.direction}
-                    onClick={() => onSort("title")}
-                  />
-                </th>
-                <th className={tableHeaderClassName} scope="col">Type</th>
-                <th className={tableHeaderClassName} scope="col">Account</th>
-                <th className={tableHeaderClassName} scope="col">
-                  <SortButton
-                    label="Messages"
-                    active={sort.key === "total_messages"}
-                    direction={sort.direction}
-                    onClick={() => onSort("total_messages")}
-                  />
-                </th>
-                <th className={tableHeaderClassName} scope="col">Ordinary</th>
-                <th className={tableHeaderClassName} scope="col">Senders</th>
-                <th className={tableHeaderClassName} scope="col">First message</th>
-                <th className={tableHeaderClassName} scope="col">Latest message</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visibleChats.map((chat) => (
-                <tr className={tableRowClassName} key={chat.chat_id}>
-                  <th className={tableRowTitleClassName} scope="row">
-                    {chat.title || "Untitled chat"}
-                  </th>
-                  <td className={tableCellClassName}>
-                    <span className="inline-block whitespace-nowrap rounded bg-surface-tag px-[7px] py-1 text-label font-semibold text-ink-tag">
-                      {chat.chat_type}
-                    </span>
-                  </td>
-                  <td className={tableCellClassName}>
-                    <PlatformAccountBadge
-                      platform={chat.platform}
-                      accountLabel={chat.source_account_label}
+        <>
+          <PaginationControls
+            pagination={chats.data.pagination}
+            onPageChange={onPageChange}
+            label="Chats pagination above table"
+          />
+          <div className={tableContainerClassName}>
+            <table className={tableClassName}>
+              <thead className={tableHeadClassName}>
+                <tr>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="Chat title"
+                      active={sort.key === "title"}
+                      direction={sort.direction}
+                      onClick={() => onSort("title")}
                     />
-                  </td>
-                  <td className={numericTableCellClassName}>
-                    {formatNumber(chat.total_messages)}
-                  </td>
-                  <td className={numericTableCellClassName}>
-                    {formatNumber(chat.ordinary_messages)}
-                  </td>
-                  <td className={numericTableCellClassName}>
-                    {formatNumber(chat.distinct_identified_senders)}
-                  </td>
-                  <td className={tableCellClassName}>
-                    {formatDate(chat.earliest_message_timestamp)}
-                  </td>
-                  <td className={tableCellClassName}>
-                    {formatDate(chat.latest_message_timestamp)}
-                  </td>
+                  </th>
+                  <th className={tableHeaderClassName} scope="col">Type</th>
+                  <th className={tableHeaderClassName} scope="col">Account</th>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="Messages"
+                      active={sort.key === "total_messages"}
+                      direction={sort.direction}
+                      onClick={() => onSort("total_messages")}
+                    />
+                  </th>
+                  <th className={tableHeaderClassName} scope="col">Ordinary</th>
+                  <th className={tableHeaderClassName} scope="col">Senders</th>
+                  <th className={tableHeaderClassName} scope="col">First message</th>
+                  <th className={tableHeaderClassName} scope="col">Latest message</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {visibleChats.map((chat) => (
+                  <tr className={tableRowClassName} key={chat.chat_id}>
+                    <th className={tableRowTitleClassName} scope="row">
+                      {chat.title || "Untitled chat"}
+                    </th>
+                    <td className={tableCellClassName}>
+                      <span className="inline-block whitespace-nowrap rounded bg-surface-tag px-[7px] py-1 text-label font-semibold text-ink-tag">
+                        {chat.chat_type}
+                      </span>
+                    </td>
+                    <td className={tableCellClassName}>
+                      <PlatformAccountBadge
+                        platform={chat.platform}
+                        accountLabel={chat.source_account_label}
+                      />
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(chat.total_messages)}
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(chat.ordinary_messages)}
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(chat.distinct_identified_senders)}
+                    </td>
+                    <td className={tableCellClassName}>
+                      {formatDate(chat.earliest_message_timestamp)}
+                    </td>
+                    <td className={tableCellClassName}>
+                      {formatDate(chat.latest_message_timestamp)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {chats.data && (
+        <PaginationControls
+          pagination={chats.data.pagination}
+          onPageChange={onPageChange}
+          label="Chats pagination below table"
+        />
       )}
     </section>
   );

@@ -12,7 +12,10 @@ import {
   sectionTitleClassName,
 } from "../styles";
 import type { Resource } from "../types";
-import { LoadingMessage, SectionError } from "./Feedback";
+import {
+  LoadingMessage,
+  SectionError,
+} from "./Feedback";
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
 import { CommunicationTimelineView } from "./CommunicationTimelineView";
 import {
@@ -65,21 +68,30 @@ export function ChatInsightsView({
             Chat insights
           </h2>
         </div>
-        {insights.data && insights.data.chats.length > 0 && (
+        {insights.data &&
+          ((insights.data.options?.length ?? 0) > 0 ||
+            insights.data.chats.length > 0) && (
           <div className="w-full max-w-[420px]">
             <SearchPicker
               label="Choose an insight chat"
               value={selectedChat ? String(selectedChat.chat_id) : ""}
-              options={sortedChats.map((chat) => ({
-                value: String(chat.chat_id),
-                label: chat.title || "Untitled chat",
-                platforms: [chat.platform],
-                searchTerms: [
-                  chat.chat_type,
-                  chat.source_account_label,
-                  String(chat.chat_id),
-                ],
-              }))}
+              options={insights.data.options?.length
+                ? insights.data.options.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    platforms: option.platforms,
+                    searchTerms: option.search_terms,
+                  }))
+                : sortedChats.map((chat) => ({
+                    value: String(chat.chat_id),
+                    label: chat.title || "Untitled chat",
+                    platforms: [chat.platform],
+                    searchTerms: [
+                      chat.chat_type,
+                      chat.source_account_label,
+                      String(chat.chat_id),
+                    ],
+                  }))}
               onChange={(value) =>
                 onChatChange(value === "" ? null : Number(value))
               }

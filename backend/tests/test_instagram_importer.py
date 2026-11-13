@@ -260,7 +260,7 @@ def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_pat
         assert len(import_sessions) == 2
         assert all(item.platform == "instagram" for item in import_sessions)
 
-        contact_statistics = get_contact_statistics(session)
+        contact_statistics = get_contact_statistics(session).items
         peer_statistics = next(
             row for row in contact_statistics if "123" in row.platform_user_ids
         )

@@ -14,6 +14,7 @@ import {
   unlinkPlatformIdentity,
   uploadFile,
 } from "./api";
+import { DEFAULT_PAGE_SIZE } from "./constants";
 
 class MockUploadRequest {
   upload: {
@@ -43,11 +44,30 @@ function mockUploadRequest(body: unknown, status = 200) {
 describe("analytics API helpers", () => {
   it("requests each analytics endpoint and returns its JSON data", async () => {
     const overview = { total_messages: 17 };
-    const chats = [{ chat_id: 1 }];
+    const chats = {
+      items: [{ chat_id: 1 }],
+      pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 1 },
+    };
     const chatInsights = { chats: [{ chat_id: 1 }] };
-    const contacts = [{ account_id: 2 }];
-    const balance = { summary: { eligible_contacts: 1 }, contacts: [] };
-    const forgotten = { summary: { eligible_contacts: 1 }, contacts: [] };
+    const contacts = {
+      items: [{ account_id: 2 }],
+      pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 1 },
+    };
+    const pagination = {
+      page: 1,
+      page_size: DEFAULT_PAGE_SIZE,
+      total: 0,
+    };
+    const balance = {
+      summary: { eligible_contacts: 1 },
+      contacts: [],
+      pagination,
+    };
+    const forgotten = {
+      summary: { eligible_contacts: 1 },
+      contacts: [],
+      pagination,
+    };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
@@ -94,10 +114,10 @@ describe("analytics API helpers", () => {
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
       ["/api/analytics/chat-insights"],
-      ["/api/analytics/chats"],
-      ["/api/analytics/contacts"],
-      ["/api/analytics/communication-balance"],
-      ["/api/analytics/forgotten-contacts"],
+      [`/api/analytics/chats?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages&sort_direction=desc`],
+      [`/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_direction=desc`],
+      [`/api/analytics/communication-balance?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=text_volume&sort_direction=desc`],
+      [`/api/analytics/forgotten-contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=ranking_score&sort_direction=desc`],
       ["/api/analytics/communication-timeline"],
     ]);
   });
@@ -113,6 +133,45 @@ describe("analytics API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/analytics/communication-timeline?canonical_identity_id=42",
+    );
+  });
+
+  it("requests only insights for the selected chat", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ chats: [{ chat_id: 42 }], options: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getChatInsights(42);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/analytics/chat-insights?chat_id=42",
+    );
+  });
+
+  it("requests a specific paginated page and keeps filter parameters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        summary: {},
+        contacts: [],
+        pagination: { page: 3, page_size: DEFAULT_PAGE_SIZE, total: 130 },
+        options: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCommunicationBalance(
+      3,
+      50,
+      "owner_share",
+      "asc",
+      "balanced",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/analytics/communication-balance?page=3&page_size=${DEFAULT_PAGE_SIZE}&sort_by=owner_share&sort_direction=asc&classification=balanced`,
     );
   });
 
