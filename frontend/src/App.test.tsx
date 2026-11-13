@@ -16,6 +16,7 @@ import {
   selectDashboardTab,
 } from "./App.testUtils";
 import App from "./App";
+import { DEFAULT_PAGE_SIZE } from "./constants";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
@@ -33,13 +34,19 @@ const api = vi.hoisted(() => ({
 
 vi.mock("./api", () => api);
 
+const paginated = <T,>(items: T[]) => ({
+  items,
+  pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: items.length },
+  options: [],
+});
+
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
   Object.values(api).forEach((mock) => mock.mockReset());
   api.getOverview.mockResolvedValue(overview);
   api.getChatInsights.mockResolvedValue(chatInsights);
-  api.getChats.mockResolvedValue(chats);
-  api.getContacts.mockResolvedValue(contacts);
+  api.getChats.mockResolvedValue(paginated(chats));
+  api.getContacts.mockResolvedValue(paginated(contacts));
   api.getIdentityLinks.mockResolvedValue({
     identities: [],
     contacts_without_identity: [],
@@ -473,10 +480,6 @@ describe("dashboard", () => {
       "Full Name match:",
       "1-symbol Full Name difference:",
       "1-symbol Full Name difference:",
-      "2-symbol Full Name difference:",
-      "2-symbol Full Name difference:",
-      "First or last name match:",
-      "First or last name match:",
     ]);
     const suggestionItems = within(suggestions).getAllByRole("listitem");
     expect(suggestionItems[0]).toHaveTextContent("Grace Moonrise");
@@ -494,10 +497,6 @@ describe("dashboard", () => {
     ).toHaveLength(2);
     expect(suggestionItems[2]).toHaveTextContent("Alexandria Starling");
     expect(suggestionItems[3]).toHaveTextContent("Alex Star");
-    expect(suggestionItems[4]).toHaveTextContent("Quentin Earth");
-    expect(suggestionItems[5]).toHaveTextContent("Casey Earth");
-    expect(suggestionItems[6]).toHaveTextContent("Theodore Smith");
-    expect(suggestionItems[7]).toHaveTextContent("Rowan Vale");
     const suggestionLinkButton = within(suggestions).getAllByRole("button", {
       name: "Link identities",
     })[0];
@@ -631,7 +630,7 @@ describe("dashboard", () => {
         },
       ],
     });
-    api.getChats.mockResolvedValue([
+    api.getChats.mockResolvedValue(paginated([
       {
         ...chats[0],
         chat_id: 101,
@@ -648,8 +647,8 @@ describe("dashboard", () => {
         title: "Second account chat",
         total_messages: 40,
       },
-    ]);
-    api.getContacts.mockResolvedValue([
+    ]));
+    api.getContacts.mockResolvedValue(paginated([
       {
         ...contacts[0],
         account_id: null,
@@ -666,7 +665,7 @@ describe("dashboard", () => {
         ordinary_messages_sent: 22,
         service_events_attributed: 2,
       },
-    ]);
+    ]));
 
     render(<App />);
     await selectDashboardTab("Chats");
@@ -864,7 +863,7 @@ describe("dashboard", () => {
 
   it("shows one combined contact row for explicitly linked platform identities", async () => {
     const user = userEvent.setup();
-    api.getContacts.mockResolvedValue([
+    api.getContacts.mockResolvedValue(paginated([
       {
         ...contacts[0],
         platforms: ["instagram", "telegram"],
@@ -881,7 +880,7 @@ describe("dashboard", () => {
         total_messages_sent: 17,
         ordinary_messages_sent: 15,
       },
-    ]);
+    ]));
 
     await renderLoadedDashboard();
     await selectDashboardTab("Contacts");
@@ -1335,31 +1334,43 @@ describe("dashboard", () => {
 
   it("sorts insight chat choices and applies selection only after choosing one", async () => {
     const user = userEvent.setup();
-    api.getChatInsights.mockResolvedValue({
-      chats: [
-        {
-          ...chatInsights.chats[0],
-          chat_id: 10,
-          title: "Medium chat",
-          ordinary_message_count: 20,
-        },
-        {
-          ...chatInsights.chats[0],
-          chat_id: 11,
-          title: "One-to-one chat",
-          ordinary_message_count: 5,
-        },
-        {
-          ...chatInsights.chats[0],
-          chat_id: 12,
-          title: "Most active chat",
-          ordinary_message_count: 30,
-        },
-      ],
-    });
+    const mediumChat = {
+      ...chatInsights.chats[0],
+      chat_id: 10,
+      title: "Medium chat",
+      ordinary_message_count: 20,
+    };
+    const oneToOneChat = {
+      ...chatInsights.chats[0],
+      chat_id: 11,
+      title: "One-to-one chat",
+      ordinary_message_count: 5,
+    };
+    const mostActiveChat = {
+      ...chatInsights.chats[0],
+      chat_id: 12,
+      title: "Most active chat",
+      ordinary_message_count: 30,
+    };
+    const insightOptions = [
+      mostActiveChat,
+      mediumChat,
+      oneToOneChat,
+    ].map((chat) => ({
+      value: String(chat.chat_id),
+      label: chat.title,
+      platforms: [chat.platform],
+      search_terms: [String(chat.chat_id)],
+    }));
+    api.getChatInsights
+      .mockResolvedValueOnce({ chats: [mostActiveChat], options: insightOptions })
+      .mockResolvedValueOnce({ chats: [oneToOneChat], options: insightOptions });
     await renderLoadedDashboard();
     await selectDashboardTab("Conversation insights");
 
+    expect(
+      screen.queryByRole("navigation", { name: "Pagination" }),
+    ).not.toBeInTheDocument();
     const chooser = screen.getByRole("button", { name: "Choose an insight chat" });
     await user.click(chooser);
     const options = within(
@@ -1398,10 +1409,16 @@ describe("dashboard", () => {
   it("keeps the insight chat picker open while interacting with its options scrollbar", async () => {
     const user = userEvent.setup();
     api.getChatInsights.mockResolvedValue({
-      chats: Array.from({ length: 20 }, (_, index) => ({
+      chats: [{
         ...chatInsights.chats[0],
-        chat_id: index + 1,
-        title: `Chat ${index + 1}`,
+        chat_id: 1,
+        title: "Chat 1",
+      }],
+      options: Array.from({ length: 20 }, (_, index) => ({
+        value: String(index + 1),
+        label: `Chat ${index + 1}`,
+        platforms: ["telegram"],
+        search_terms: [String(index + 1)],
       })),
     });
     await renderLoadedDashboard();
@@ -1463,8 +1480,8 @@ describe("dashboard", () => {
       total_ordinary_messages: 0,
       total_service_messages: 0,
     });
-    api.getChats.mockResolvedValue([]);
-    api.getContacts.mockResolvedValue([]);
+    api.getChats.mockResolvedValue(paginated([]));
+    api.getContacts.mockResolvedValue(paginated([]));
     render(<App />);
 
     expect(await screen.findByText("No imported data yet.")).toBeInTheDocument();
@@ -1488,8 +1505,8 @@ describe("dashboard", () => {
       total_chats: 0,
       total_messages: 8,
     });
-    api.getChats.mockResolvedValue([]);
-    api.getContacts.mockResolvedValue([]);
+    api.getChats.mockResolvedValue(paginated([]));
+    api.getContacts.mockResolvedValue(paginated([]));
     render(<App />);
 
     await selectDashboardTab("Chats");
@@ -1541,6 +1558,48 @@ describe("dashboard", () => {
     );
     expect(within(contactsRegion).getByRole("row", { name: /Morgan/ })).toBeInTheDocument();
     expect(within(contactsRegion).queryByRole("row", { name: /Avery/ })).not.toBeInTheDocument();
+  });
+
+  it("pages chat rows while keeping every chat available in the picker", async () => {
+    const user = userEvent.setup();
+    const options = chats.map((chat) => ({
+      value: String(chat.chat_id),
+      label: chat.title || "Untitled chat",
+      platforms: [chat.platform],
+      search_terms: [chat.platform_chat_id, chat.chat_type],
+    }));
+    api.getChats
+      .mockResolvedValueOnce({
+        items: [chats[0]],
+        pagination: { page: 1, page_size: 1, total: chats.length },
+        options,
+      })
+      .mockResolvedValueOnce({
+        items: [chats[1]],
+        pagination: { page: 2, page_size: 1, total: chats.length },
+        options,
+      });
+
+    render(<App />);
+    await selectDashboardTab("Chats");
+    const region = screen.getByRole("region", { name: "Chats" });
+    expect(await within(region).findByRole("row", { name: /Zebra group/ }))
+      .toBeInTheDocument();
+
+    await user.click(within(region).getByRole("button", { name: "Choose a chat" }));
+    await user.click(
+      within(screen.getByRole("listbox", { name: "Choose a chat options" }))
+        .getByRole("option", { name: /Aurora group/ }),
+    );
+
+    expect(await within(region).findByRole("row", { name: /Aurora group/ }))
+      .toBeInTheDocument();
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      2,
+      50,
+      "total_messages",
+      "desc",
+    );
   });
 
   it("shows no matching options without filtering the page while typing", async () => {
@@ -1598,6 +1657,16 @@ describe("dashboard", () => {
     await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
     const contactsTable = within(contactsRegion).getByRole("table");
+    expect(
+      within(contactsRegion).getByRole("navigation", {
+        name: "Contacts pagination above table",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(contactsRegion).getByRole("navigation", {
+        name: "Contacts pagination below table",
+      }),
+    ).toBeInTheDocument();
     const sortButton = within(contactsRegion).getByRole("button", {
       name: "Sort by Messages sent, descending",
     });
@@ -1797,21 +1866,34 @@ describe("dashboard", () => {
 
   it("uses one chat selection for the timeline and insight details", async () => {
     const user = userEvent.setup();
-    api.getChatInsights.mockResolvedValue({
-      chats: [
-        {
-          ...chatInsights.chats[0],
-          chat_id: 10,
-          title: "Private group",
-        },
-        {
-          ...chatInsights.chats[0],
-          chat_id: 11,
-          title: "One-to-one chat",
-          ordinary_message_count: 5,
-        },
-      ],
-    });
+    const firstChat = {
+      ...chatInsights.chats[0],
+      chat_id: 10,
+      title: "Private group",
+    };
+    const secondChat = {
+      ...chatInsights.chats[0],
+      chat_id: 11,
+      title: "One-to-one chat",
+      ordinary_message_count: 5,
+    };
+    const insightOptions = [
+      {
+        value: "10",
+        label: "Private group",
+        platforms: ["telegram"],
+        search_terms: ["private_group", "10"],
+      },
+      {
+        value: "11",
+        label: "One-to-one chat",
+        platforms: ["telegram"],
+        search_terms: ["personal_chat", "11"],
+      },
+    ];
+    api.getChatInsights
+      .mockResolvedValueOnce({ chats: [firstChat], options: insightOptions })
+      .mockResolvedValueOnce({ chats: [secondChat], options: insightOptions });
     api.getCommunicationTimeline
       .mockResolvedValueOnce(timeline)
       .mockResolvedValueOnce({
@@ -1886,6 +1968,8 @@ describe("dashboard", () => {
       ).getByRole("option", { name: /One-to-one chat/ }),
     );
 
+    expect(api.getChatInsights).toHaveBeenNthCalledWith(1, undefined);
+    expect(api.getChatInsights).toHaveBeenNthCalledWith(2, 11);
     expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, undefined, 11);
     expect(
       await within(region).findByRole("img", {

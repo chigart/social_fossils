@@ -5,19 +5,20 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from statistics import median
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
-from sqlalchemy import and_, func, select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.analytics_stop_words import STOP_WORDS
 from app.db import get_db
 from app.models import Account, Chat, Message
 from app.schemas.analytics import (
+    ChatInsightSender,
     ChatInsightsResponse,
     ChatInsightsStatistics,
-    ChatInsightSender,
+    SearchOption,
     ConversationActivityStatistics,
     ConversationHandoffCount,
     ConversationParticipantCount,
@@ -583,8 +584,10 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
     response_model=ChatInsightsResponse,
     summary="Get text and reaction analytics for private chats and groups",
     description=(
-        "Returns per-chat normalized message, text, word, emoji, and reaction "
-        "statistics across supported platforms for personal chats, private "
+        "Returns normalized message, text, word, emoji, and reaction statistics "
+        "for one selected chat, or the most active eligible chat when no chat is "
+        "selected. Lightweight options for all eligible chats are included for "
+        "the picker. Statistics cover supported platforms, personal chats, private "
         "groups, and private supergroups. Reaction "
         "totals use each message's full reaction count. Per-reactor and "
         "reactor-to-author statistics use only reaction records present in the "
@@ -594,7 +597,85 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
         "gap between dated ordinary messages."
     ),
 )
-def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
+def get_chat_insights(
+    db: Session = Depends(get_db),
+    chat_id: Annotated[int | None, Query(gt=0)] = None,
+) -> ChatInsightsResponse:
+    ordinary_message_count = func.count(
+        case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
+    )
+    chat_id_page = (
+        select(Chat.id)
+        .join(Account, Account.id == Chat.account_id)
+        .outerjoin(
+            Message,
+            and_(
+                Message.chat_id == Chat.id,
+                Message.platform == Chat.platform,
+            ),
+        )
+        .where(
+            Chat.platform == Account.platform,
+            Chat.chat_type.in_(SUPPORTED_CHAT_TYPES),
+        )
+        .group_by(Chat.id)
+    )
+    if chat_id is not None:
+        chat_id_page = chat_id_page.where(Chat.id == chat_id)
+    else:
+        chat_id_page = (
+            chat_id_page
+            .order_by(
+                ordinary_message_count.desc(),
+                Chat.title,
+                Chat.id,
+            )
+            .limit(1)
+        )
+    option_rows = db.execute(
+        select(
+            Chat.id,
+            Chat.platform,
+            Chat.title,
+            Chat.chat_type,
+            Account.username,
+            Account.name,
+        )
+        .join(Account, Account.id == Chat.account_id)
+        .where(
+            Chat.platform == Account.platform,
+            Chat.chat_type.in_(SUPPORTED_CHAT_TYPES),
+        )
+        .outerjoin(
+            Message,
+            and_(
+                Message.chat_id == Chat.id,
+                Message.platform == Chat.platform,
+            ),
+        )
+        .group_by(
+            Chat.id,
+            Chat.platform,
+            Chat.title,
+            Chat.chat_type,
+            Account.username,
+            Account.name,
+        )
+        .order_by(ordinary_message_count.desc(), Chat.title, Chat.id)
+    )
+    options = [
+        SearchOption(
+            value=str(row.id),
+            label=row.title or "Untitled chat",
+            platforms=[row.platform],
+            search_terms=[
+                row.chat_type,
+                f"@{row.username}" if row.username else row.name,
+                str(row.id),
+            ],
+        )
+        for row in option_rows
+    ]
     statement = (
         select(
             Chat.id.label("chat_id"),
@@ -629,6 +710,7 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
         .where(
             Chat.platform == Account.platform,
             Chat.chat_type.in_(SUPPORTED_CHAT_TYPES),
+            Chat.id.in_(chat_id_page),
         )
         .order_by(Chat.id, Message.message_date, Message.id)
     )
@@ -787,5 +869,6 @@ def get_chat_insights(db: Session = Depends(get_db)) -> ChatInsightsResponse:
                 pair.message_ids.add(row.message_id)
 
     return ChatInsightsResponse(
-        chats=[_build_chat_statistics(chat) for chat in chats.values()]
+        chats=[_build_chat_statistics(chat) for chat in chats.values()],
+        options=options,
     )

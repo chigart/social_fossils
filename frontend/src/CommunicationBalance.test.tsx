@@ -16,6 +16,7 @@ import {
   selectDashboardTab,
 } from "./App.testUtils";
 import App from "./App";
+import { DEFAULT_PAGE_SIZE } from "./constants";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
@@ -88,6 +89,7 @@ describe("communication balance dashboard", () => {
     api.getCommunicationBalance.mockResolvedValue({
       summary: emptyBalanceSummary,
       contacts: [],
+      pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 0 },
     });
     render(<App />);
     await selectDashboardTab("Balance");
@@ -300,11 +302,6 @@ describe("communication balance dashboard", () => {
         name: "Scrollable communication balance table",
       }),
     ).toHaveClass("overflow-x-scroll");
-    expect(
-      within(balanceRegion).getByText(
-        "The table is wider than this panel. Scroll horizontally to see the remaining columns.",
-      ),
-    ).toBeInTheDocument();
     expect(
       within(balanceRegion).getByRole("combobox", { name: "Sort direction" }),
     ).toBeVisible();

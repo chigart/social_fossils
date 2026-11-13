@@ -20,6 +20,16 @@ import {
 import { useDashboardData } from "./hooks/useDashboardData";
 import { useDashboardFilters } from "./hooks/useDashboardFilters";
 
+function pageForSearchOption(
+  value: string,
+  options: { value: string }[] | undefined,
+  pageSize: number | undefined,
+): number {
+  if (!value || !options || !pageSize) return 1;
+  const index = options.findIndex((option) => option.value === value);
+  return index < 0 ? 1 : Math.floor(index / pageSize) + 1;
+}
+
 export default function App() {
   const dashboard = useDashboardData();
   const {
@@ -108,31 +118,56 @@ export default function App() {
         break;
       case "conversation-insights":
         void loadOverview();
-        void loadChatInsights();
+        void loadChatInsights(false, selectedInsightsChatId ?? undefined);
         break;
       case "chats":
         void loadOverview();
-        void loadChats();
+        void loadChats(
+          false,
+          chats.data?.pagination.page ?? 1,
+          chatSort.key,
+          chatSort.direction,
+        );
         break;
       case "contacts":
         void loadOverview();
-        void loadContacts();
+        void loadContacts(
+          false,
+          contacts.data?.pagination.page ?? 1,
+          contactSortDirection,
+        );
         break;
       case "identity-links":
         void loadIdentityLinks();
         break;
       case "communication-balance":
-        void loadBalance();
+        void loadBalance(
+          false,
+          balance.data?.pagination.page ?? 1,
+          balanceSortKey,
+          balanceSortDirection,
+          balanceClassification,
+        );
         break;
       case "forgotten-contacts":
         void loadOverview();
-        void loadForgottenContacts();
+        void loadForgottenContacts(
+          false,
+          forgottenContacts.data?.pagination.page ?? 1,
+          forgottenSortKey,
+          forgottenSortDirection,
+        );
         break;
       case "uploads":
         break;
     }
   }, [
     selectedTab,
+    selectedInsightsChatId,
+    chats.data?.pagination.page,
+    contacts.data?.pagination.page,
+    balance.data?.pagination.page,
+    forgottenContacts.data?.pagination.page,
     loadOverview,
     loadChats,
     loadChatInsights,
@@ -189,9 +224,16 @@ export default function App() {
               insights={chatInsights}
               timeline={communicationTimeline}
               selectedChatId={selectedInsightsChatId}
-              onChatChange={setSelectedInsightsChatId}
+              onChatChange={(chatId) => {
+                setSelectedInsightsChatId(chatId);
+              }}
               noImportedData={noImportedData}
-              onRetryInsights={() => void loadChatInsights(true)}
+              onRetryInsights={() =>
+                void loadChatInsights(
+                  true,
+                  selectedInsightsChatId ?? undefined,
+                )
+              }
               onRetryTimeline={() =>
                 void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
               }
@@ -211,13 +253,47 @@ export default function App() {
               chats={chats}
               visibleChats={visibleChats}
               search={chatSearch}
-              onSearchChange={setChatSearch}
+              onSearchChange={(value) => {
+                setChatSearch(value);
+                void loadChats(
+                  false,
+                  pageForSearchOption(
+                    value,
+                    chats.data?.options,
+                    chats.data?.pagination.page_size,
+                  ),
+                  chatSort.key,
+                  chatSort.direction,
+                );
+              }}
               sort={chatSort}
-              onSort={changeChatSort}
+              onSort={(key) => {
+                setChatSearch("");
+                const next = {
+                  key,
+                  direction:
+                    chatSort.key === key && chatSort.direction === "asc"
+                      ? "desc"
+                      : "asc",
+                } as const;
+                changeChatSort(key);
+                void loadChats(false, 1, next.key, next.direction);
+              }}
               hasImportedAccounts={
                 (overview.data?.total_imported_accounts ?? 0) > 0
               }
-              onRetry={() => void loadChats(true)}
+              onRetry={() =>
+                void loadChats(true, 1, chatSort.key, chatSort.direction)
+              }
+              onPageChange={(page) => {
+                setChatSearch("");
+                void loadChats(
+                  false,
+                  page,
+                  chatSort.key,
+                  chatSort.direction,
+                );
+              }}
             />
           )}
         </div>
@@ -244,15 +320,33 @@ export default function App() {
               contacts={contacts}
               visibleContacts={visibleContacts}
               search={contactSearch}
-              onSearchChange={setContactSearch}
+              onSearchChange={(value) => {
+                setContactSearch(value);
+                void loadContacts(
+                  false,
+                  pageForSearchOption(
+                    value,
+                    contacts.data?.options,
+                    contacts.data?.pagination.page_size,
+                  ),
+                  contactSortDirection,
+                );
+              }}
               sortDirection={contactSortDirection}
-              onSort={() =>
-                setContactSortDirection((direction) =>
-                  direction === "asc" ? "desc" : "asc",
-                )
-              }
+              onSort={() => {
+                setContactSearch("");
+                const next = contactSortDirection === "asc" ? "desc" : "asc";
+                setContactSortDirection(next);
+                void loadContacts(false, 1, next);
+              }}
               hasMessages={(overview.data?.total_messages ?? 0) > 0}
-              onRetry={() => void loadContacts(true)}
+              onRetry={() =>
+                void loadContacts(true, 1, contactSortDirection)
+              }
+              onPageChange={(page) => {
+                setContactSearch("");
+                void loadContacts(false, page, contactSortDirection);
+              }}
             />
           )}
         </div>
@@ -286,14 +380,75 @@ export default function App() {
               balance={balance}
               visibleContacts={visibleBalanceContacts}
               search={balanceSearch}
-              onSearchChange={setBalanceSearch}
+              onSearchChange={(value) => {
+                setBalanceSearch(value);
+                void loadBalance(
+                  false,
+                  pageForSearchOption(
+                    value,
+                    balance.data?.options,
+                    balance.data?.pagination.page_size,
+                  ),
+                  balanceSortKey,
+                  balanceSortDirection,
+                  balanceClassification,
+                );
+              }}
               classification={balanceClassification}
-              onClassificationChange={setBalanceClassification}
+              onClassificationChange={(classification) => {
+                setBalanceSearch("");
+                setBalanceClassification(classification);
+                void loadBalance(
+                  false,
+                  1,
+                  balanceSortKey,
+                  balanceSortDirection,
+                  classification,
+                );
+              }}
               sortKey={balanceSortKey}
               sortDirection={balanceSortDirection}
-              onSortKeyChange={setBalanceSortKey}
-              onSortDirectionChange={setBalanceSortDirection}
-              onRetry={() => void loadBalance(true)}
+              onSortKeyChange={(sortKey) => {
+                setBalanceSearch("");
+                setBalanceSortKey(sortKey);
+                void loadBalance(
+                  false,
+                  1,
+                  sortKey,
+                  balanceSortDirection,
+                  balanceClassification,
+                );
+              }}
+              onSortDirectionChange={(direction) => {
+                setBalanceSearch("");
+                setBalanceSortDirection(direction);
+                void loadBalance(
+                  false,
+                  1,
+                  balanceSortKey,
+                  direction,
+                  balanceClassification,
+                );
+              }}
+              onRetry={() =>
+                void loadBalance(
+                  true,
+                  1,
+                  balanceSortKey,
+                  balanceSortDirection,
+                  balanceClassification,
+                )
+              }
+              onPageChange={(page) => {
+                setBalanceSearch("");
+                void loadBalance(
+                  false,
+                  page,
+                  balanceSortKey,
+                  balanceSortDirection,
+                  balanceClassification,
+                );
+              }}
             />
           )}
         </div>
@@ -311,12 +466,58 @@ export default function App() {
               noImportedData={noImportedData}
               visibleContacts={visibleForgottenContacts}
               search={forgottenSearch}
-              onSearchChange={setForgottenSearch}
+              onSearchChange={(value) => {
+                setForgottenSearch(value);
+                void loadForgottenContacts(
+                  false,
+                  pageForSearchOption(
+                    value,
+                    forgottenContacts.data?.options,
+                    forgottenContacts.data?.pagination.page_size,
+                  ),
+                  forgottenSortKey,
+                  forgottenSortDirection,
+                );
+              }}
               sortKey={forgottenSortKey}
               sortDirection={forgottenSortDirection}
-              onSortKeyChange={setForgottenSortKey}
-              onSortDirectionChange={setForgottenSortDirection}
-              onRetry={() => void loadForgottenContacts(true)}
+              onSortKeyChange={(sortKey) => {
+                setForgottenSearch("");
+                setForgottenSortKey(sortKey);
+                void loadForgottenContacts(
+                  false,
+                  1,
+                  sortKey,
+                  forgottenSortDirection,
+                );
+              }}
+              onSortDirectionChange={(direction) => {
+                setForgottenSearch("");
+                setForgottenSortDirection(direction);
+                void loadForgottenContacts(
+                  false,
+                  1,
+                  forgottenSortKey,
+                  direction,
+                );
+              }}
+              onRetry={() =>
+                void loadForgottenContacts(
+                  true,
+                  1,
+                  forgottenSortKey,
+                  forgottenSortDirection,
+                )
+              }
+              onPageChange={(page) => {
+                setForgottenSearch("");
+                void loadForgottenContacts(
+                  false,
+                  page,
+                  forgottenSortKey,
+                  forgottenSortDirection,
+                );
+              }}
             />
           )}
         </div>

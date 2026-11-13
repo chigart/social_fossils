@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type {
   ForgottenContact,
   ForgottenContactsStatistics,
@@ -20,7 +21,13 @@ import {
   tableRowTitleClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
-import { LoadingMessage, MetricCard, SectionError, SortButton } from "./Feedback";
+import {
+  LoadingMessage,
+  MetricCard,
+  PaginationControls,
+  SectionError,
+  SortButton,
+} from "./Feedback";
 import { SearchPicker } from "./SearchPicker";
 
 export const forgottenClassificationLabels = {
@@ -163,6 +170,7 @@ export function ForgottenContactsView({
   onSortKeyChange,
   onSortDirectionChange,
   onRetry,
+  onPageChange,
 }: {
   forgotten: Resource<ForgottenContactsStatistics>;
   noImportedData: boolean;
@@ -176,7 +184,29 @@ export function ForgottenContactsView({
   ) => void;
   onSortDirectionChange: (value: SortDirection) => void;
   onRetry: () => void;
+  onPageChange: (page: number) => void;
 }) {
+  const searchOptions = useMemo(
+    () =>
+      forgotten.data?.options?.length
+        ? forgotten.data.options.map((option) => ({
+            value: option.value,
+            label: option.label,
+            platforms: option.platforms,
+            searchTerms: option.search_terms,
+          }))
+        : (forgotten.data?.contacts ?? []).map((contact, index) => ({
+            value: String(index),
+            label: contact.display_name || "Unnamed contact",
+            platforms: contact.platforms,
+            searchTerms: [
+              ...contact.platform_user_ids,
+              ...contact.source_account_labels,
+            ],
+          })),
+    [forgotten.data?.options, forgotten.data?.contacts],
+  );
+
   const toggleSort = (
     key: "ranking_score" | "display_name" | "days_since_last_communication",
     defaultDirection: SortDirection,
@@ -208,15 +238,7 @@ export function ForgottenContactsView({
             <SearchPicker
               label="Choose a forgotten contact"
               value={search}
-              options={forgotten.data.contacts.map((contact, index) => ({
-                value: String(index),
-                label: contact.display_name || "Unnamed contact",
-                platforms: contact.platforms,
-                searchTerms: [
-                  ...contact.platform_user_ids,
-                  ...contact.source_account_labels,
-                ],
-              }))}
+              options={searchOptions}
               onChange={onSearchChange}
               placeholder="All contacts"
               searchPlaceholder="Search contact name or ID"
@@ -298,6 +320,11 @@ export function ForgottenContactsView({
                   classification. Check each contact’s evidence status.
                 </p>
               )}
+              <PaginationControls
+                pagination={forgotten.data.pagination}
+                onPageChange={onPageChange}
+                label="Forgotten contacts pagination above table"
+              />
               <div className="w-full overflow-x-auto rounded-lg border border-border-subtle">
               <table className={`${tableClassName} min-w-[1060px]`}>
                 <thead className={tableHeadClassName}>
@@ -358,6 +385,11 @@ export function ForgottenContactsView({
               </div>
             </>
           )}
+          <PaginationControls
+            pagination={forgotten.data.pagination}
+            onPageChange={onPageChange}
+            label="Forgotten contacts pagination below table"
+          />
         </>
       )}
     </section>

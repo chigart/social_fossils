@@ -7,6 +7,7 @@ import type {
   ForgottenContactsStatistics,
   OverviewStatistics,
 } from "./api";
+import { DEFAULT_PAGE_SIZE } from "./constants";
 
 export const overview: OverviewStatistics = {
   total_imported_accounts: 1,
@@ -337,6 +338,8 @@ export const emptyBalanceSummary = {
 };
 
 export const balance: CommunicationBalanceStatistics = {
+  pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 5 },
+  options: [],
   summary: {
     ...emptyBalanceSummary,
     eligible_contacts: 5,
@@ -497,6 +500,8 @@ export const balance: CommunicationBalanceStatistics = {
 };
 
 export const forgotten: ForgottenContactsStatistics = {
+  pagination: { page: 1, page_size: DEFAULT_PAGE_SIZE, total: 3 },
+  options: [],
   summary: {
     scope: "combined_owner",
     source_account_count: 1,

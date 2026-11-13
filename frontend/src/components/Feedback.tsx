@@ -1,3 +1,4 @@
+import type { PaginationMetadata } from "../api";
 import type { SortDirection } from "../types";
 
 export function MetricCard({
@@ -78,5 +79,106 @@ export function SortButton({
         {active ? (direction === "asc" ? " ↑" : " ↓") : ""}
       </span>
     </button>
+  );
+}
+
+export function PaginationControls({
+  pagination,
+  onPageChange,
+  label = "Pagination",
+}: {
+  pagination: PaginationMetadata;
+  onPageChange: (page: number) => void;
+  label?: string;
+}) {
+  const pageCount = Math.max(
+    1,
+    Math.ceil(pagination.total / pagination.page_size),
+  );
+  const currentPage = Math.min(Math.max(pagination.page, 1), pageCount);
+  const pageNumbers = new Set<number>();
+  if (pageCount <= 7) {
+    for (let page = 1; page <= pageCount; page += 1) {
+      pageNumbers.add(page);
+    }
+  } else {
+    for (let page = 1; page <= 5; page += 1) {
+      pageNumbers.add(page);
+    }
+    for (
+      let page = Math.max(1, currentPage - 1);
+      page <= Math.min(pageCount, currentPage + 1);
+      page += 1
+    ) {
+      pageNumbers.add(page);
+    }
+    for (let page = pageCount - 2; page <= pageCount; page += 1) {
+      pageNumbers.add(page);
+    }
+  }
+  const pages = [...pageNumbers].sort((left, right) => left - right);
+  const pageItems: (number | "ellipsis")[] = [];
+  pages.forEach((page, index) => {
+    if (index > 0 && page - pages[index - 1] > 2) {
+      pageItems.push("ellipsis");
+    } else if (index > 0 && page - pages[index - 1] === 2) {
+      pageItems.push(page - 1);
+    }
+    pageItems.push(page);
+  });
+
+  return (
+    <nav
+      aria-label={label}
+      className="mt-4 flex flex-wrap items-center justify-between gap-3 text-small text-ink-muted"
+    >
+      <span>
+        Page {pagination.page} of {pageCount} · {pagination.total} items
+      </span>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          className="rounded-md border border-border-input bg-surface px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          type="button"
+          disabled={currentPage <= 1}
+          onClick={() => onPageChange(pagination.page - 1)}
+        >
+          Previous
+        </button>
+        {pageItems.map((item, index) =>
+          item === "ellipsis" ? (
+            <span
+              key={`ellipsis-${index}`}
+              className="px-1"
+              aria-hidden="true"
+            >
+              …
+            </span>
+          ) : (
+            <button
+              key={item}
+              className={`min-w-10 rounded-md border px-3 py-2 ${
+                item === currentPage
+                  ? "border-brand bg-brand text-white"
+                  : "border-border-input bg-surface hover:bg-surface-subtle"
+              }`}
+              type="button"
+              aria-label={`Go to page ${item}`}
+              aria-current={item === currentPage ? "page" : undefined}
+              onClick={() => onPageChange(item)}
+            >
+              {item}
+            </button>
+          ),
+        )}
+        <button
+          className="rounded-md border border-border-input bg-surface px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          type="button"
+          disabled={currentPage >= pageCount}
+          onClick={() => onPageChange(pagination.page + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </nav>
   );
 }

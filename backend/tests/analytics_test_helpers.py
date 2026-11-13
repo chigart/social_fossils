@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import text
 
@@ -180,7 +180,7 @@ def add_exchanges(
     contact_id: int,
     chat_id: int,
     peer_id: str,
-    dates: list[datetime | None],
+    dates: Sequence[datetime | None],
     *,
     exchanges_per_day: int = 5,
     message_id_start: int = 1,

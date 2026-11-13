@@ -1,9 +1,10 @@
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
+from app.constants import DEFAULT_PAGE_SIZE
 from app.db import get_db
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
 from app.schemas.analytics import (
@@ -11,6 +12,8 @@ from app.schemas.analytics import (
     CommunicationBalanceContact,
     CommunicationBalanceStatistics,
     CommunicationBalanceSummary,
+    PaginationMetadata,
+    SearchOption,
 )
 
 from .analytics_constants import (
@@ -71,10 +74,14 @@ def classify_communication_balance(
 )
 def get_communication_balance(
     db: Session = Depends(get_db),
-    sort_by: Literal["display_name", "owner_share", "message_count"] = Query(
-        default="display_name",
-        description="Sort by display name, owner text share ascending, or known-direction message count descending.",
+    sort_by: Literal["text_volume", "owner_share", "recent_activity"] = Query(
+        default="text_volume",
+        description="Sort by total text volume, owner text share, or recent activity.",
     ),
+    sort_direction: Literal["asc", "desc"] = "asc",
+    classification: CommunicationBalanceClassification | None = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
 ) -> CommunicationBalanceStatistics:
     owner_account = aliased(Account)
     owner_sender = (
@@ -401,24 +408,43 @@ def get_communication_balance(
         )
 
     if sort_by == "owner_share":
-        contacts.sort(
+        sortable = [contact for contact in contacts if contact.owner_text_share is not None]
+        unsortable = [contact for contact in contacts if contact.owner_text_share is None]
+        sortable.sort(
             key=lambda contact: (
-                contact.owner_text_share is None,
-                contact.owner_text_share or 0.0,
-                contact.contact_id,
-            )
-        )
-    elif sort_by == "message_count":
-        contacts.sort(
-            key=lambda contact: (-contact.total_message_count, contact.contact_id)
-        )
-    else:
-        contacts.sort(
-            key=lambda contact: (
+                contact.owner_text_share,
                 (contact.display_name or "").casefold(),
                 contact.contact_id,
-            )
+            ),
+            reverse=sort_direction == "desc",
         )
+    elif sort_by == "recent_activity":
+        sortable = [contact for contact in contacts if contact.last_message_at is not None]
+        unsortable = [contact for contact in contacts if contact.last_message_at is None]
+        sortable.sort(
+            key=lambda contact: (
+                (
+                    contact.last_message_at.isoformat()
+                    if contact.last_message_at is not None
+                    else ""
+                ),
+                (contact.display_name or "").casefold(),
+                contact.contact_id,
+            ),
+            reverse=sort_direction == "desc",
+        )
+    else:
+        sortable = contacts
+        unsortable = []
+        sortable.sort(
+            key=lambda contact: (
+                contact.total_text_length,
+                (contact.display_name or "").casefold(),
+                contact.contact_id,
+            ),
+            reverse=sort_direction == "desc",
+        )
+    contacts = sortable + unsortable
 
     summary = CommunicationBalanceSummary(
         eligible_contacts=len(contacts),
@@ -446,4 +472,30 @@ def get_communication_balance(
             c.excluded_unknown_direction_message_count for c in contacts
         ),
     )
-    return CommunicationBalanceStatistics(summary=summary, contacts=contacts)
+    filtered_contacts = [
+        contact
+        for contact in contacts
+        if classification is None or contact.classification == classification
+    ]
+    offset = (page - 1) * page_size
+    return CommunicationBalanceStatistics(
+        summary=summary,
+        contacts=filtered_contacts[offset : offset + page_size],
+        pagination=PaginationMetadata(
+            page=page,
+            page_size=page_size,
+            total=len(filtered_contacts),
+        ),
+        options=[
+            SearchOption(
+                value=str(index),
+                label=contact.display_name or "Unnamed contact",
+                platforms=contact.platforms,
+                search_terms=[
+                    *contact.platform_user_ids,
+                    *contact.source_account_labels,
+                ],
+            )
+            for index, contact in enumerate(filtered_contacts)
+        ],
+    )

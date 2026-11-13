@@ -73,10 +73,6 @@ export function CommunicationBalanceTable({
 }) {
   return (
     <>
-      <p className="mb-2 text-caption text-ink-muted">
-        The table is wider than this panel. Scroll horizontally to see the
-        remaining columns.
-      </p>
       <div
         className="w-full overflow-x-scroll rounded-lg border border-border-subtle max-sm:max-w-full focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
         role="region"

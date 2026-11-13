@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { platformAccountPrefix } from "../platforms";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
@@ -8,6 +8,8 @@ export type SearchPickerOption = {
   platforms: string[];
   searchTerms?: string[];
 };
+
+const SEARCH_PICKER_OPTION_LIMIT = 100;
 
 function PickerOptionLabel({
   label,
@@ -59,17 +61,21 @@ export function SearchPicker({
   const platforms = [...new Set(options.flatMap((option) => option.platforms))]
     .sort();
   const normalizedSearch = search.trim().toLocaleLowerCase();
-  const visibleOptions = options.filter((option) => {
-    const matchesPlatform =
-      platformFilter === "" || option.platforms.includes(platformFilter);
-    const matchesSearch =
-      normalizedSearch === "" ||
-      [option.label, ...option.platforms, ...(option.searchTerms ?? [])].some(
-        (candidate) =>
-          candidate.toLocaleLowerCase().includes(normalizedSearch),
-      );
-    return matchesPlatform && matchesSearch;
-  });
+  const matchingOptions = useMemo(
+    () => options.filter((option) => {
+      const matchesPlatform =
+        platformFilter === "" || option.platforms.includes(platformFilter);
+      const matchesSearch =
+        normalizedSearch === "" ||
+        [option.label, ...option.platforms, ...(option.searchTerms ?? [])].some(
+          (candidate) =>
+            candidate.toLocaleLowerCase().includes(normalizedSearch),
+        );
+      return matchesPlatform && matchesSearch;
+    }),
+    [options, platformFilter, normalizedSearch],
+  );
+  const visibleOptions = matchingOptions.slice(0, SEARCH_PICKER_OPTION_LIMIT);
 
   const close = () => {
     setOpen(false);
@@ -182,6 +188,12 @@ export function SearchPicker({
                 </li>
               )}
             </ul>
+            {matchingOptions.length > SEARCH_PICKER_OPTION_LIMIT && (
+              <p className="m-0 px-2 py-2 text-caption font-normal text-ink-muted">
+                Showing the first {SEARCH_PICKER_OPTION_LIMIT} matches. Refine
+                your search to see other options.
+              </p>
+            )}
           </div>
         )}
       </div>

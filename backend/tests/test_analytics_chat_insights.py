@@ -44,6 +44,29 @@ def test_extract_emojis_skips_plain_text():
     assert extract_emojis("synthetic benchmark text alpha beta 123") == []
 
 
+def test_chat_insights_returns_one_chat_and_supports_searching_all_chat_options(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "chat-10", "First", chat_type="personal_chat")
+    add_chat(db_session, 20, 1, "chat-20", "Second", chat_type="private_group")
+    add_message(db_session, 1, 10, "message", "peer-10", text_content="first words")
+    add_message(db_session, 2, 20, "message", "peer-20", text_content="second words")
+
+    default_chat = get_chat_insights(db_session)
+    selected_chat = get_chat_insights(db_session, chat_id=10)
+
+    assert [chat.chat_id for chat in default_chat.chats] == [10]
+    assert [option.value for option in default_chat.options] == ["10", "20"]
+    assert [chat.chat_id for chat in selected_chat.chats] == [10]
+    assert [option.value for option in selected_chat.options] == ["10", "20"]
+    parameter_names = [
+        parameter["name"]
+        for parameter in app.openapi()["paths"]["/api/analytics/chat-insights"][
+            "get"
+        ]["parameters"]
+    ]
+    assert parameter_names == ["chat_id"]
+
+
 def test_popular_words_exclude_common_english_and_russian_words(db_session):
     add_account(db_session, 1, "user-owner")
     add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")
@@ -59,7 +82,13 @@ def test_popular_words_exclude_common_english_and_russian_words(db_session):
         ),
     )
 
-    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    result = ChatInsightsResponse(
+        chats=[
+            chat
+            for chat_id in (10, 11, 12)
+            for chat in get_chat_insights(db_session, chat_id=chat_id).chats
+        ]
+    )
     chat = result.chats[0]
     sender = chat.senders[0]
 
@@ -174,7 +203,13 @@ def test_chat_insights_include_requested_chat_types_and_exclude_service_messages
         text_content="Not included 🚫",
     )
 
-    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    result = ChatInsightsResponse(
+        chats=[
+            chat
+            for chat_id in (10, 11, 12)
+            for chat in get_chat_insights(db_session, chat_id=chat_id).chats
+        ]
+    )
 
     assert [chat.title for chat in result.chats] == ["Direct", "Group", "Supergroup"]
     direct = result.chats[0]
@@ -231,7 +266,13 @@ def test_empty_supported_chat_and_unattributed_reactions_are_safe(db_session):
         },
     )
 
-    result = ChatInsightsResponse.model_validate(get_chat_insights(db_session))
+    result = ChatInsightsResponse(
+        chats=[
+            chat
+            for chat_id in (9, 10)
+            for chat in get_chat_insights(db_session, chat_id=chat_id).chats
+        ]
+    )
 
     assert len(result.chats) == 2
     assert result.chats[0].ordinary_message_count == 0

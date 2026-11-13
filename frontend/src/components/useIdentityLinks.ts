@@ -1,11 +1,25 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   IdentityLinksResponse,
+  PaginationMetadata,
   PlatformIdentity,
 } from "../api";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { platformAccountPrefix } from "../platforms";
 import type { Resource } from "../types";
 import type { SearchPickerOption } from "./SearchPicker";
+
+function paginate<T>(items: T[], page: number) {
+  const start = (page - 1) * DEFAULT_PAGE_SIZE;
+  return {
+    items: items.slice(start, start + DEFAULT_PAGE_SIZE),
+    pagination: {
+      page,
+      page_size: DEFAULT_PAGE_SIZE,
+      total: items.length,
+    } satisfies PaginationMetadata,
+  };
+}
 
 function identityLabel(identity: PlatformIdentity | undefined): string {
   if (!identity) return "Unknown identity";
@@ -31,60 +45,38 @@ function normalizedName(name: string): string {
     .replace(/\s+/g, " ");
 }
 
-function editDistanceWithinLimit(first: string, second: string, limit: number): number | null {
+function editDistanceWithinLimit(first: string, second: string): number | null {
   const firstSymbols = Array.from(first);
   const secondSymbols = Array.from(second);
-  if (Math.abs(firstSymbols.length - secondSymbols.length) > limit) return null;
+  if (first === second) return 0;
+  if (Math.abs(firstSymbols.length - secondSymbols.length) > 1) return null;
 
-  let previous = Array.from(
-    { length: secondSymbols.length + 1 },
-    (_, index) => index,
-  );
-  for (let row = 1; row <= firstSymbols.length; row += 1) {
-    const current = [row];
-    let rowMinimum = row;
-    for (let column = 1; column <= secondSymbols.length; column += 1) {
-      const cost = firstSymbols[row - 1] === secondSymbols[column - 1] ? 0 : 1;
-      const distance = Math.min(
-        previous[column] + 1,
-        current[column - 1] + 1,
-        previous[column - 1] + cost,
-      );
-      current.push(distance);
-      rowMinimum = Math.min(rowMinimum, distance);
+  let firstIndex = 0;
+  let secondIndex = 0;
+  let differences = 0;
+  while (
+    firstIndex < firstSymbols.length &&
+    secondIndex < secondSymbols.length
+  ) {
+    if (firstSymbols[firstIndex] === secondSymbols[secondIndex]) {
+      firstIndex += 1;
+      secondIndex += 1;
+      continue;
     }
-    if (rowMinimum > limit) return null;
-    previous = current;
-  }
-  return previous[secondSymbols.length] <= limit
-    ? previous[secondSymbols.length]
-    : null;
-}
 
-function hasMatchingFirstOrLastName(first: string, second: string): boolean {
-  const firstParts = first.split(" ");
-  const secondParts = second.split(" ");
-  if (firstParts.length < 2 || secondParts.length < 2) return false;
-  const firstNames = [firstParts[0], firstParts[firstParts.length - 1]];
-  const secondNames = [secondParts[0], secondParts[secondParts.length - 1]];
-  return firstNames.some((part) => secondNames.includes(part));
-}
-
-function suggestionRank(
-  firstName: string,
-  secondName: string,
-): { rank: number; reason: string } | null {
-  const first = normalizedName(firstName);
-  const second = normalizedName(secondName);
-  if (!first || !second) return null;
-  if (first === second) return { rank: 0, reason: "Full Name match" };
-  const distance = editDistanceWithinLimit(first, second, 2);
-  if (distance === 1) return { rank: 1, reason: "1-symbol Full Name difference" };
-  if (distance === 2) return { rank: 2, reason: "2-symbol Full Name difference" };
-  if (hasMatchingFirstOrLastName(first, second)) {
-    return { rank: 3, reason: "First or last name match" };
+    differences += 1;
+    if (differences > 1) return null;
+    if (firstSymbols.length > secondSymbols.length) firstIndex += 1;
+    else if (secondSymbols.length > firstSymbols.length) secondIndex += 1;
+    else {
+      firstIndex += 1;
+      secondIndex += 1;
+    }
   }
-  return null;
+  if (firstIndex < firstSymbols.length || secondIndex < secondSymbols.length) {
+    differences += 1;
+  }
+  return differences === 1 ? 1 : null;
 }
 
 export function useIdentityLinks(
@@ -97,81 +89,152 @@ export function useIdentityLinks(
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [linkedPage, setLinkedPage] = useState(1);
+  const [suggestedPage, setSuggestedPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const identities = identityLinks.data?.identities ?? [];
-  const identityById = new Map(
-    identities.map((identity) => [identity.identity_id, identity]),
+  useEffect(() => {
+    setLinkedPage(1);
+    setSuggestedPage(1);
+    setHistoryPage(1);
+  }, [identityLinks.data]);
+  const identityById = useMemo(
+    () => new Map(identities.map((identity) => [identity.identity_id, identity])),
+    [identities],
   );
-  const groups = new Map<number, PlatformIdentity[]>();
-  for (const identity of identities) {
-    if (identity.identity_group_id === null) continue;
-    const group = groups.get(identity.identity_group_id) ?? [];
-    group.push(identity);
-    groups.set(identity.identity_group_id, group);
-  }
+  const identityOptions = useMemo(
+    () => identities.map((identity) => ({
+      value: String(identity.identity_id),
+      label: `${identityLabel(identity)} (${identity.platform_user_id})`,
+      platforms: [identity.platform],
+      searchTerms: [
+        identity.platform_user_id,
+        ...identity.contacts.map((contact) => contact.username ?? ""),
+      ],
+    })) satisfies SearchPickerOption[],
+    [identities],
+  );
+  const linkedGroups = useMemo(() => {
+    const groups = new Map<number, PlatformIdentity[]>();
+    for (const identity of identities) {
+      if (identity.identity_group_id === null) continue;
+      const group = groups.get(identity.identity_group_id) ?? [];
+      group.push(identity);
+      groups.set(identity.identity_group_id, group);
+    }
+    return [...groups.entries()].map(([groupId, members]) => ({
+      groupId,
+      members: members.map((identity) => ({
+        identity,
+        label: identityLabel(identity),
+        platformLabel: platformAccountPrefix(identity.platform),
+      })),
+    }));
+  }, [identities]);
+  const suggestedLinks = useMemo(() => {
+    const identitiesByName = new Map<
+      string,
+      { identity: PlatformIdentity; label: string }[]
+    >();
+    for (const identity of identities) {
+      if (identity.identity_group_id !== null) continue;
+      const label = identityFullName(identity);
+      if (!label) continue;
+      const name = normalizedName(label);
+      if (!name) continue;
+      const matches = identitiesByName.get(name) ?? [];
+      matches.push({ identity, label });
+      identitiesByName.set(name, matches);
+    }
 
-  const identityOptions = identities.map((identity) => ({
-    value: String(identity.identity_id),
-    label: `${identityLabel(identity)} (${identity.platform_user_id})`,
-    platforms: [identity.platform],
-    searchTerms: [
-      identity.platform_user_id,
-      ...identity.contacts.map((contact) => contact.username ?? ""),
-    ],
-  })) satisfies SearchPickerOption[];
-  const suggestedLinks = identities.flatMap((identity, index) => {
-    const fullName = identityFullName(identity);
-    if (!fullName || identity.identity_group_id !== null) return [];
-    return identities.slice(index + 1).flatMap((candidate) => {
-      const candidateName = identityFullName(candidate);
-      if (
-        !candidateName ||
-        candidate.identity_group_id !== null ||
-        candidate.platform === identity.platform
-      ) {
-        return [];
+    const namesBySignature = new Map<string, Set<string>>();
+    for (const name of identitiesByName.keys()) {
+      const signatures = new Set([name]);
+      const symbols = Array.from(name);
+      for (let index = 0; index < symbols.length; index += 1) {
+        signatures.add(
+          symbols.slice(0, index).join("") + symbols.slice(index + 1).join(""),
+        );
       }
-      const match = suggestionRank(fullName, candidateName);
-      return match
-        ? [{
-            first: identity,
-            firstLabel: fullName,
-            second: candidate,
-            secondLabel: candidateName,
-            reason: match.reason,
-            rank: match.rank,
-            sortLength: Math.max(
-              Array.from(fullName).length,
-              Array.from(candidateName).length,
-            ),
-            sortName: `${normalizedName(fullName)} ${normalizedName(candidateName)}`,
-          }]
-        : [];
-    });
-  }).sort((first, second) =>
-    first.rank - second.rank ||
-    second.sortLength - first.sortLength ||
-    first.sortName.localeCompare(second.sortName) ||
-    first.first.identity_id - second.first.identity_id ||
-    first.second.identity_id - second.second.identity_id,
+      for (const signature of signatures) {
+        const names = namesBySignature.get(signature) ?? new Set<string>();
+        names.add(name);
+        namesBySignature.set(signature, names);
+      }
+    }
+
+    const candidateNamePairs = new Set(
+      [...identitiesByName.keys()].map((name) => `${name}\u0000${name}`),
+    );
+    for (const names of namesBySignature.values()) {
+      const candidates = [...names];
+      for (let firstIndex = 0; firstIndex < candidates.length; firstIndex += 1) {
+        for (
+          let secondIndex = firstIndex + 1;
+          secondIndex < candidates.length;
+          secondIndex += 1
+        ) {
+          candidateNamePairs.add(
+            `${candidates[firstIndex]}\u0000${candidates[secondIndex]}`,
+          );
+        }
+      }
+    }
+
+    return [...candidateNamePairs].flatMap((pair) => {
+      const [firstName, secondName] = pair.split("\u0000");
+      const distance = editDistanceWithinLimit(firstName, secondName);
+      if (distance === null) return [];
+      const rank = distance;
+      const reason = distance === 0
+        ? "Full Name match"
+        : "1-symbol Full Name difference";
+      const firstIdentities = identitiesByName.get(firstName) ?? [];
+      const secondIdentities = identitiesByName.get(secondName) ?? [];
+      return firstIdentities.flatMap((first, index) =>
+        secondIdentities
+          .slice(firstName === secondName ? index + 1 : 0)
+          .flatMap((second) => {
+            if (first.identity.platform === second.identity.platform) return [];
+            return [{
+              first: first.identity,
+              firstLabel: first.label,
+              second: second.identity,
+              secondLabel: second.label,
+              reason,
+              rank,
+              sortLength: Math.max(
+                Array.from(first.label).length,
+                Array.from(second.label).length,
+              ),
+              sortName: `${firstName} ${secondName}`,
+            }];
+          })
+      );
+    }).sort((first, second) =>
+      first.rank - second.rank ||
+      second.sortLength - first.sortLength ||
+      first.sortName.localeCompare(second.sortName) ||
+      first.first.identity_id - second.first.identity_id ||
+      first.second.identity_id - second.second.identity_id,
+    );
+  }, [identities]);
+  const historyEvents = useMemo(
+    () => (identityLinks.data?.events ?? []).map((event) => {
+      const identityName = identityLabel(identityById.get(event.identity_id));
+      const peerName = event.peer_identity_id === null
+        ? ""
+        : ` and ${identityLabel(identityById.get(event.peer_identity_id))}`;
+      return {
+        id: event.id,
+        description: `${event.action === "linked" ? "Linked" : "Unlinked"} ${identityName}${peerName} · ${event.source} · ${new Date(event.occurred_at).toLocaleString()}`,
+      };
+    }),
+    [identityLinks.data?.events, identityById],
   );
-  const linkedGroups = [...groups.entries()].map(([groupId, members]) => ({
-    groupId,
-    members: members.map((identity) => ({
-      identity,
-      label: identityLabel(identity),
-      platformLabel: platformAccountPrefix(identity.platform),
-    })),
-  }));
-  const historyEvents = (identityLinks.data?.events ?? []).map((event) => {
-    const identityName = identityLabel(identityById.get(event.identity_id));
-    const peerName = event.peer_identity_id === null
-      ? ""
-      : ` and ${identityLabel(identityById.get(event.peer_identity_id))}`;
-    return {
-      id: event.id,
-      description: `${event.action === "linked" ? "Linked" : "Unlinked"} ${identityName}${peerName} · ${event.source} · ${new Date(event.occurred_at).toLocaleString()}`,
-    };
-  });
+  const linkedGroupsPage = paginate(linkedGroups, linkedPage);
+  const suggestedLinksPage = paginate(suggestedLinks, suggestedPage);
+  const historyEventsPage = paginate(historyEvents, historyPage);
 
   const performLink = async (
     firstIdentity = Number(firstIdentityId),
@@ -228,6 +291,12 @@ export function useIdentityLinks(
     suggestedLinks,
     linkedGroups,
     historyEvents,
+    linkedGroupsPage,
+    setLinkedPage,
+    suggestedLinksPage,
+    setSuggestedPage,
+    historyEventsPage,
+    setHistoryPage,
     performLink,
     performUnlink,
   };

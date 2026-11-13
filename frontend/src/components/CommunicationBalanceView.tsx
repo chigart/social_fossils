@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type {
   CommunicationBalanceClassification,
   CommunicationBalanceContact,
@@ -14,7 +15,12 @@ import {
   sectionTitleClassName,
 } from "../styles";
 import type { Resource, SortDirection } from "../types";
-import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
+import {
+  LoadingMessage,
+  MetricCard,
+  PaginationControls,
+  SectionError,
+} from "./Feedback";
 import { CommunicationBalanceControls } from "./CommunicationBalanceControls";
 import { CommunicationBalanceTable } from "./CommunicationBalanceTable";
 import {
@@ -61,6 +67,7 @@ export function CommunicationBalanceView({
   onSortKeyChange,
   onSortDirectionChange,
   onRetry,
+  onPageChange,
 }: {
   balance: Resource<CommunicationBalanceStatistics>;
   visibleContacts: CommunicationBalanceContact[];
@@ -75,7 +82,29 @@ export function CommunicationBalanceView({
   onSortKeyChange: (value: BalanceSortKey) => void;
   onSortDirectionChange: (value: SortDirection) => void;
   onRetry: () => void;
+  onPageChange: (page: number) => void;
 }) {
+  const searchOptions = useMemo(
+    () =>
+      balance.data?.options?.length
+        ? balance.data.options.map((option) => ({
+            value: option.value,
+            label: option.label,
+            platforms: option.platforms,
+            searchTerms: option.search_terms,
+          } satisfies SearchPickerOption))
+        : (balance.data?.contacts ?? []).map((contact, index) => ({
+            value: String(index),
+            label: contact.display_name || "Unnamed contact",
+            platforms: contact.platforms,
+            searchTerms: [
+              ...contact.platform_user_ids,
+              ...contact.source_account_labels,
+            ],
+          } satisfies SearchPickerOption)),
+    [balance.data?.options, balance.data?.contacts],
+  );
+
   return (
     <section
       id="communication-balance"
@@ -93,15 +122,7 @@ export function CommunicationBalanceView({
           <CommunicationBalanceControls
             search={search}
             onSearchChange={onSearchChange}
-            searchOptions={balance.data.contacts.map((contact, index) => ({
-              value: String(index),
-              label: contact.display_name || "Unnamed contact",
-              platforms: contact.platforms,
-              searchTerms: [
-                ...contact.platform_user_ids,
-                ...contact.source_account_labels,
-              ],
-            } satisfies SearchPickerOption))}
+            searchOptions={searchOptions}
             classification={classification}
             onClassificationChange={onClassificationChange}
             sortKey={sortKey}
@@ -143,8 +164,20 @@ export function CommunicationBalanceView({
               </p>
             </div>
           ) : (
-            <CommunicationBalanceTable contacts={visibleContacts} />
+            <>
+              <PaginationControls
+                pagination={balance.data.pagination}
+                onPageChange={onPageChange}
+                label="Communication balance pagination above table"
+              />
+              <CommunicationBalanceTable contacts={visibleContacts} />
+            </>
           )}
+          <PaginationControls
+            pagination={balance.data.pagination}
+            onPageChange={onPageChange}
+            label="Communication balance pagination below table"
+          />
         </>
       )}
     </section>

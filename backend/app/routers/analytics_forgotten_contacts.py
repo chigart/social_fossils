@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.constants import DEFAULT_PAGE_SIZE
 from app.db import get_db
 from app.models import Account
 from app.schemas.analytics import (
@@ -13,6 +14,8 @@ from app.schemas.analytics import (
     ForgottenContactMonthlyActivity,
     ForgottenContactsStatistics,
     ForgottenContactsSummary,
+    PaginationMetadata,
+    SearchOption,
 )
 
 from .analytics_forgotten_queries import (
@@ -53,11 +56,15 @@ def build_forgotten_contacts_statistics(
         "days_since_last_communication",
         "historical_message_count",
     ] = "ranking_score",
-    limit: int = 100,
+    sort_direction: Literal["asc", "desc"] = "desc",
+    limit: int = DEFAULT_PAGE_SIZE,
+    offset: int = 0,
     as_of: datetime | None = None,
 ) -> ForgottenContactsStatistics:
     if not 1 <= limit <= FORGOTTEN_MAX_LIMIT:
         raise ValueError(f"limit must be between 1 and {FORGOTTEN_MAX_LIMIT}.")
+    if offset < 0:
+        raise ValueError("offset must be non-negative.")
 
     source_account_count = int(
         db.scalar(
@@ -76,6 +83,11 @@ def build_forgotten_contacts_statistics(
                 insufficient_data_contacts=0,
             ),
             contacts=[],
+            pagination=PaginationMetadata(
+                page=offset // limit + 1,
+                page_size=limit,
+                total=0,
+            ),
         )
 
     current_time = _as_utc(as_of or datetime.now(timezone.utc))
@@ -383,36 +395,69 @@ def build_forgotten_contacts_statistics(
         )
 
     if sort_by == "display_name":
-        contacts.sort(
-            key=lambda contact: (
-                contact.classification == "insufficient_data",
-                (contact.display_name or "").casefold(),
-                contact.contact_id,
-            )
+        reliable = [
+            contact
+            for contact in contacts
+            if contact.classification != "insufficient_data"
+        ]
+        insufficient = [
+            contact
+            for contact in contacts
+            if contact.classification == "insufficient_data"
+        ]
+        reliable.sort(
+            key=lambda contact: contact.contact_id,
         )
+        reliable.sort(
+            key=lambda contact: (contact.display_name or "").casefold(),
+            reverse=sort_direction == "desc",
+        )
+        insufficient.sort(
+            key=lambda contact: contact.contact_id,
+        )
+        insufficient.sort(
+            key=lambda contact: (contact.display_name or "").casefold(),
+            reverse=sort_direction == "desc",
+        )
+        contacts = reliable + insufficient
     elif sort_by == "days_since_last_communication":
-        contacts.sort(
-            key=lambda contact: (
-                contact.days_since_last_communication is None,
-                -(contact.days_since_last_communication or 0),
-                contact.contact_id,
-            )
+        sortable = [
+            contact
+            for contact in contacts
+            if contact.days_since_last_communication is not None
+        ]
+        unsortable = [
+            contact
+            for contact in contacts
+            if contact.days_since_last_communication is None
+        ]
+        sortable.sort(
+            key=lambda contact: contact.contact_id,
         )
+        sortable.sort(
+            key=lambda contact: contact.days_since_last_communication or 0,
+            reverse=sort_direction == "desc",
+        )
+        contacts = sortable + unsortable
     elif sort_by == "historical_message_count":
         contacts.sort(
-            key=lambda contact: (
-                -contact.historical_message_count,
-                contact.contact_id,
-            )
+            key=lambda contact: contact.contact_id,
+        )
+        contacts.sort(
+            key=lambda contact: contact.historical_message_count,
+            reverse=sort_direction == "desc",
         )
     else:
-        contacts.sort(
-            key=lambda contact: (
-                contact.ranking_score is None,
-                -(contact.ranking_score or 0.0),
-                contact.contact_id,
-            )
+        sortable = [contact for contact in contacts if contact.ranking_score is not None]
+        unsortable = [contact for contact in contacts if contact.ranking_score is None]
+        sortable.sort(
+            key=lambda contact: contact.contact_id,
         )
+        sortable.sort(
+            key=lambda contact: contact.ranking_score or 0.0,
+            reverse=sort_direction == "desc",
+        )
+        contacts = sortable + unsortable
 
     summary = ForgottenContactsSummary(
         source_account_count=source_account_count,
@@ -442,7 +487,24 @@ def build_forgotten_contacts_statistics(
     )
     return ForgottenContactsStatistics(
         summary=summary,
-        contacts=contacts[:limit],
+        contacts=contacts[offset : offset + limit],
+        pagination=PaginationMetadata(
+            page=offset // limit + 1,
+            page_size=limit,
+            total=len(contacts),
+        ),
+        options=[
+            SearchOption(
+                value=str(index),
+                label=contact.display_name or "Unnamed contact",
+                platforms=contact.platforms,
+                search_terms=[
+                    *contact.platform_user_ids,
+                    *contact.source_account_labels,
+                ],
+            )
+            for index, contact in enumerate(contacts)
+        ],
     )
 
 
@@ -480,10 +542,16 @@ def get_forgotten_contacts(
         "days_since_last_communication",
         "historical_message_count",
     ] = Query(default="ranking_score"),
-    limit: int = Query(default=100, ge=1, le=FORGOTTEN_MAX_LIMIT),
+    sort_direction: Literal["asc", "desc"] = "desc",
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=FORGOTTEN_MAX_LIMIT)] = (
+        DEFAULT_PAGE_SIZE
+    ),
 ) -> ForgottenContactsStatistics:
     return build_forgotten_contacts_statistics(
         db,
         sort_by=sort_by,
-        limit=limit,
+        sort_direction=sort_direction,
+        limit=page_size,
+        offset=(page - 1) * page_size,
     )
