@@ -1,9 +1,9 @@
 from collections import Counter
 from sqlalchemy import text
 
-from app.analytics_stop_words import STOP_WORDS
+from app.constants import STOP_WORDS
+from app.routers.analytics_chat_insights_helpers import _rank_words
 from app.routers.analytics_chat_insights import (
-    _rank_words,
     extract_emojis,
     get_chat_insights,
 )

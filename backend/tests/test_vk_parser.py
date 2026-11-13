@@ -4,7 +4,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from app.vk_parser import parse_vk_archive
+from app.parsers.vk_parser import parse_vk_archive
 
 
 def _write_archive(path, *, include_profile=True):

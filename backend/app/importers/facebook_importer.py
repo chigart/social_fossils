@@ -6,16 +6,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.facebook_parser import (
+from app.constants import FACEBOOK_PLATFORM_ID, MESSAGE_INSERT_BATCH_SIZE
+from app.parsers.facebook_parser import (
     ParsedFacebookChat,
     parse_facebook_archive,
 )
-from app.import_utils import file_sha256, insert_message_batch
+from app.importers.import_utils import file_sha256, insert_message_batch
 from app.models import (
     Account,
     CanonicalIdentity,
@@ -24,12 +25,8 @@ from app.models import (
     ImportSession,
     Message,
 )
-from app.platforms import FACEBOOK_PLATFORM_ID
 
 logger = logging.getLogger(__name__)
-MESSAGE_INSERT_BATCH_SIZE = 50
-
-
 def _get_or_create_account(
     session: Session,
     account_name: str,

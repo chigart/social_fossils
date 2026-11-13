@@ -19,7 +19,7 @@ from app.schemas.analytics import (
     SearchOption,
 )
 
-from .analytics_constants import (
+from app.constants import (
     ORDINARY_MESSAGE_TYPE,
     SERVICE_MESSAGE_TYPE,
 )

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import (
     BigInteger,
@@ -90,7 +90,7 @@ class IdentityLinkEvent(Base):
         ForeignKey("canonical_identities.id", ondelete="RESTRICT"),
         nullable=True,
     )
-    action: Mapped[str] = mapped_column(String(20))
+    action: Mapped[Literal["linked", "unlinked"]] = mapped_column(String(20))
     source: Mapped[str] = mapped_column(String(50))
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

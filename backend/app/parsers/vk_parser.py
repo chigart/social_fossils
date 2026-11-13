@@ -1,24 +1,24 @@
 from __future__ import annotations
 
 import json
-import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from app.vk_parser_helpers import (
+from app.constants import (
+    VK_MAX_MESSAGE_DATA_BYTES as MAX_MESSAGE_DATA_BYTES,
+    VK_MAX_MESSAGE_FILE_BYTES as MAX_MESSAGE_FILE_BYTES,
+    VK_MESSAGE_FILE_PATTERN as MESSAGE_FILE_PATTERN,
+)
+from app.parsers.vk_parser_helpers import (
     _account_details,
     _archive_sha256,
     _chat_type,
 )
-from app.vk_parser_html import _Element, _classes, _elements, _element_text, _parse_document
-from app.vk_parser_messages import _message_elements, _message_payload
-
-MESSAGE_FILE_PATTERN = re.compile(r"messages(?P<offset>\d+)\.html", re.IGNORECASE)
-MAX_MESSAGE_FILE_BYTES = 8 * 1024 * 1024
-MAX_MESSAGE_DATA_BYTES = 1024 * 1024 * 1024
+from app.parsers.vk_parser_html import _Element, _classes, _elements, _element_text, _parse_document
+from app.parsers.vk_parser_messages import _message_elements, _message_payload
 
 
 @dataclass

@@ -16,7 +16,7 @@ from app.schemas.analytics import (
     SearchOption,
 )
 
-from .analytics_constants import (
+from app.constants import (
     ORDINARY_MESSAGE_TYPE,
     MINIMUM_BALANCE_TEXT_LENGTH,
     BALANCED_OWNER_SHARE_MINIMUM,

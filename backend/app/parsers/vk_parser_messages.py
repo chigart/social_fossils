@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.vk_parser_helpers import (
+from app.parsers.vk_parser_helpers import (
     DATE_WITH_MONTH_PATTERN,
     NUMERIC_DATE_PATTERN,
     OWNER_SENDER_LABELS,
@@ -11,7 +11,9 @@ from app.vk_parser_helpers import (
     _stable_record_key,
     _timestamp_from_header,
 )
-from app.vk_parser_html import _Element, _classes, _elements, _element_text
+from app.parsers.vk_parser_html import _Element, _classes, _elements, _element_text
+
+__all__ = ["_message_elements", "_message_payload"]
 
 
 def _message_elements(root: _Element) -> list[_Element]:

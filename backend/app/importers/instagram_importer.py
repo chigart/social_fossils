@@ -10,8 +10,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.import_utils import file_sha256, insert_message_batch
-from app.instagram_parser import (
+from app.constants import INSTAGRAM_PLATFORM_ID, MESSAGE_INSERT_BATCH_SIZE
+from app.importers.import_utils import file_sha256, insert_message_batch
+from app.parsers.instagram_parser import (
     ParsedInstagramChat,
     normalize_instagram_text,
     parse_instagram_archive,
@@ -24,12 +25,8 @@ from app.models import (
     Message,
     Account,
 )
-from app.platforms import INSTAGRAM_PLATFORM_ID
 
 logger = logging.getLogger(__name__)
-MESSAGE_INSERT_BATCH_SIZE = 50
-
-
 def _is_placeholder_contact_name(name: str | None) -> bool:
     return (
         isinstance(name, str)

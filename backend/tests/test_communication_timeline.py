@@ -1,6 +1,4 @@
 from datetime import datetime, timezone
-from types import SimpleNamespace
-
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select, text
@@ -297,17 +295,14 @@ def test_chat_timeline_includes_only_the_selected_chat(db_session):
 
 
 def test_utc_sql_expressions_compile_for_postgresql():
-    postgresql_session = SimpleNamespace(
-        get_bind=lambda: SimpleNamespace(dialect=postgresql.dialect())
-    )
     month_sql = str(
-        select(_utc_month_expression(postgresql_session, Message.message_date)).compile(
+        select(_utc_month_expression("postgresql", Message.message_date)).compile(
             dialect=postgresql.dialect(),
             compile_kwargs={"literal_binds": True},
         )
     )
     date_sql = str(
-        select(_utc_date_expression(postgresql_session, Message.message_date)).compile(
+        select(_utc_date_expression("postgresql", Message.message_date)).compile(
             dialect=postgresql.dialect(),
             compile_kwargs={"literal_binds": True},
         )

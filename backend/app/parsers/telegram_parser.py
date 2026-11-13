@@ -247,7 +247,7 @@ def parse_message_record(message: dict[str, Any], owner_telegram_id: str | None)
     return parsed_message
 
 
-def parse_telegram_export(data: dict[str, Any]) -> ParsedTelegramExport:
+def parse_telegram_export(data: Any) -> ParsedTelegramExport:
     if not isinstance(data, dict):
         raise ValueError("Telegram export payload must be a JSON object.")
 

@@ -10,84 +10,24 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
-from app.vk_parser_html import _Element, _elements, _element_text, _parse_document
-
-MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
-OWNER_SENDER_LABELS = {"me", "you", "you (you)", "я", "вы"}
-
-MONTH_NUMBERS = {
-    "января": 1,
-    "янв": 1,
-    "февраля": 2,
-    "февраль": 2,
-    "фев": 2,
-    "марта": 3,
-    "март": 3,
-    "мар": 3,
-    "апреля": 4,
-    "апрель": 4,
-    "апр": 4,
-    "мая": 5,
-    "май": 5,
-    "июня": 6,
-    "июнь": 6,
-    "июн": 6,
-    "июля": 7,
-    "июль": 7,
-    "июл": 7,
-    "августа": 8,
-    "август": 8,
-    "авг": 8,
-    "сентября": 9,
-    "сентябрь": 9,
-    "сен": 9,
-    "сент": 9,
-    "октября": 10,
-    "октябрь": 10,
-    "окт": 10,
-    "ноября": 11,
-    "ноябрь": 11,
-    "ноя": 11,
-    "нояб": 11,
-    "декабря": 12,
-    "декабрь": 12,
-    "дек": 12,
-    "january": 1,
-    "jan": 1,
-    "february": 2,
-    "feb": 2,
-    "march": 3,
-    "mar": 3,
-    "april": 4,
-    "apr": 4,
-    "may": 5,
-    "june": 6,
-    "jun": 6,
-    "july": 7,
-    "jul": 7,
-    "august": 8,
-    "aug": 8,
-    "september": 9,
-    "sep": 9,
-    "sept": 9,
-    "october": 10,
-    "oct": 10,
-    "november": 11,
-    "nov": 11,
-    "december": 12,
-}
-
-DATE_WITH_MONTH_PATTERN = re.compile(
-    r"(?P<day>\d{1,2})\s+(?P<month>[^\W\d_]+)\s+"
-    r"(?P<year>\d{4})\D{0,12}(?P<hour>\d{1,2}):(?P<minute>\d{2})"
-    r"(?::(?P<second>\d{2}))?",
-    re.IGNORECASE,
+from app.constants import (
+    VK_DATE_WITH_MONTH_PATTERN as DATE_WITH_MONTH_PATTERN,
+    VK_MAX_PROFILE_FILE_BYTES as MAX_PROFILE_FILE_BYTES,
+    VK_MONTH_NUMBERS as MONTH_NUMBERS,
+    VK_NUMERIC_DATE_PATTERN as NUMERIC_DATE_PATTERN,
+    VK_OWNER_SENDER_LABELS as OWNER_SENDER_LABELS,
 )
-NUMERIC_DATE_PATTERN = re.compile(
-    r"(?P<day>\d{1,2})[./-](?P<month>\d{1,2})[./-](?P<year>\d{4})"
-    r"\D{0,12}(?P<hour>\d{1,2}):(?P<minute>\d{2})"
-    r"(?::(?P<second>\d{2}))?"
-)
+from app.parsers.vk_parser_html import _Element, _elements, _element_text, _parse_document
+
+__all__ = [
+    "OWNER_SENDER_LABELS",
+    "_account_details",
+    "_archive_sha256",
+    "_chat_type",
+    "_platform_id_from_href",
+    "_stable_record_key",
+    "_timestamp_from_header",
+]
 
 
 def _source_id(value: Any) -> str | None:

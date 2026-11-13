@@ -1,11 +1,14 @@
 import json
 import logging
 from types import SimpleNamespace
+from unittest.mock import Mock
 
-from sqlalchemy import create_engine, select
+from typing import cast
+
+from sqlalchemy import Table, create_engine, select
 from sqlalchemy.orm import Session
 
-from app import telegram_importer as importer
+from app.importers import telegram_importer as importer
 from app.models import Account, CanonicalIdentity, Contact
 
 
@@ -14,8 +17,8 @@ class FakeSession:
         self.committed = False
         self.rolled_back = False
 
-    def add(self, _instance):
-        pass
+    def add(self, instance):
+        del instance
 
     def flush(self):
         pass
@@ -43,10 +46,22 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
     account = SimpleNamespace(id=1, name="Example", platform_user_id="user123")
     session = FakeSession()
 
-    monkeypatch.setattr(importer, "parse_telegram_export", lambda _payload: parsed_export)
-    monkeypatch.setattr(importer, "get_or_create_account", lambda *_args: account)
-    monkeypatch.setattr(importer, "ensure_chat", lambda *_args: SimpleNamespace(id=1))
-    monkeypatch.setattr(importer, "insert_messages", lambda *_args: 1)
+    monkeypatch.setattr(
+        importer,
+        "parse_telegram_export",
+        Mock(return_value=parsed_export),
+    )
+    monkeypatch.setattr(
+        importer,
+        "get_or_create_account",
+        Mock(return_value=account),
+    )
+    monkeypatch.setattr(
+        importer,
+        "ensure_chat",
+        Mock(return_value=SimpleNamespace(id=1)),
+    )
+    monkeypatch.setattr(importer, "insert_messages", Mock(return_value=1))
 
     export_path = tmp_path / "export.json"
     export_path.write_text(json.dumps({"synthetic": True}), encoding="utf-8")
@@ -65,8 +80,8 @@ def test_import_logs_progress_without_chat_titles_or_message_text(tmp_path, monk
 
 def test_get_or_create_contact_reuses_canonical_identity_across_accounts():
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    CanonicalIdentity.__table__.create(engine)
-    Contact.__table__.create(engine)
+    cast(Table, CanonicalIdentity.__table__).create(engine)
+    cast(Table, Contact.__table__).create(engine)
 
     with Session(engine) as session:
         first = importer.get_or_create_contact(
@@ -98,7 +113,7 @@ def test_get_or_create_contact_reuses_canonical_identity_across_accounts():
 
 def test_get_or_create_account_persists_username_and_updates_existing_value():
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    Account.__table__.create(engine)
+    cast(Table, Account.__table__).create(engine)
 
     with Session(engine) as session:
         first = importer.get_or_create_account(

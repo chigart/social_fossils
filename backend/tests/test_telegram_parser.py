@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.telegram_parser import (
+from app.parsers.telegram_parser import (
     determine_is_outgoing,
     extract_account_name,
     extract_account_username,

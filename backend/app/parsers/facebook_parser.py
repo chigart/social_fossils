@@ -2,26 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from app.parser_utils import (
+from app.constants import (
+    FACEBOOK_MAX_MESSAGE_DATA_BYTES as MAX_MESSAGE_DATA_BYTES,
+    FACEBOOK_MAX_MESSAGE_FILE_BYTES as MAX_MESSAGE_FILE_BYTES,
+    FACEBOOK_MAX_PROFILE_FILE_BYTES as MAX_PROFILE_FILE_BYTES,
+    FACEBOOK_MESSAGE_FILE_PATTERN as MESSAGE_FILE_PATTERN,
+    FACEBOOK_USER_FOLDER_PATTERN as USER_FOLDER_PATTERN,
+)
+from app.parsers.parser_utils import (
     chat_type as _chat_type,
     source_id as _source_id,
     stable_record_key as _stable_record_key,
     timestamp_from_message as _timestamp_from_message,
 )
-
-
-MESSAGE_FILE_PATTERN = re.compile(r"message(?:_(\d+))?\.json", re.IGNORECASE)
-USER_FOLDER_PATTERN = re.compile(r"^.+_(?P<user_id>\d+)$")
-MAX_MESSAGE_FILE_BYTES = 4 * 1024 * 1024
-MAX_MESSAGE_DATA_BYTES = 16 * 1024 * 1024
-MAX_PROFILE_FILE_BYTES = 5 * 1024 * 1024
 
 
 @dataclass

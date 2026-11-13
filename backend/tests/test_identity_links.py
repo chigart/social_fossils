@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from typing import cast
+
+from sqlalchemy import Table, create_engine, select
 from sqlalchemy.orm import Session
 
 from app.db import Base, get_db
@@ -16,13 +18,16 @@ from app.models import (
 def _create_identity_tables(engine) -> None:
     Base.metadata.create_all(
         engine,
-        tables=[
-            Account.__table__,
-            CanonicalIdentityGroup.__table__,
-            CanonicalIdentity.__table__,
-            Contact.__table__,
-            IdentityLinkEvent.__table__,
-        ],
+        tables=cast(
+            list[Table],
+            [
+                Account.__table__,
+                CanonicalIdentityGroup.__table__,
+                CanonicalIdentity.__table__,
+                Contact.__table__,
+                IdentityLinkEvent.__table__,
+            ],
+        ),
     )
 
 

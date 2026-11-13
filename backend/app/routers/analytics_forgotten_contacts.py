@@ -22,7 +22,7 @@ from .analytics_forgotten_queries import (
     build_forgotten_contact_queries,
 )
 
-from .analytics_constants import (
+from app.constants import (
     FORGOTTEN_RECENT_WINDOW_DAYS,
     FORGOTTEN_INACTIVE_DAYS,
     FORGOTTEN_MIN_HISTORICAL_MESSAGES,

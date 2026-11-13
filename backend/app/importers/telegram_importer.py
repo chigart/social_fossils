@@ -15,7 +15,12 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.db import SessionLocal
-from app.import_utils import insert_message_batch
+from app.constants import (
+    MESSAGE_INSERT_BATCH_SIZE,
+    PLATFORM_CONFIGS,
+    TELEGRAM_PLATFORM_ID,
+)
+from app.importers.import_utils import insert_message_batch
 from app.models import (
     CanonicalIdentity,
     Chat,
@@ -24,13 +29,9 @@ from app.models import (
     Message,
     Account,
 )
-from app.platforms import PLATFORM_CONFIGS, TELEGRAM_PLATFORM_ID
-from app.telegram_parser import parse_telegram_export
+from app.parsers.telegram_parser import parse_telegram_export
 
 logger = logging.getLogger(__name__)
-MESSAGE_INSERT_BATCH_SIZE = 50
-
-
 def get_or_create_account(
     session,
     owner_telegram_id: str | None,
@@ -349,7 +350,7 @@ def import_telegram_export(export_path: str | Path, *, session=None) -> dict[str
         logger.error("Import failed; transaction rolled back (%s)", type(exc).__name__)
         raise
     finally:
-        if should_close:
+        if should_close and session is not None:
             session.close()
 
 

@@ -3,9 +3,9 @@ from zipfile import ZipFile
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
-from app import vk_importer
+from app.importers import vk_importer
 from app.models import Account, Chat, Contact, ImportSession, Message
-from app.telegram_importer import import_source_export
+from app.importers.telegram_importer import import_source_export
 
 
 def _create_import_tables(engine):

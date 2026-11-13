@@ -10,7 +10,7 @@ from airflow.task.trigger_rule import TriggerRule
 import sys
 sys.path.insert(0, "/app")
 from app.db import SessionLocal
-from app.telegram_importer import import_source_export
+from app.importers.telegram_importer import import_source_export
 from app.models import UploadJob, ImportSession
 
 logger = logging.getLogger(__name__)

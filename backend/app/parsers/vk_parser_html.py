@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
 
+__all__ = ["_Element", "_classes", "_element_text", "_elements", "_parse_document"]
+
+
 @dataclass
 class _Element:
     tag: str

@@ -185,20 +185,20 @@ def _measure(
 
 
 def _parse_telegram(path: Path) -> Any:
-    from app.telegram_parser import parse_telegram_export
+    from app.parsers.telegram_parser import parse_telegram_export
 
     with path.open(encoding="utf-8") as export_file:
         return parse_telegram_export(json.load(export_file))
 
 
 def _parse_instagram(path: Path) -> Any:
-    from app.instagram_parser import parse_instagram_archive
+    from app.parsers.instagram_parser import parse_instagram_archive
 
     return parse_instagram_archive(path)
 
 
 def _run_workload(message_count: int, root: Path, *, profile: bool) -> list[dict[str, Any]]:
-    from app.instagram_importer import import_instagram_export
+    from app.importers.instagram_importer import import_instagram_export
     from app.routers.analytics_chat_insights import get_chat_insights
     from app.routers.analytics_communication_balance import (
         get_communication_balance,
@@ -214,7 +214,7 @@ def _run_workload(message_count: int, root: Path, *, profile: bool) -> list[dict
         get_contact_statistics,
         get_overview,
     )
-    from app.telegram_importer import import_telegram_export
+    from app.importers.telegram_importer import import_telegram_export
 
     telegram_path = root / "synthetic-telegram.json"
     instagram_path = root / "synthetic-instagram.zip"

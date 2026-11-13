@@ -11,15 +11,12 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.import_utils import file_sha256, insert_message_batch
+from app.constants import MESSAGE_INSERT_BATCH_SIZE, VK_PLATFORM_ID
+from app.importers.import_utils import file_sha256, insert_message_batch
 from app.models import Account, CanonicalIdentity, Chat, Contact, ImportSession, Message
-from app.platforms import VK_PLATFORM_ID
-from app.vk_parser import ParsedVkChat, parse_vk_archive
+from app.parsers.vk_parser import ParsedVkChat, parse_vk_archive
 
 logger = logging.getLogger(__name__)
-MESSAGE_INSERT_BATCH_SIZE = 50
-
-
 def _get_or_create_account(
     session: Session,
     account_name: str,

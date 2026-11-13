@@ -9,7 +9,7 @@ from app.airflow_client import get_airflow_client
 from app.config import settings
 from app.db import get_db
 from app.models import UploadJob
-from app.platforms import PLATFORM_CONFIGS
+from app.constants import PLATFORM_CONFIGS
 from app.schemas.uploads import UploadJobResponse
 
 logger = logging.getLogger(__name__)

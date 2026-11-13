@@ -12,17 +12,17 @@ from app.schemas.analytics import (
     CommunicationTimelineSummary,
 )
 
-from .analytics_constants import ORDINARY_MESSAGE_TYPE
+from app.constants import ORDINARY_MESSAGE_TYPE
 
 
-def _utc_month_expression(db: Session, message_date: Any) -> Any:
-    if db.get_bind().dialect.name == "postgresql":
+def _utc_month_expression(dialect_name: str, message_date: Any) -> Any:
+    if dialect_name == "postgresql":
         return func.to_char(func.timezone("UTC", message_date), "YYYY-MM")
     return func.strftime("%Y-%m", message_date)
 
 
-def _utc_date_expression(db: Session, message_date: Any) -> Any:
-    if db.get_bind().dialect.name == "postgresql":
+def _utc_date_expression(dialect_name: str, message_date: Any) -> Any:
+    if dialect_name == "postgresql":
         return func.date(func.timezone("UTC", message_date))
     return func.date(message_date)
 
@@ -55,6 +55,7 @@ def build_communication_timeline_statistics(
             CanonicalIdentity.identity_group_id == identity_group_id
         )
     contact_pairs = None
+    relevant_chats = None
     if canonical_identity_id is not None:
         contact_pairs = (
             select(
@@ -110,6 +111,7 @@ def build_communication_timeline_statistics(
         )
     )
     if canonical_identity_id is not None:
+        assert relevant_chats is not None
         scoped_messages_statement = scoped_messages_statement.join(
             relevant_chats,
             relevant_chats.c.chat_id == Chat.id,
@@ -163,8 +165,12 @@ def build_communication_timeline_statistics(
         (contact_direction, 0),
         else_=1,
     )
-    utc_date = _utc_date_expression(db, scoped_messages.c.message_date)
-    month_expression = _utc_month_expression(db, scoped_messages.c.message_date)
+    dialect_name = db.get_bind().dialect.name
+    utc_date = _utc_date_expression(dialect_name, scoped_messages.c.message_date)
+    month_expression = _utc_month_expression(
+        dialect_name,
+        scoped_messages.c.message_date,
+    )
 
     summary_statement = select(
         func.count().label("ordinary_message_count"),
@@ -243,6 +249,7 @@ def build_communication_timeline_statistics(
         )
         source_contact_ids: list[int] = []
     else:
+        assert contact_pairs is not None
         source_rows = list(
             db.execute(
                 select(

@@ -3,7 +3,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from app.facebook_parser import parse_facebook_archive
+from app.parsers.facebook_parser import parse_facebook_archive
 
 
 def _write_conversation(archive, path, messages, **metadata):
@@ -326,7 +326,7 @@ def test_parse_facebook_archive_rejects_message_data_over_memory_limit(
             title="Synthetic conversation",
         )
 
-    monkeypatch.setattr("app.facebook_parser.MAX_MESSAGE_DATA_BYTES", 1)
+    monkeypatch.setattr("app.parsers.facebook_parser.MAX_MESSAGE_DATA_BYTES", 1)
 
     with pytest.raises(ValueError, match="message data exceeds"):
         parse_facebook_archive(archive_path)
@@ -342,7 +342,7 @@ def test_parse_facebook_archive_rejects_oversized_message_file(tmp_path, monkeyp
             title="Synthetic conversation",
         )
 
-    monkeypatch.setattr("app.facebook_parser.MAX_MESSAGE_FILE_BYTES", 1)
+    monkeypatch.setattr("app.parsers.facebook_parser.MAX_MESSAGE_FILE_BYTES", 1)
 
     with pytest.raises(ValueError, match="message JSON file exceeds"):
         parse_facebook_archive(archive_path)

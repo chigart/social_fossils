@@ -5,7 +5,7 @@ from sqlalchemy.sql.selectable import CTE, Select
 
 from app.models import Account, CanonicalIdentity, Chat, Contact, Message
 
-from .analytics_constants import ORDINARY_MESSAGE_TYPE
+from app.constants import ORDINARY_MESSAGE_TYPE
 
 
 def _utc_month_expression(db: Session):

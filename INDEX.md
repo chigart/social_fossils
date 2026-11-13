@@ -25,9 +25,10 @@ logic live in backend services so they remain separate from the DAG.
 | `backend/app/` | FastAPI application, database layer, SQLAlchemy models, parsers, importers, and analytics routes. |
 | `backend/app/main.py` | Creates the FastAPI app, middleware, and API routers. |
 | `backend/app/routers/` | HTTP endpoints for uploads, analytics, and cross-platform identity links. |
-| `backend/app/telegram_parser.py`, `backend/app/instagram_parser.py`, `backend/app/facebook_parser.py`, `backend/app/vk_parser.py` | Convert platform export formats into normalized parsed data. |
-| `backend/app/telegram_importer.py`, `backend/app/instagram_importer.py`, `backend/app/facebook_importer.py`, `backend/app/vk_importer.py` | Persist parsed exports and import-session results. `backend/app/platforms.py` maps supported platforms to importer and file types. |
-| `backend/app/analytics_*.py`, `backend/app/routers/analytics_*.py` | Shared analytics helpers and API endpoints; `backend/app/routers/analytics.py` composes the analytics router. |
+| `backend/app/parsers/` | Convert Telegram, Instagram, Facebook, and VK exports into normalized parsed data. |
+| `backend/app/importers/` | Persist parsed exports and import-session results; `import_utils.py` contains shared import helpers. |
+| `backend/app/constants.py` | Shared platform, parsing, import, and analytics constants, including platform upload configuration. |
+| `backend/app/routers/analytics_*.py`, `backend/app/schemas/analytics_*.py` | Analytics API endpoints and domain-specific response schemas; `backend/app/routers/analytics.py` composes the analytics router. |
 | `backend/app/models.py`, `backend/app/db.py`, `backend/app/config.py` | Database schema, SQLAlchemy setup, and application settings. |
 | `backend/alembic/` | Alembic migration environment and schema history; `backend/alembic.ini` configures migrations. |
 | `backend/tests/` | Backend tests for parsers, importers, API routes, analytics, and migrations. |
@@ -47,8 +48,9 @@ logic live in backend services so they remain separate from the DAG.
    directory, creates an `UploadJob`, and triggers the Airflow DAG through
    `backend/app/airflow_client.py`.
 3. `airflow/dags/import.py` validates the staged job and calls
-   `import_source_export` from `backend/app/telegram_importer.py`; platform
-   configuration routes to the Telegram, Instagram, Facebook, or VK importer.
+   `import_source_export` from `backend/app/importers/telegram_importer.py`;
+   platform configuration routes to the Telegram, Instagram, Facebook, or VK
+   importer.
 4. The importer uses a platform parser and SQLAlchemy models to store accounts,
    chats, contacts, messages, and import status in PostgreSQL.
 5. Analytics routers query that data; the frontend API client and dashboard

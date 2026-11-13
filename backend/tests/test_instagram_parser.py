@@ -3,7 +3,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from app.instagram_parser import parse_instagram_archive
+from app.parsers.instagram_parser import parse_instagram_archive
 
 
 def _write_conversation(archive: ZipFile, path: str, messages, **metadata) -> None:
