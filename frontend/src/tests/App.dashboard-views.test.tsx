@@ -48,6 +48,13 @@ describe("dashboard", () => {
     await user.click(overviewTab);
     await user.keyboard("{ArrowRight}");
 
+    expect(screen.getByRole("tab", { name: "Chats" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.hash).toBe("#chats");
+    await user.keyboard("{ArrowRight}");
+
     expect(
       screen.getByRole("tab", { name: "Conversation insights" }),
     ).toHaveAttribute(

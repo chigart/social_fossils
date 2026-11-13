@@ -16,6 +16,7 @@ import {
   tableRowClassName,
   tableRowTitleClassName,
   numericTableCellClassName,
+  navigationLinkClassName,
 } from "../constants";
 import type { Resource, SortDirection } from "../types";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
@@ -38,6 +39,7 @@ export function ChatsView({
   hasImportedAccounts,
   onRetry,
   onPageChange,
+  onOpenChatInsights,
 }: {
   chats: Resource<PaginatedItems<ChatStatistics>>;
   visibleChats: ChatStatistics[];
@@ -49,6 +51,7 @@ export function ChatsView({
   hasImportedAccounts: boolean;
   onRetry: () => void;
   onPageChange: (page: number) => void;
+  onOpenChatInsights: (chatId: number) => void;
 }) {
   return (
     <section
@@ -132,7 +135,13 @@ export function ChatsView({
                 {visibleChats.map((chat) => (
                   <tr className={tableRowClassName} key={chat.chat_id}>
                     <th className={tableRowTitleClassName} scope="row">
-                      {chat.title || "Untitled chat"}
+                      <button
+                        type="button"
+                        className={`${navigationLinkClassName} cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit]`}
+                        onClick={() => onOpenChatInsights(chat.chat_id)}
+                      >
+                        {chat.title || "Untitled chat"}
+                      </button>
                     </th>
                     <td className={tableCellClassName}>
                       <span className="inline-block whitespace-nowrap rounded bg-surface-tag px-[7px] py-1 text-label font-semibold text-ink-tag">

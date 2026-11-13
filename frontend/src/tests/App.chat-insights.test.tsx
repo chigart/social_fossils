@@ -38,6 +38,31 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
+  it("opens insights for the clicked chat title", async () => {
+    const user = userEvent.setup();
+    api.getChatInsights.mockResolvedValue({
+      chats: [{
+        ...chatInsights.chats[0],
+        chat_id: 2,
+        title: "Aurora group",
+      }],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Chats");
+
+    await user.click(screen.getByRole("button", { name: "Aurora group" }));
+
+    expect(
+      screen.getByRole("tab", { name: "Conversation insights" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(window.location.hash).toBe("#conversation-insights");
+    expect(api.getChatInsights).toHaveBeenLastCalledWith(2);
+    expect(
+      await screen.findByRole("button", { name: "Choose an insight chat" }),
+    ).toHaveTextContent("Aurora group");
+    expect(screen.getByText("Most popular words")).toBeInTheDocument();
+  });
+
   it("shows per-chat word, emoji, and observed reaction insights", async () => {
     const user = userEvent.setup();
     const chatWithSingleUseItems = {

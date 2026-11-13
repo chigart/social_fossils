@@ -59,8 +59,8 @@ export const PLATFORM_ACCOUNT_BADGE_CLASS_NAMES: Record<string, string> = {
 
 export const dashboardTabs = [
   { id: "overview", label: "Overview" },
-  { id: "conversation-insights", label: "Conversation insights" },
   { id: "chats", label: "Chats" },
+  { id: "conversation-insights", label: "Conversation insights" },
   { id: "contacts", label: "Contacts" },
   { id: "identity-links", label: "Identity links" },
   { id: "communication-balance", label: "Balance" },

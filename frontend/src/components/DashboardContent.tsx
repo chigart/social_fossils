@@ -23,6 +23,7 @@ export function DashboardContent({
   selectedInsightsChatId,
   onSelectedInsightsChatChange,
   selectedChat,
+  onOpenChatInsights,
   noImportedData,
 }: {
   dashboard: ReturnType<typeof useDashboardData>;
@@ -32,6 +33,7 @@ export function DashboardContent({
   selectedInsightsChatId: number | null;
   onSelectedInsightsChatChange: (chatId: number | null) => void;
   selectedChat: ChatInsightsStatistics | undefined;
+  onOpenChatInsights: (chatId: number) => void;
   noImportedData: boolean;
 }) {
   const {
@@ -206,6 +208,7 @@ export function DashboardContent({
                 setChatSearch("");
                 void loadChats(false, page, chatSort.key, chatSort.direction);
               }}
+              onOpenChatInsights={onOpenChatInsights}
             />
           )}
         </div>

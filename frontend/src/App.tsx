@@ -143,6 +143,11 @@ export default function App() {
   const noImportedData =
     overview.data?.total_imported_accounts === 0 &&
     overview.data.total_chats === 0;
+  const openChatInsights = (chatId: number) => {
+    setSelectedInsightsChatId(chatId);
+    setSelectedTab("conversation-insights");
+    window.history.pushState(null, "", "#conversation-insights");
+  };
 
   return (
     <DashboardContent
@@ -153,6 +158,7 @@ export default function App() {
       selectedInsightsChatId={selectedInsightsChatId}
       onSelectedInsightsChatChange={setSelectedInsightsChatId}
       selectedChat={selectedChat}
+      onOpenChatInsights={openChatInsights}
       noImportedData={noImportedData}
     />
   );
