@@ -264,6 +264,10 @@ def parse_instagram_archive(
             chat = chats_by_id.get(platform_chat_id)
             if chat is None:
                 title = payload.get("title")
+                parsed_chat_type = _chat_type(payload.get("participants"))
+                if parsed_chat_type == "private_group":
+                    correspondent_username = None
+                    correspondent_user_id = None
                 chat = ParsedInstagramChat(
                     platform_chat_id=platform_chat_id,
                     correspondent_platform_user_id=correspondent_user_id,
@@ -273,12 +277,17 @@ def parse_instagram_archive(
                         if isinstance(title, str) and title.strip()
                         else None
                     ),
-                    chat_type=_chat_type(payload.get("participants")),
+                    chat_type=parsed_chat_type,
                 )
                 chats_by_id[platform_chat_id] = chat
                 identical_message_counts[platform_chat_id] = Counter()
-            elif chat.chat_type == "personal_chat":
-                chat.chat_type = _chat_type(payload.get("participants"))
+            else:
+                parsed_chat_type = _chat_type(payload.get("participants"))
+                if parsed_chat_type != "unknown":
+                    chat.chat_type = parsed_chat_type
+                if chat.chat_type == "private_group":
+                    chat.correspondent_platform_user_id = None
+                    chat.correspondent_username = None
 
             occurrences = identical_message_counts[platform_chat_id]
             for raw_message in raw_messages:

@@ -105,7 +105,9 @@ class _ChatCounts:
     text_length: int = 0
     words: Counter[str] = field(default_factory=Counter)
     emojis: Counter[str] = field(default_factory=Counter)
-    senders: dict[str | None, _SenderCounts] = field(default_factory=dict)
+    senders: dict[str | tuple[str, str] | None, _SenderCounts] = field(
+        default_factory=dict
+    )
     reactions: Counter[str] = field(default_factory=Counter)
     reactors: dict[str, _ReactorCounts] = field(default_factory=dict)
     pairs: dict[tuple[str, str], _PairCounts] = field(default_factory=dict)
@@ -113,7 +115,7 @@ class _ChatCounts:
     message_type_counts: Counter[str] = field(default_factory=Counter)
     with_text_counts: Counter[str] = field(default_factory=Counter)
     message_type_senders: dict[
-        str, dict[str | None, _MessageTypeSenderCounts]
+        str, dict[str | tuple[str, str] | None, _MessageTypeSenderCounts]
     ] = field(default_factory=dict)
     messages: list[_ConversationMessage] = field(default_factory=list)
 

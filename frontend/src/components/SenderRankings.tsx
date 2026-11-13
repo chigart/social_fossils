@@ -22,7 +22,7 @@ export function SenderRankings({ chat }: { chat: ChatInsightsStatistics }) {
           return (
             <article
               className={chatInsightsCardClassName}
-              key={sender.sender_id ?? "unknown"}
+              key={sender.sender_id ?? sender.display_name}
             >
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <h4 className="m-0 text-ui font-semibold text-ink">

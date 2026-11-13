@@ -88,7 +88,13 @@ def _create_import_tables(engine) -> None:
         )
 
 
-def _write_archive(path, message_count: int | None = None) -> None:
+def _write_archive(
+    path,
+    message_count: int | None = None,
+    *,
+    participants=None,
+    thread_folder: str = "example_123",
+) -> None:
     messages = [
         {
             "sender_name": "Friend",
@@ -140,15 +146,47 @@ def _write_archive(path, message_count: int | None = None) -> None:
             ),
         )
         archive.writestr(
-            "your_instagram_activity/messages/inbox/example_123/message_1.json",
+            (
+                "your_instagram_activity/messages/inbox/"
+                f"{thread_folder}/message_1.json"
+            ),
             json.dumps(
                 {
                     "title": "Synthetic thread",
-                    "participants": [{"name": "Owner"}, {"name": "Friend"}],
+                    "participants": participants
+                    or [{"name": "Owner"}, {"name": "Friend"}],
                     "messages": messages,
                 }
             ),
         )
+
+
+def test_import_instagram_group_does_not_create_folder_as_a_contact(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'instagram-group.db'}")
+    _create_import_tables(engine)
+    archive_path = tmp_path / "instagram-group.zip"
+    _write_archive(
+        archive_path,
+        participants=[
+            {"name": "Synthetic Owner"},
+            {"name": "Friend"},
+            {"name": "Another friend"},
+        ],
+        thread_folder="tonsai_2244461946079010",
+    )
+
+    with Session(engine) as session:
+        instagram_importer.import_instagram_export(archive_path, session=session)
+
+        chat = session.scalar(select(Chat))
+        contact_ids = set(session.scalars(select(Contact.platform_user_id)))
+
+        assert chat is not None
+        assert chat.chat_type == "private_group"
+        assert contact_ids == {"owner-123", "123"}
+        assert "2244461946079010" not in contact_ids
+
+    engine.dispose()
 def test_import_instagram_archive_is_idempotent_and_preserves_provenance(tmp_path):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'instagram.db'}")
     _create_import_tables(engine)

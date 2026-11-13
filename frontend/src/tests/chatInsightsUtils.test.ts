@@ -89,6 +89,30 @@ describe("chat insights utilities", () => {
     expect(chart.pieBackground).toContain("conic-gradient(");
   });
 
+  it("uses sender names as chart keys when Instagram group sender IDs are missing", () => {
+    const senders = [
+      {
+        ...chatInsights.chats[0].senders[0],
+        sender_id: null,
+        display_name: "Kent Pat",
+        message_count: 5,
+      },
+      {
+        ...chatInsights.chats[0].senders[0],
+        sender_id: null,
+        display_name: "Anton Malkov",
+        message_count: 1,
+      },
+    ];
+
+    const chart = buildSenderShareChart(senders, 6, "messages");
+
+    expect(chart.slices.map(({ key }) => key)).toEqual([
+      "Kent Pat",
+      "Anton Malkov",
+    ]);
+  });
+
   it("uses the neutral chart background when the total is zero", () => {
     const chart = buildSenderShareChart(chatInsights.chats[0].senders, 0, "messages");
 

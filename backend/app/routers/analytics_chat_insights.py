@@ -186,6 +186,16 @@ def get_chat_insights(
             )
             chats[row.chat_id] = chat
 
+        sender_name = _clean_display_name(row.sender_name)
+        sender_key: str | tuple[str, str] | None = row.sender_id
+        if (
+            sender_key is None
+            and row.platform == "instagram"
+            and row.chat_type == "private_group"
+            and sender_name
+        ):
+            sender_key = ("instagram_group_name", sender_name.casefold())
+
         if row.message_id is None or row.message_type != ORDINARY_MESSAGE_TYPE:
             if row.message_id is None:
                 continue
@@ -196,24 +206,24 @@ def get_chat_insights(
             if text:
                 chat.with_text_counts[category] += 1
             type_senders = chat.message_type_senders.setdefault(category, {})
-            type_sender = type_senders.get(row.sender_id)
+            type_sender = type_senders.get(sender_key)
             if type_sender is None:
                 type_sender = _MessageTypeSenderCounts(
                     sender_id=row.sender_id,
                     name=(
-                        _clean_display_name(row.sender_name)
+                        sender_name
                         or row.sender_id
                         or "Unknown sender"
                     ),
                 )
-                type_senders[row.sender_id] = type_sender
+                type_senders[sender_key] = type_sender
             type_sender.count += 1
             chat.messages.append(
                 _ConversationMessage(
                     message_id=row.message_id,
                     source_message_id=row.source_message_id,
                     sender_id=row.sender_id,
-                    sender_name=_clean_display_name(row.sender_name),
+                    sender_name=sender_name,
                     message_type=message_type,
                     message_date=row.message_date,
                     reply_to_message_id=row.source_reply_id,
@@ -227,24 +237,24 @@ def get_chat_insights(
         if text:
             chat.with_text_counts[category] += 1
         type_senders = chat.message_type_senders.setdefault(category, {})
-        type_sender = type_senders.get(row.sender_id)
+        type_sender = type_senders.get(sender_key)
         if type_sender is None:
             type_sender = _MessageTypeSenderCounts(
                 sender_id=row.sender_id,
                 name=(
-                    _clean_display_name(row.sender_name)
+                    sender_name
                     or row.sender_id
                     or "Unknown sender"
                 ),
             )
-            type_senders[row.sender_id] = type_sender
+            type_senders[sender_key] = type_sender
         type_sender.count += 1
         chat.messages.append(
             _ConversationMessage(
                 message_id=row.message_id,
                 source_message_id=row.source_message_id,
                 sender_id=row.sender_id,
-                sender_name=_clean_display_name(row.sender_name),
+                sender_name=sender_name,
                 message_type=row.message_type,
                 message_date=row.message_date,
                 reply_to_message_id=row.source_reply_id,
@@ -252,15 +262,15 @@ def get_chat_insights(
         )
 
         sender_id = row.sender_id
-        sender = chat.senders.get(sender_id)
+        sender = chat.senders.get(sender_key)
         if sender is None:
             sender = _SenderCounts(
                 sender_id=sender_id,
-                name=_clean_display_name(row.sender_name),
+                name=sender_name,
             )
-            chat.senders[sender_id] = sender
+            chat.senders[sender_key] = sender
         elif not sender.name:
-            sender.name = _clean_display_name(row.sender_name)
+            sender.name = sender_name
 
         words = [word.casefold() for word in WORD_PATTERN.findall(text)]
         emojis = extract_emojis(text)

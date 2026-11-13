@@ -91,7 +91,7 @@ export function buildSenderShareChart(
     .reduce((sum, sender) => sum + valueForSender(sender, metric), 0);
   const sliceValues = [
     ...visibleSenders.map((sender, index) => ({
-      key: sender.sender_id ?? "unknown",
+      key: sender.sender_id ?? sender.display_name,
       label: sender.display_name,
       value: valueForSender(sender, metric),
       color: senderColors[index],
