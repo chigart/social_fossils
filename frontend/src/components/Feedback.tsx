@@ -130,7 +130,7 @@ export function PaginationControls({
   return (
     <nav
       aria-label={label}
-      className="mt-4 flex flex-wrap items-center justify-between gap-3 text-small text-ink-muted"
+      className="mt-4 mb-4 flex flex-wrap items-center justify-between gap-3 text-small text-ink-muted" 
     >
       <span>
         Page {pagination.page} of {pageCount} · {pagination.total} items
