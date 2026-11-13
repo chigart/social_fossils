@@ -84,6 +84,24 @@ def test_chat_and_contact_pages_are_bounded_and_keep_all_picker_options(db_sessi
     assert len(contact_page.options) == 3
 
 
+def test_contact_options_exclude_hidden_contacts_and_keep_original_indices(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_contact(db_session, 40, 1, "peer-1", "Ada")
+    add_contact(db_session, 50, 1, "peer-2", "Bea")
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, display_name) "
+            "VALUES (60, 1, 'telegram', NULL, '   ')"
+        )
+    )
+
+    result = get_contact_statistics(db_session)
+
+    assert [option.value for option in result.options] == ["1", "2"]
+    assert [option.label for option in result.options] == ["Ada", "Bea"]
+
+
 def test_account_without_messages_and_empty_chat_are_included(db_session):
     add_account(
         db_session,

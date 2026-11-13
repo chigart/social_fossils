@@ -552,7 +552,7 @@ def get_contact_statistics(
         options=[
             SearchOption(
                 value=str(index),
-                label=contact.display_name or "Unnamed contact",
+                label=(contact.display_name or "").strip() or "Unnamed contact",
                 platforms=contact.platforms,
                 search_terms=[
                     *contact.platform_user_ids,
@@ -560,5 +560,7 @@ def get_contact_statistics(
                 ],
             )
             for index, contact in enumerate(contacts)
+            if (contact.display_name and contact.display_name.strip())
+            or contact.platform_user_ids
         ],
     )
