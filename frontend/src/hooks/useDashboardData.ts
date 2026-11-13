@@ -10,6 +10,7 @@ import {
   getOverview,
   linkPlatformIdentities,
   unlinkPlatformIdentity,
+  type ChatScope,
   type ChatInsightsResponse,
   type ChatStatistics,
   type CommunicationBalanceClassification,
@@ -54,9 +55,11 @@ export function useDashboardData() {
   const chatInsightPages = useRef(new Map<string, ChatInsightsResponse>());
   const chatInsightsRequestId = useRef(0);
   const chatRequestId = useRef(0);
+  const activeChatScope = useRef<ChatScope | null>(null);
   const contactRequestId = useRef(0);
   const balanceRequestId = useRef(0);
   const forgottenContactRequestId = useRef(0);
+  const activeForgottenScope = useRef<"private" | "group" | null>(null);
   const timelineRequestId = useRef(0);
   const loadedResources = useRef(new Set<string>());
 
@@ -84,21 +87,30 @@ export function useDashboardData() {
     page = 1,
     sortBy: "title" | "total_messages" = "total_messages",
     sortDirection: "asc" | "desc" = "desc",
+    chatScope: ChatScope = "all",
   ) => {
     const requestId = ++chatRequestId.current;
-    const cacheKey = `${page}:${sortBy}:${sortDirection}`;
+    const cacheKey = `${chatScope}:${page}:${sortBy}:${sortDirection}`;
     const cachedPage = chatPages.current.get(cacheKey);
+    const scopeChanged = activeChatScope.current !== chatScope;
+    activeChatScope.current = chatScope;
     if (!force && cachedPage) {
       setChats({ data: cachedPage, error: null, loading: false });
       return;
     }
-    setChats((current) => ({ ...current, error: null, loading: true }));
+    setChats((current) => ({
+      ...current,
+      data: scopeChanged ? null : current.data,
+      error: null,
+      loading: true,
+    }));
     try {
       const data = await getChats(
         page,
         DEFAULT_PAGE_SIZE,
         sortBy,
         sortDirection,
+        chatScope,
       );
       chatPages.current.set(cacheKey, data);
       if (requestId !== chatRequestId.current) return;
@@ -240,10 +252,13 @@ export function useDashboardData() {
       | "display_name"
       | "days_since_last_communication" = "ranking_score",
     sortDirection: "asc" | "desc" = "desc",
+    scope: "private" | "group" = "private",
   ) => {
     const requestId = ++forgottenContactRequestId.current;
-    const cacheKey = `${page}:${sortBy}:${sortDirection}`;
+    const cacheKey = `${scope}:${page}:${sortBy}:${sortDirection}`;
     const cachedPage = forgottenContactPages.current.get(cacheKey);
+    const scopeChanged = activeForgottenScope.current !== scope;
+    activeForgottenScope.current = scope;
     if (!force && cachedPage) {
       setForgottenContacts({
         data: cachedPage,
@@ -254,6 +269,7 @@ export function useDashboardData() {
     }
     setForgottenContacts((current) => ({
       ...current,
+      data: scopeChanged ? null : current.data,
       error: null,
       loading: true,
     }));
@@ -263,6 +279,7 @@ export function useDashboardData() {
         DEFAULT_PAGE_SIZE,
         sortBy,
         sortDirection,
+        scope,
       );
       forgottenContactPages.current.set(cacheKey, data);
       if (requestId !== forgottenContactRequestId.current) return;

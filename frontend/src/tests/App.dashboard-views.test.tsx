@@ -2,6 +2,7 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,6 +40,32 @@ beforeEach(() => {
   resetDashboardApi(api);
 });
 
+it("requests DM and group-chat lists separately", async () => {
+  await renderLoadedDashboard();
+
+  await selectDashboardTab("DMs");
+  await waitFor(() =>
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "total_messages",
+      "desc",
+      "dm",
+    ),
+  );
+
+  await selectDashboardTab("Chats");
+  await waitFor(() =>
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "total_messages",
+      "desc",
+      "group",
+    ),
+  );
+});
+
 describe("dashboard", () => {
   it("supports keyboard tab navigation and keeps inactive sections hidden", async () => {
     const user = userEvent.setup();
@@ -46,6 +73,13 @@ describe("dashboard", () => {
 
     const overviewTab = screen.getByRole("tab", { name: "Overview" });
     await user.click(overviewTab);
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("tab", { name: "DMs" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.hash).toBe("#dms");
     await user.keyboard("{ArrowRight}");
 
     expect(screen.getByRole("tab", { name: "Chats" })).toHaveAttribute(
@@ -68,6 +102,62 @@ describe("dashboard", () => {
       "hidden",
     );
     expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
+  });
+
+  it("loads private Forgotten and group Interactions scopes separately", async () => {
+    api.getForgottenContacts.mockImplementation(
+      async (_page, _pageSize, _sortBy, _sortDirection, scope) =>
+        scope === "group"
+          ? {
+              ...forgotten,
+              summary: { ...forgotten.summary, eligible_contacts: 1 },
+              pagination: { ...forgotten.pagination, total: 1 },
+              contacts: [
+                {
+                  ...forgotten.contacts[0],
+                  display_name: "Group participant",
+                  interaction_chat_count: 4,
+                },
+              ],
+            }
+          : forgotten,
+    );
+    await renderLoadedDashboard();
+
+    await selectDashboardTab("Interactions");
+    const interactions = await screen.findByRole("region", {
+      name: "Group interactions",
+    });
+    expect(api.getForgottenContacts).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "ranking_score",
+      "desc",
+      "group",
+    );
+    expect(
+      within(interactions).getByRole("row", {
+        name: /Group participant.*4/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(interactions).getByRole("columnheader", { name: "Group chats" }),
+    ).toBeInTheDocument();
+
+    await selectDashboardTab("Forgotten");
+    const forgottenRegion = screen.getByRole("region", {
+      name: "Forgotten contacts",
+    });
+    expect(api.getForgottenContacts).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "ranking_score",
+      "desc",
+      "private",
+    );
+    expect(
+      within(forgottenRegion).getByRole("row", { name: /Mika/ }),
+    ).toBeInTheDocument();
   });
 
   it("shows the no-import guidance when analytics contain no imported data", async () => {
@@ -143,6 +233,9 @@ describe("dashboard", () => {
     await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
     const contactsTable = within(contactsRegion).getByRole("table");
+    const averyRow = within(contactsTable).getByRole("row", { name: /Avery/ });
+    expect(within(averyRow).getAllByRole("cell").map((cell) => cell.textContent))
+      .toEqual(["12345", "TG@anton", "8", "4", "12"]);
     const rowCount = within(contactsTable).getAllByRole("row").length;
     await user.click(within(contactsRegion).getByRole("button", { name: "Choose a contact" }));
     await user.type(
@@ -198,6 +291,7 @@ describe("dashboard", () => {
       50,
       "total_messages",
       "desc",
+      "group",
     );
   });
 

@@ -30,6 +30,7 @@ import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function ChatsView({
   chats,
+  chatScope,
   visibleChats,
   search,
   searchOptions,
@@ -42,6 +43,7 @@ export function ChatsView({
   onOpenChatInsights,
 }: {
   chats: Resource<PaginatedItems<ChatStatistics>>;
+  chatScope: "dm" | "group";
   visibleChats: ChatStatistics[];
   search: string;
   searchOptions: SearchPickerOption[];
@@ -53,16 +55,24 @@ export function ChatsView({
   onPageChange: (page: number) => void;
   onOpenChatInsights: (chatId: number) => void;
 }) {
+  const title = chatScope === "dm" ? "DMs" : "Chats";
+  const allLabel = chatScope === "dm" ? "All DMs" : "All chats";
+  const emptyTitle = chatScope === "dm" ? "No DMs available" : "No chats available";
   return (
     <section
-      id="chats"
+      id={chatScope === "dm" ? "dms" : "chats"}
       className={sectionClassName}
-      aria-labelledby="chats-title"
+      aria-labelledby={`${chatScope === "dm" ? "dms" : "chats"}-title`}
     >
       <div className={sectionHeaderClassName}>
         <div>
           <p className={sectionEyebrowClassName}>CONVERSATIONS</p>
-          <h2 id="chats-title" className={sectionTitleClassName}>Chats</h2>
+          <h2
+            id={`${chatScope === "dm" ? "dms" : "chats"}-title`}
+            className={sectionTitleClassName}
+          >
+            {title}
+          </h2>
         </div>
         {chats.data && chats.data.items.length > 0 && (
           <SearchPicker
@@ -70,9 +80,9 @@ export function ChatsView({
             value={search}
             options={searchOptions}
             onChange={onSearchChange}
-            placeholder="All chats"
-            searchPlaceholder="Search chat title or ID"
-            allLabel="All chats"
+            placeholder={allLabel}
+            searchPlaceholder={`Search ${chatScope === "dm" ? "DM" : "chat"} title or ID`}
+            allLabel={allLabel}
             emptyMessage="No chats match these filters."
           />
         )}
@@ -81,7 +91,7 @@ export function ChatsView({
       {chats.error && <SectionError message={chats.error} onRetry={onRetry} />}
       {chats.data && chats.data.items.length === 0 && (
         <div className={`${emptyStateClassName} p-[23px]`}>
-          <h3 className={emptyStateTitleClassName}>No chats available</h3>
+          <h3 className={emptyStateTitleClassName}>{emptyTitle}</h3>
           <p className={emptyStateTextClassName}>
             {hasImportedAccounts
               ? "No chats were included in the imported account data."

@@ -16,7 +16,6 @@ from app.constants import (
     FACEBOOK_USER_FOLDER_PATTERN as USER_FOLDER_PATTERN,
 )
 from app.parsers.parser_utils import (
-    chat_type as _chat_type,
     source_id as _source_id,
     stable_record_key as _stable_record_key,
     timestamp_from_message as _timestamp_from_message,
@@ -192,6 +191,72 @@ def _is_owner_participant(
     ) or (participant_id is not None and participant_id in owner_ids)
 
 
+def _chat_type(participants: Any, account_details: dict[str, str]) -> str:
+    if not isinstance(participants, list):
+        return "unknown"
+
+    identities: set[tuple[str, str] | tuple[str, int]] = set()
+    for index, participant in enumerate(participants):
+        if isinstance(participant, dict):
+            if _is_owner_participant(participant, account_details):
+                identities.add(("owner", ""))
+                continue
+            participant_id = _source_id(
+                participant.get("user_id", participant.get("id"))
+            )
+            if participant_id is not None:
+                identities.add(("id", participant_id))
+                continue
+            participant_name = _profile_value(participant.get("name"))
+            if participant_name is not None:
+                identities.add(("name", participant_name.casefold()))
+                continue
+        identities.add(("unknown", index))
+
+    if len(identities) < 2:
+        return "unknown"
+    return "private_group" if len(identities) > 2 else "personal_chat"
+
+
+def _message_participant_identities(
+    messages: list[Any],
+    account_details: dict[str, str],
+) -> set[tuple[str, str]]:
+    owner_names = {
+        value.casefold()
+        for value in (account_details.get("name"), account_details.get("username"))
+        if value
+    }
+    owner_ids = {
+        value
+        for value in (account_details.get("user_id"), account_details.get("username"))
+        if value
+    }
+    identities: set[tuple[str, str]] = set()
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        sender_id = _source_id(
+            message.get("sender_id", message.get("sender_user_id"))
+        )
+        sender_name = _profile_value(message.get("sender_name"))
+        is_outgoing = message.get("is_outgoing", message.get("is_sent_by_you"))
+        if (
+            is_outgoing is True
+            or (sender_id is not None and sender_id in owner_ids)
+            or (
+                sender_name is not None
+                and sender_name.casefold() in owner_names
+            )
+        ):
+            identities.add(("owner", ""))
+        elif sender_name is not None:
+            identities.add(("name", sender_name.casefold()))
+        elif sender_id is not None:
+            identities.add(("id", sender_id))
+    return identities
+
+
 def _profile_value(value: Any) -> str | None:
     if isinstance(value, dict):
         value = value.get("value", value.get("full_name"))
@@ -285,6 +350,7 @@ def parse_facebook_archive(
 
         chats_by_id: dict[str, ParsedFacebookChat] = {}
         identical_message_counts: dict[str, Counter[str]] = {}
+        observed_participants: dict[str, set[tuple[str, str]]] = {}
         for member, chat_id in message_files:
             if member.file_size > MAX_MESSAGE_FILE_BYTES:
                 raise ValueError(
@@ -315,7 +381,16 @@ def parse_facebook_archive(
                 raise ValueError("Facebook conversation must contain a messages list.")
 
             participants = payload.get("participants")
-            chat_type = _chat_type(participants)
+            chat_type = _chat_type(participants, account_details)
+            chat_participants = observed_participants.setdefault(chat_id, set())
+            chat_participants.update(
+                _message_participant_identities(raw_messages, account_details)
+            )
+            if chat_type == "unknown":
+                if len(chat_participants) == 2:
+                    chat_type = "personal_chat"
+                elif len(chat_participants) > 2:
+                    chat_type = "private_group"
             correspondent = (
                 next(
                     (
@@ -365,8 +440,12 @@ def parse_facebook_archive(
                 )
                 chats_by_id[chat_id] = chat
                 identical_message_counts[chat_id] = Counter()
-            elif chat.chat_type == "personal_chat":
-                chat.chat_type = chat_type
+            elif chat_type != "unknown":
+                chat.chat_type = (
+                    "private_group"
+                    if "private_group" in (chat.chat_type, chat_type)
+                    else "personal_chat"
+                )
 
             occurrences = identical_message_counts[chat_id]
             for raw_message in raw_messages:

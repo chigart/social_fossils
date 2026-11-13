@@ -37,6 +37,7 @@ import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
 
 export function ForgottenContactsView({
   forgotten,
+  scope,
   noImportedData,
   visibleContacts,
   search,
@@ -51,6 +52,7 @@ export function ForgottenContactsView({
   onPageChange,
 }: {
   forgotten: Resource<ForgottenContactsStatistics>;
+  scope: "private" | "group";
   noImportedData: boolean;
   visibleContacts: ForgottenContact[];
   search: string;
@@ -64,30 +66,38 @@ export function ForgottenContactsView({
   onRetry: () => void;
   onPageChange: (page: number) => void;
 }) {
+  const isGroupScope = scope === "group";
+  const title = isGroupScope ? "Group interactions" : "Forgotten contacts";
+  const entityName = isGroupScope ? "participants" : "contacts";
   return (
     <section
-      id="forgotten-contacts"
+      id={isGroupScope ? "group-interactions" : "forgotten-contacts"}
       className={sectionClassName}
-      aria-labelledby="forgotten-contacts-title"
+      aria-labelledby={isGroupScope ? "group-interactions-title" : "forgotten-contacts-title"}
     >
       <div className={sectionHeaderClassName}>
         <div>
-          <p className={sectionEyebrowClassName}>CONTACT HEALTH</p>
-          <h2 id="forgotten-contacts-title" className={sectionTitleClassName}>
-            Forgotten contacts
+          <p className={sectionEyebrowClassName}>
+            {isGroupScope ? "GROUP ACTIVITY" : "CONTACT HEALTH"}
+          </p>
+          <h2
+            id={isGroupScope ? "group-interactions-title" : "forgotten-contacts-title"}
+            className={sectionTitleClassName}
+          >
+            {title}
           </h2>
         </div>
         {forgotten.data && forgotten.data.contacts.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
             <SearchPicker
-              label="Choose a forgotten contact"
+              label={`Choose a ${isGroupScope ? "participant" : "forgotten contact"}`}
               value={search}
               options={searchOptions}
               onChange={onSearchChange}
-              placeholder="All contacts"
-              searchPlaceholder="Search contact name or ID"
-              allLabel="All contacts"
-              emptyMessage="No contacts match these filters."
+              placeholder={`All ${entityName}`}
+              searchPlaceholder={`Search ${isGroupScope ? "participant" : "contact"} name or ID`}
+              allLabel={`All ${entityName}`}
+              emptyMessage={`No ${entityName} match these filters.`}
             />
             <div className="flex items-center gap-3 text-small text-ink-muted">
               <SortButton
@@ -114,10 +124,12 @@ export function ForgottenContactsView({
       </div>
 
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
-        This view summarises dormant or declining conversations using historical
-        patterns and recent activity. The labels are descriptive heuristics and not
-        judgments about relationships. Decline percentages compare recent activity
-        with each contact’s historical baseline.
+        {isGroupScope
+          ? "This view aggregates each participant’s activity across all group chats and summarizes dormant or declining interactions using historical patterns and recent activity. "
+          : "This view summarizes dormant or declining one-to-one conversations using historical patterns and recent activity. "}
+        The labels are descriptive heuristics and not judgments about
+        relationships. Decline percentages compare recent activity with each{" "}
+        {isGroupScope ? "participant’s" : "contact’s"} historical baseline.
       </p>
       {forgotten.data && (
         <p className="mb-4 text-caption text-ink-muted">
@@ -131,25 +143,29 @@ export function ForgottenContactsView({
       {forgotten.error && <SectionError message={forgotten.error} onRetry={onRetry} />}
       {forgotten.data && (
         <>
-          <ForgottenSummaryCards data={forgotten.data} />
+          <ForgottenSummaryCards data={forgotten.data} scope={scope} />
           {noImportedData ? (
             <div className={`${emptyStateClassName} p-[23px]`}>
               <h3 className={emptyStateTitleClassName}>No imported data yet</h3>
               <p className={emptyStateTextClassName}>
-                Import a Telegram export to compare contact activity over time.
+                Import messaging data to compare activity over time.
               </p>
             </div>
           ) : forgotten.data.summary.eligible_contacts === 0 ? (
             <div className={`${emptyStateClassName} p-[23px]`}>
-              <h3 className={emptyStateTitleClassName}>No eligible contacts available</h3>
+              <h3 className={emptyStateTitleClassName}>
+                No eligible {isGroupScope ? "participants" : "contacts"} available
+              </h3>
               <p className={emptyStateTextClassName}>
-                No identifiable one-to-one contacts are available for comparison.
+                {isGroupScope
+                  ? "No identifiable participants in group chats are available for comparison."
+                  : "No identifiable one-to-one contacts are available for comparison."}
               </p>
             </div>
           ) : visibleContacts.length === 0 ? (
             <div className={`${emptyStateClassName} p-4`}>
               <p className={emptyStateTextClassName}>
-                No contacts match the selected search.
+                No {entityName} match the selected search.
               </p>
             </div>
           ) : (
@@ -158,22 +174,29 @@ export function ForgottenContactsView({
                 <p className="mb-3 rounded-md border border-border-input bg-surface-neutral px-3 py-2 text-small text-ink-neutral">
                   {formatNumber(forgotten.data.summary.insufficient_data_contacts)}{" "}
                   {forgotten.data.summary.insufficient_data_contacts === 1
-                    ? "contact has"
-                    : "contacts have"}{" "}
+                    ? `${isGroupScope ? "participant" : "contact"} has`
+                    : `${entityName} have`}{" "}
                   insufficient history or ambiguous message direction for a reliable
-                  classification. Check each contact’s evidence status.
+                  classification. Check each {isGroupScope ? "participant’s" : "contact’s"} evidence status.
                 </p>
               )}
               <PaginationControls
                 pagination={forgotten.data.pagination}
                 onPageChange={onPageChange}
-                label="Forgotten contacts pagination above table"
+                label={`${isGroupScope ? "Interactions" : "Forgotten contacts"} pagination above table`}
               />
               <div className="w-full overflow-x-auto rounded-lg border border-border-subtle">
               <table className={`${tableClassName} min-w-[1060px]`}>
                 <thead className={tableHeadClassName}>
                   <tr>
-                    <th className={tableHeaderClassName} scope="col">Contact</th>
+                    <th className={tableHeaderClassName} scope="col">
+                      {isGroupScope ? "Participant" : "Contact"}
+                    </th>
+                    {isGroupScope && (
+                      <th className={tableHeaderClassName} scope="col">
+                        Group chats
+                      </th>
+                    )}
                     <th className={tableHeaderClassName} scope="col">Last seen</th>
                     <th className={tableHeaderClassName} scope="col">Days</th>
                     <th className={tableHeaderClassName} scope="col">Recent</th>
@@ -188,6 +211,11 @@ export function ForgottenContactsView({
                       <th className={tableRowTitleClassName} scope="row">
                         {contact.display_name || "Unnamed contact"}
                       </th>
+                      {isGroupScope && (
+                        <td className={numericTableCellClassName}>
+                          {formatNumber(contact.interaction_chat_count)}
+                        </td>
+                      )}
                       <td className={tableCellClassName}>{formatDate(contact.last_message_at)}</td>
                       <td className={numericTableCellClassName}>
                         {contact.days_since_last_communication === null
@@ -232,7 +260,7 @@ export function ForgottenContactsView({
           <PaginationControls
             pagination={forgotten.data.pagination}
             onPageChange={onPageChange}
-            label="Forgotten contacts pagination below table"
+            label={`${isGroupScope ? "Interactions" : "Forgotten contacts"} pagination below table`}
           />
         </>
       )}

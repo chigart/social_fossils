@@ -48,7 +48,7 @@ describe("dashboard", () => {
       screen.queryByText(/All imported Telegram exports are included/),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(8);
+    expect(screen.getAllByRole("tab")).toHaveLength(10);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -164,6 +164,8 @@ describe("dashboard", () => {
         platform_user_ids: ["instagram-peer", "telegram-peer"],
         display_name: "Shared person",
         total_messages_sent: 17,
+        personal_chat_messages_sent: 10,
+        group_chat_messages_sent: 7,
         ordinary_messages_sent: 15,
       },
     ]));

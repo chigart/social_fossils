@@ -84,6 +84,68 @@ def test_parse_facebook_archive_reads_profile_and_normalizes_messages(tmp_path):
     ]
 
 
+def test_facebook_duplicate_owner_participant_does_not_make_a_dm_a_group(tmp_path):
+    archive_path = tmp_path / "facebook-duplicate-owner.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "your_facebook_activity/profile_information/profile_information.json",
+            json.dumps(
+                {
+                    "profile_v2": {
+                        "name": {"full_name": "Synthetic Owner"},
+                        "user_id": {"value": "owner-123"},
+                    }
+                }
+            ),
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_123/message_1.json",
+            [{"sender_name": "Synthetic Friend", "sender_id": "123"}],
+            title="Synthetic conversation",
+            participants=[
+                {"name": "Synthetic Owner", "user_id": "owner-123"},
+                {"name": "Synthetic Friend", "user_id": "123"},
+                {"name": "Synthetic Owner", "user_id": "owner-123"},
+            ],
+        )
+
+    parsed = parse_facebook_archive(archive_path)
+
+    assert parsed.chats[0].chat_type == "personal_chat"
+
+
+def test_facebook_infers_dm_from_two_senders_when_participants_are_missing(
+    tmp_path,
+):
+    archive_path = tmp_path / "facebook-missing-participants.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile_information/profile_information.json",
+            json.dumps(
+                {
+                    "profile_v2": {
+                        "name": {"full_name": "Synthetic Owner"},
+                        "user_id": {"value": "owner-123"},
+                    }
+                }
+            ),
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_123/message_1.json",
+            [
+                {"sender_name": "Synthetic Owner", "sender_id": "owner-123"},
+                {"sender_name": "Synthetic Friend", "sender_id": "friend-123"},
+            ],
+            title="Synthetic conversation",
+        )
+
+    parsed = parse_facebook_archive(archive_path)
+
+    assert parsed.chats[0].chat_type == "personal_chat"
+
+
 def test_facebook_uses_numeric_thread_folder_id_for_personal_chat(tmp_path):
     archive_path = tmp_path / "facebook-short-id.zip"
     long_user_id = "name:" + "a" * 64

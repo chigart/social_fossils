@@ -91,12 +91,60 @@ export function DashboardContent({
       balance: balance.data,
       forgotten: forgottenContacts.data,
     });
+  const renderChatsView = (chatScope: "dm" | "group") => (
+    <ChatsView
+      chats={chats}
+      chatScope={chatScope}
+      visibleChats={visibleChats}
+      search={chatSearch}
+      searchOptions={chatOptions}
+      onSearchChange={(value) => {
+        setChatSearch(value);
+        void loadChats(
+          false,
+          pageForSearchOption(
+            value,
+            chats.data?.options,
+            chats.data?.pagination.page_size,
+          ),
+          chatSort.key,
+          chatSort.direction,
+          chatScope,
+        );
+      }}
+      sort={chatSort}
+      onSort={(key) => {
+        setChatSearch("");
+        const next = {
+          key,
+          direction:
+            chatSort.key === key && chatSort.direction === "asc"
+              ? "desc"
+              : "asc",
+        } as const;
+        changeChatSort(key);
+        void loadChats(false, 1, next.key, next.direction, chatScope);
+      }}
+      hasImportedAccounts={
+        (overview.data?.total_imported_accounts ?? 0) > 0
+      }
+      onRetry={() =>
+        void loadChats(true, 1, chatSort.key, chatSort.direction, chatScope)
+      }
+      onPageChange={(page) => {
+        setChatSearch("");
+        void loadChats(false, page, chatSort.key, chatSort.direction, chatScope);
+      }}
+      onOpenChatInsights={onOpenChatInsights}
+    />
+  );
   const changeForgottenSort = (
     sortKey:
       | "ranking_score"
       | "display_name"
       | "days_since_last_communication",
     defaultDirection: "asc" | "desc",
+    scope: "private" | "group",
   ) => {
     const direction =
       forgottenSortKey === sortKey
@@ -107,8 +155,66 @@ export function DashboardContent({
     setForgottenSearch("");
     setForgottenSortKey(sortKey);
     setForgottenSortDirection(direction);
-    void loadForgottenContacts(false, 1, sortKey, direction);
+    void loadForgottenContacts(false, 1, sortKey, direction, scope);
   };
+  const renderForgottenView = (scope: "private" | "group") => (
+    <ForgottenContactsView
+      forgotten={forgottenContacts}
+      scope={scope}
+      noImportedData={noImportedData}
+      visibleContacts={visibleForgottenContacts}
+      search={forgottenSearch}
+      searchOptions={forgottenOptions}
+      onSearchChange={(value) => {
+        setForgottenSearch(value);
+        void loadForgottenContacts(
+          false,
+          pageForSearchOption(
+            value,
+            forgottenContacts.data?.options,
+            forgottenContacts.data?.pagination.page_size,
+          ),
+          forgottenSortKey,
+          forgottenSortDirection,
+          scope,
+        );
+      }}
+      sortKey={forgottenSortKey}
+      sortDirection={forgottenSortDirection}
+      onSortByRank={() =>
+        changeForgottenSort("ranking_score", "desc", scope)
+      }
+      onSortByLastSeen={() =>
+        changeForgottenSort(
+          "days_since_last_communication",
+          "desc",
+          scope,
+        )
+      }
+      onSortByName={() =>
+        changeForgottenSort("display_name", "asc", scope)
+      }
+      onRetry={() =>
+        void loadForgottenContacts(
+          true,
+          1,
+          forgottenSortKey,
+          forgottenSortDirection,
+          scope,
+        )
+      }
+      onPageChange={(page) => {
+        setForgottenSearch("");
+        void loadForgottenContacts(
+          false,
+          page,
+          forgottenSortKey,
+          forgottenSortDirection,
+          scope,
+        );
+      }}
+    />
+  );
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -159,6 +265,16 @@ export function DashboardContent({
           )}
         </div>
         <div
+          id="dms-panel"
+          role="tabpanel"
+          aria-labelledby="dms-tab"
+          aria-label="DMs"
+          tabIndex={0}
+          hidden={selectedTab !== "dms"}
+        >
+          {selectedTab === "dms" && renderChatsView("dm")}
+        </div>
+        <div
           id="chats-panel"
           role="tabpanel"
           aria-labelledby="chats-tab"
@@ -166,51 +282,7 @@ export function DashboardContent({
           tabIndex={0}
           hidden={selectedTab !== "chats"}
         >
-          {selectedTab === "chats" && (
-            <ChatsView
-              chats={chats}
-              visibleChats={visibleChats}
-              search={chatSearch}
-              searchOptions={chatOptions}
-              onSearchChange={(value) => {
-                setChatSearch(value);
-                void loadChats(
-                  false,
-                  pageForSearchOption(
-                    value,
-                    chats.data?.options,
-                    chats.data?.pagination.page_size,
-                  ),
-                  chatSort.key,
-                  chatSort.direction,
-                );
-              }}
-              sort={chatSort}
-              onSort={(key) => {
-                setChatSearch("");
-                const next = {
-                  key,
-                  direction:
-                    chatSort.key === key && chatSort.direction === "asc"
-                      ? "desc"
-                      : "asc",
-                } as const;
-                changeChatSort(key);
-                void loadChats(false, 1, next.key, next.direction);
-              }}
-              hasImportedAccounts={
-                (overview.data?.total_imported_accounts ?? 0) > 0
-              }
-              onRetry={() =>
-                void loadChats(true, 1, chatSort.key, chatSort.direction)
-              }
-              onPageChange={(page) => {
-                setChatSearch("");
-                void loadChats(false, page, chatSort.key, chatSort.direction);
-              }}
-              onOpenChatInsights={onOpenChatInsights}
-            />
-          )}
+          {selectedTab === "chats" && renderChatsView("group")}
         </div>
         <div
           id="uploads-panel"
@@ -378,58 +450,18 @@ export function DashboardContent({
           hidden={selectedTab !== "forgotten-contacts"}
         >
           {selectedTab === "forgotten-contacts" && (
-            <ForgottenContactsView
-              forgotten={forgottenContacts}
-              noImportedData={noImportedData}
-              visibleContacts={visibleForgottenContacts}
-              search={forgottenSearch}
-              searchOptions={forgottenOptions}
-              onSearchChange={(value) => {
-                setForgottenSearch(value);
-                void loadForgottenContacts(
-                  false,
-                  pageForSearchOption(
-                    value,
-                    forgottenContacts.data?.options,
-                    forgottenContacts.data?.pagination.page_size,
-                  ),
-                  forgottenSortKey,
-                  forgottenSortDirection,
-                );
-              }}
-              sortKey={forgottenSortKey}
-              sortDirection={forgottenSortDirection}
-              onSortByRank={() =>
-                changeForgottenSort("ranking_score", "desc")
-              }
-              onSortByLastSeen={() =>
-                changeForgottenSort(
-                  "days_since_last_communication",
-                  "desc",
-                )
-              }
-              onSortByName={() =>
-                changeForgottenSort("display_name", "asc")
-              }
-              onRetry={() =>
-                void loadForgottenContacts(
-                  true,
-                  1,
-                  forgottenSortKey,
-                  forgottenSortDirection,
-                )
-              }
-              onPageChange={(page) => {
-                setForgottenSearch("");
-                void loadForgottenContacts(
-                  false,
-                  page,
-                  forgottenSortKey,
-                  forgottenSortDirection,
-                );
-              }}
-            />
+            renderForgottenView("private")
           )}
+        </div>
+        <div
+          id="interactions-panel"
+          role="tabpanel"
+          aria-labelledby="interactions-tab"
+          aria-label="Interactions"
+          tabIndex={0}
+          hidden={selectedTab !== "interactions"}
+        >
+          {selectedTab === "interactions" && renderForgottenView("group")}
         </div>
         <footer className="px-0 pt-[6px] pb-3 text-center text-caption text-ink-footer">
           Statistics are aggregated from imported data. Message contents are not

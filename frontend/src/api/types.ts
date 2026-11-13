@@ -161,6 +161,8 @@ export type ChatStatistics = {
   distinct_identified_senders: number;
 };
 
+export type ChatScope = "dm" | "group" | "all";
+
 export type ContactStatistics = {
   platforms: string[];
   account_id: number | null;
@@ -173,6 +175,8 @@ export type ContactStatistics = {
   platform_user_ids: string[];
   display_name: string | null;
   total_messages_sent: number;
+  personal_chat_messages_sent: number;
+  group_chat_messages_sent: number;
   ordinary_messages_sent: number;
   service_events_attributed: number;
 };
@@ -316,6 +320,7 @@ export type ForgottenContact = {
   source_contact_ids: number[];
   platform_user_ids: string[];
   display_name: string | null;
+  interaction_chat_count: number;
   first_message_at: string | null;
   last_message_at: string | null;
   days_since_last_communication: number | null;

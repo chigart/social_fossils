@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Literal
+
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql.selectable import CTE, Select
@@ -21,6 +23,7 @@ def build_forgotten_contact_queries(
     db: Session,
     recent_start: datetime,
     current_time: datetime,
+    scope: Literal["private", "group"] = "private",
 ) -> tuple[CTE, Select, Select]:
     owner_account = aliased(Account)
     owner_sender = (
@@ -42,7 +45,11 @@ def build_forgotten_contact_queries(
         .where(
             Chat.platform == Account.platform,
             Message.platform == Chat.platform,
-            Chat.chat_type == "personal_chat",
+            (
+                Chat.chat_type == "personal_chat"
+                if scope == "private"
+                else Chat.chat_type != "personal_chat"
+            ),
             Account.platform_user_id.is_not(None),
             Message.message_type == ORDINARY_MESSAGE_TYPE,
             Message.sender_id.is_not(None),
@@ -51,13 +58,7 @@ def build_forgotten_contact_queries(
         .distinct()
     )
     peers = peers_statement.cte("forgotten_contact_peers")
-    single_peer_chats = (
-        select(peers.c.chat_id)
-        .group_by(peers.c.chat_id)
-        .having(func.count() == 1)
-        .cte("forgotten_single_peer_chats")
-    )
-    eligible_pairs = (
+    eligible_pairs_statement = (
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
@@ -99,7 +100,6 @@ def build_forgotten_contact_queries(
             Chat.platform == Account.platform,
         )
         .join(peers, peers.c.chat_id == Chat.id)
-        .join(single_peer_chats, single_peer_chats.c.chat_id == Chat.id)
         .join(
             Contact,
             and_(
@@ -112,8 +112,19 @@ def build_forgotten_contact_queries(
             CanonicalIdentity,
             CanonicalIdentity.id == Contact.canonical_identity_id,
         )
-        .cte("forgotten_eligible_pairs")
     )
+    if scope == "private":
+        single_peer_chats = (
+            select(peers.c.chat_id)
+            .group_by(peers.c.chat_id)
+            .having(func.count() == 1)
+            .cte("forgotten_single_peer_chats")
+        )
+        eligible_pairs_statement = eligible_pairs_statement.join(
+            single_peer_chats,
+            single_peer_chats.c.chat_id == Chat.id,
+        )
+    eligible_pairs = eligible_pairs_statement.cte("forgotten_eligible_pairs")
 
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
     owner_direction = (
@@ -130,6 +141,13 @@ def build_forgotten_contact_queries(
         Message.is_outgoing.is_(False),
     )
     known_direction = or_(owner_direction, contact_direction)
+    relevant_sender = or_(
+        owner_direction,
+        and_(
+            Message.platform == eligible_pairs.c.platform,
+            Message.sender_id == eligible_pairs.c.contact_platform_user_id,
+        ),
+    )
     historical_message = and_(
         Message.message_date < recent_start,
         Message.message_date <= current_time,
@@ -160,6 +178,9 @@ def build_forgotten_contact_queries(
             eligible_pairs.c.identity_source_account_id,
             func.min(eligible_pairs.c.contact_id).label("contact_id"),
             func.min(eligible_pairs.c.display_name).label("display_name"),
+            func.count(
+                func.distinct(eligible_pairs.c.chat_id)
+            ).label("interaction_chat_count"),
             count_when(and_(ordinary_message, owner_direction)).label(
                 "owner_message_count"
             ),
@@ -187,7 +208,16 @@ def build_forgotten_contact_queries(
             func.count(
                 case((and_(ordinary_message, known_direction), Message.id))
             ).label("known_message_count"),
-            func.count(case((ordinary_message, Message.id))).label(
+            func.count(
+                case(
+                    (
+                        and_(ordinary_message, relevant_sender)
+                        if scope == "group"
+                        else ordinary_message,
+                        Message.id,
+                    )
+                )
+            ).label(
                 "ordinary_message_count"
             ),
             func.min(

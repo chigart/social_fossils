@@ -84,6 +84,23 @@ def test_chat_and_contact_pages_are_bounded_and_keep_all_picker_options(db_sessi
     assert len(contact_page.options) == 3
 
 
+def test_chat_scope_filters_pages_and_options(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "dm-10", "First DM", chat_type="personal_chat")
+    add_chat(db_session, 20, 1, "group-20", "Group", chat_type="private_group")
+    add_chat(db_session, 30, 1, "other-30", "Other", chat_type="channel")
+
+    dm_page = get_chat_statistics(db_session, chat_scope="dm")
+    group_page = get_chat_statistics(db_session, chat_scope="group", page_size=1)
+
+    assert [chat.title for chat in dm_page.items] == ["First DM"]
+    assert dm_page.pagination.total == 1
+    assert [option.label for option in dm_page.options] == ["First DM"]
+    assert [chat.title for chat in group_page.items] == ["Group"]
+    assert group_page.pagination.total == 2
+    assert [option.label for option in group_page.options] == ["Group", "Other"]
+
+
 def test_contact_options_exclude_hidden_contacts_and_keep_original_indices(db_session):
     add_account(db_session, 1, "user-owner")
     add_contact(db_session, 40, 1, "peer-1", "Ada")
@@ -151,8 +168,12 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
 
 def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     add_account(db_session, 1, "user-owner")
-    add_chat(db_session, 10, 1, "telegram-chat-10", "Active")
-    add_chat(db_session, 11, 1, "telegram-chat-11", "Second")
+    add_chat(
+        db_session, 10, 1, "telegram-chat-10", "Active", chat_type="personal_chat"
+    )
+    add_chat(
+        db_session, 11, 1, "telegram-chat-11", "Second", chat_type="private_group"
+    )
     add_chat(db_session, 12, 1, "telegram-chat-12", "Empty")
     db_session.execute(
         text(
@@ -220,11 +241,17 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     assert "contact_id" not in by_sender["user-alex"].model_dump()
     assert by_sender["user-alex"].source_contact_ids == [20]
     assert by_sender["user-alex"].total_messages_sent == 2
+    assert by_sender["user-alex"].personal_chat_messages_sent == 1
+    assert by_sender["user-alex"].group_chat_messages_sent == 1
     assert by_sender["user-alex"].ordinary_messages_sent == 2
     assert by_sender["user-sam"].service_events_attributed == 1
+    assert by_sender["user-sam"].personal_chat_messages_sent == 1
+    assert by_sender["user-sam"].group_chat_messages_sent == 0
     assert by_sender["user-unlinked"].source_contact_ids == []
     assert by_sender["user-unlinked"].service_events_attributed == 1
     assert by_sender[None].total_messages_sent == 1
+    assert by_sender[None].personal_chat_messages_sent == 1
+    assert by_sender[None].group_chat_messages_sent == 0
 
 def test_nonstandard_message_type_only_contributes_to_total(db_session):
     add_account(db_session, 1, "user-owner")

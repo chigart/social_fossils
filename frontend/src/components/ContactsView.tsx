@@ -118,6 +118,8 @@ export function ContactsView({
                   <th className={tableHeaderClassName} scope="col">Contact / sender</th>
                   <th className={tableHeaderClassName} scope="col">User ID</th>
                   <th className={tableHeaderClassName} scope="col">Accounts</th>
+                  <th className={tableHeaderClassName} scope="col">DM messages</th>
+                  <th className={tableHeaderClassName} scope="col">Group messages</th>
                   <th className={tableHeaderClassName} scope="col">
                     <SortButton
                       label="Messages sent"
@@ -154,6 +156,12 @@ export function ContactsView({
                       ) : (
                         "—"
                       )}
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(contact.personal_chat_messages_sent)}
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(contact.group_chat_messages_sent)}
                     </td>
                     <td className={numericTableCellClassName}>
                       {formatNumber(contact.total_messages_sent)}

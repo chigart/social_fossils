@@ -119,14 +119,16 @@ export function ForgottenMonthlyActivity({
 
 export function ForgottenSummaryCards({
   data,
+  scope,
 }: {
   data: ForgottenContactsStatistics;
+  scope: "private" | "group";
 }) {
   const { summary } = data;
   return (
     <div className="mb-5 grid grid-cols-5 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
       <MetricCard
-        label="Eligible contacts"
+        label={scope === "group" ? "Eligible participants" : "Eligible contacts"}
         value={formatNumber(summary.eligible_contacts)}
       />
       <MetricCard

@@ -6,6 +6,7 @@ from analytics_test_helpers import (
     FORGOTTEN_AS_OF,
     HISTORICAL_ACTIVITY_DATES,
     add_account,
+    add_chat,
     add_contact,
     add_exchanges,
     add_forgotten_candidate,
@@ -355,6 +356,82 @@ def test_forgotten_contacts_excludes_groups_and_multiple_peer_chats(db_session):
 
     assert result.summary.eligible_contacts == 0
     assert result.contacts == []
+
+
+def test_group_interactions_aggregate_participant_across_group_chats(db_session):
+    add_account(db_session, 1, "user-owner")
+    first_chat, peer_id = add_forgotten_candidate(
+        db_session,
+        20,
+        chat_type="private_group",
+    )
+    add_exchanges(
+        db_session,
+        20,
+        first_chat,
+        peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+    )
+    add_message(
+        db_session,
+        9_000_001,
+        first_chat,
+        "message",
+        "user-unlisted-group-participant",
+        message_date=HISTORICAL_ACTIVITY_DATES[0],
+        is_outgoing=False,
+    )
+
+    second_chat = 10_021
+    add_chat(
+        db_session,
+        second_chat,
+        1,
+        "telegram-group-10021",
+        chat_type="private_supergroup",
+    )
+    add_exchanges(
+        db_session,
+        20,
+        second_chat,
+        peer_id,
+        HISTORICAL_ACTIVITY_DATES,
+        exchanges_per_day=1,
+        message_id_start=500,
+    )
+    add_exchanges(
+        db_session,
+        20,
+        second_chat,
+        peer_id,
+        [
+            FORGOTTEN_AS_OF - timedelta(days=80),
+            FORGOTTEN_AS_OF - timedelta(days=60),
+            FORGOTTEN_AS_OF - timedelta(days=30),
+        ],
+        exchanges_per_day=1,
+        message_id_start=600,
+    )
+
+    result = build_forgotten_contacts_statistics(
+        db_session,
+        scope="group",
+        as_of=FORGOTTEN_AS_OF,
+    )
+
+    assert result.summary.eligible_contacts == 1
+    assert len(result.contacts) == 1
+    interaction = result.contacts[0]
+    assert interaction.contact_id == 20
+    assert interaction.source_contact_ids == [20]
+    assert interaction.historical_message_count == 60
+    assert interaction.recent_message_count == 6
+    assert interaction.total_message_count == 66
+    assert interaction.owner_message_count == 33
+    assert interaction.contact_message_count == 33
+    assert interaction.excluded_ambiguous_message_count == 0
+    assert interaction.evidence_status == "reliable_baseline"
+
 
 def test_forgotten_contacts_combines_owner_aliases_and_canonical_contacts(db_session):
     add_account(db_session, 1, "user-owner-one", username="anton")

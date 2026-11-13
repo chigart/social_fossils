@@ -50,6 +50,7 @@ def _as_utc(value: datetime) -> datetime:
 def build_forgotten_contacts_statistics(
     db: Session,
     *,
+    scope: Literal["private", "group"] = "private",
     sort_by: Literal[
         "ranking_score",
         "display_name",
@@ -97,6 +98,7 @@ def build_forgotten_contacts_statistics(
             db,
             recent_start,
             current_time,
+            scope,
         )
     )
 
@@ -358,6 +360,7 @@ def build_forgotten_contacts_statistics(
                 source_contact_ids=sorted(source_contact_ids),
                 platform_user_ids=sorted(platform_user_ids),
                 display_name=row.display_name,
+                interaction_chat_count=int(row.interaction_chat_count),
                 first_message_at=first_message_at,
                 last_message_at=last_message_at,
                 days_since_last_communication=days_since_last,
@@ -511,15 +514,17 @@ def build_forgotten_contacts_statistics(
 @router.get(
     "/forgotten-contacts",
     response_model=ForgottenContactsStatistics,
-    summary="Rank private contacts by inactivity and declining communication",
+    summary="Rank private contacts or group participants by activity",
     description=(
-        "Uses only ordinary messages in 'personal_chat' chats with a known "
-        "owner alias, exactly one non-owner sender ID, and a matching "
-        "canonical contact identity. Owner IDs across every imported source "
+        "Uses only ordinary messages with a known owner alias and a matching "
+        "canonical contact identity. The private scope includes 'personal_chat' "
+        "chats with exactly one non-owner sender ID. The group scope includes "
+        "all non-one-to-one chats and aggregates each participant across those "
+        "chats. Owner IDs across every imported source "
         "account are treated as aliases and override source-local outgoing "
         "flags. Contact sender ID and is_outgoing must agree; contacts "
         "with any ambiguous ordinary-message direction are returned without a "
-        "score. Group chats are excluded. The recent window is the trailing "
+        "score. The recent window is the trailing "
         "90 days ending at request time. Historical evidence requires at least "
         "20 known-direction messages, five active UTC days, and three active "
         "pre-window months; a score additionally requires a 90-day historical "
@@ -536,6 +541,7 @@ def build_forgotten_contacts_statistics(
 )
 def get_forgotten_contacts(
     db: Session = Depends(get_db),
+    scope: Literal["private", "group"] = Query(default="private"),
     sort_by: Literal[
         "ranking_score",
         "display_name",
@@ -550,6 +556,7 @@ def get_forgotten_contacts(
 ) -> ForgottenContactsStatistics:
     return build_forgotten_contacts_statistics(
         db,
+        scope=scope,
         sort_by=sort_by,
         sort_direction=sort_direction,
         limit=page_size,

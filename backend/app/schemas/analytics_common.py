@@ -140,10 +140,15 @@ class ContactStatistics(BaseModel):
     total_messages_sent: int = Field(
         description="Incoming message rows attributed to this sender, all types."
     )
+    personal_chat_messages_sent: int = Field(
+        description="Incoming message rows attributed to this sender in one-to-one chats."
+    )
+    group_chat_messages_sent: int = Field(
+        description="Incoming message rows attributed to this sender in non-one-to-one chats."
+    )
     ordinary_messages_sent: int = Field(
         description="Attributed rows whose message_type is exactly 'message'."
     )
     service_events_attributed: int = Field(
         description="Attributed rows whose message_type is exactly 'service'."
     )
-

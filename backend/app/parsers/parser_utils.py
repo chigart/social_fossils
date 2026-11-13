@@ -43,6 +43,27 @@ def stable_record_key(
 
 
 def chat_type(participants: Any) -> str:
-    if not isinstance(participants, list) or len(participants) < 2:
+    if not isinstance(participants, list):
         return "unknown"
-    return "private_group" if len(participants) > 2 else "personal_chat"
+    identities: set[tuple[str, str] | tuple[str, int]] = set()
+    for index, participant in enumerate(participants):
+        if isinstance(participant, dict):
+            user_id = source_id(
+                participant.get(
+                    "user_id",
+                    participant.get("id", participant.get("participant_id")),
+                )
+            )
+            if user_id is not None:
+                identities.add(("id", user_id))
+                continue
+            name = participant.get("name")
+            if isinstance(name, dict):
+                name = name.get("value", name.get("full_name"))
+            if isinstance(name, str) and name.strip():
+                identities.add(("name", name.strip().casefold()))
+                continue
+        identities.add(("unknown", index))
+    if len(identities) < 2:
+        return "unknown"
+    return "private_group" if len(identities) > 2 else "personal_chat"

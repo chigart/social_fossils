@@ -140,6 +140,49 @@ def test_parse_instagram_archive_reads_account_identity_from_profile_data(tmp_pa
     assert parsed.owner_platform_user_id == "user-123"
 
 
+def test_parse_instagram_archive_excludes_owner_only_conversations(tmp_path):
+    archive_path = tmp_path / "instagram-owner-thread.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "personal_information/personal_information.json",
+            json.dumps(
+                {
+                    "profile_user": [
+                        {
+                            "string_map_data": {
+                                "Username": {"value": "owner_handle"},
+                                "Name": {"value": "Owner"},
+                                "User ID": {"value": "owner-123"},
+                            }
+                        }
+                    ]
+                }
+            ),
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/owner_123/message_1.json",
+            [{"sender_id": "owner-123", "sender_name": "Owner"}],
+            title="Owner",
+            participants=[{"name": "Owner", "user_id": "owner-123"}],
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_456/message_1.json",
+            [{"sender_id": "friend-456", "sender_name": "Friend"}],
+            title="Friend",
+            participants=[
+                {"name": "Owner", "user_id": "owner-123"},
+                {"name": "Friend", "user_id": "friend-456"},
+            ],
+        )
+
+    parsed = parse_instagram_archive(archive_path)
+
+    assert [chat.title for chat in parsed.chats] == ["Friend"]
+    assert parsed.owner_only_chat_ids == {"123"}
+
+
 def test_parse_instagram_archive_repairs_latin1_mojibake(tmp_path):
     archive_path = tmp_path / "mojibake.zip"
     mojibake_name = "Ð\u0098Ð²Ð°Ð½ Ð§Ð¾Ð¿Ð¾Ð±ÐµÑ\u0081Ð¾Ð²"

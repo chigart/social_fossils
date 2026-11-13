@@ -429,6 +429,8 @@ describe("dashboard", () => {
         ],
         source_contact_ids: [11, 22],
         total_messages_sent: 24,
+        personal_chat_messages_sent: 18,
+        group_chat_messages_sent: 6,
         ordinary_messages_sent: 22,
         service_events_attributed: 2,
       },

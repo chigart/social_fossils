@@ -37,6 +37,7 @@ class ParsedInstagramExport:
     account_username: str | None
     owner_platform_user_id: str | None
     chats: list[ParsedInstagramChat] = field(default_factory=list)
+    owner_only_chat_ids: set[str] = field(default_factory=set)
 
 
 def _message_files(archive: zipfile.ZipFile) -> list[tuple[zipfile.ZipInfo, str]]:
@@ -232,6 +233,18 @@ def parse_instagram_archive(
 
         chats_by_id: dict[str, ParsedInstagramChat] = {}
         identical_message_counts: dict[str, Counter[str]] = {}
+        owner_participant_chat_ids: set[str] = set()
+        non_owner_participant_chat_ids: set[str] = set()
+        owner_names = {
+            value.strip().casefold()
+            for value in (account_details.get("name"), account_details.get("username"))
+            if value
+        }
+        owner_ids = {
+            value
+            for value in (account_details.get("user_id"), account_details.get("username"))
+            if value
+        }
         for member, chat_id in message_files:
             if member.file_size > MAX_MESSAGE_FILE_BYTES:
                 raise ValueError("Instagram message JSON file exceeds the supported size.")
@@ -257,10 +270,41 @@ def parse_instagram_archive(
             raw_messages = payload.get("messages")
             if not isinstance(raw_messages, list):
                 raise ValueError("Instagram conversation must contain a messages list.")
-
             platform_chat_id, correspondent_username, correspondent_user_id = (
                 _folder_identity(chat_id)
             )
+            if platform_chat_id in owner_ids:
+                owner_participant_chat_ids.add(platform_chat_id)
+            participants = payload.get("participants")
+            if isinstance(participants, list) and participants:
+                participant_is_owner = []
+                for participant in participants:
+                    if not isinstance(participant, dict):
+                        participant_is_owner.append(False)
+                        continue
+                    participant_id = _source_id(
+                        participant.get(
+                            "user_id",
+                            participant.get("id", participant.get("participant_id")),
+                        )
+                    )
+                    participant_name = participant.get("name")
+                    if isinstance(participant_name, dict):
+                        participant_name = participant_name.get(
+                            "value",
+                            participant_name.get("full_name"),
+                        )
+                    participant_is_owner.append(
+                        (participant_id is not None and participant_id in owner_ids)
+                        or (
+                            isinstance(participant_name, str)
+                            and participant_name.strip().casefold() in owner_names
+                        )
+                    )
+                if all(participant_is_owner):
+                    owner_participant_chat_ids.add(platform_chat_id)
+                else:
+                    non_owner_participant_chat_ids.add(platform_chat_id)
             chat = chats_by_id.get(platform_chat_id)
             if chat is None:
                 title = payload.get("title")
@@ -307,6 +351,7 @@ def parse_instagram_archive(
 
     account_username = account_details.get("username")
     owner_platform_user_id = account_details.get("user_id") or account_username
+    owner_only_chat_ids = owner_participant_chat_ids - non_owner_participant_chat_ids
     account_name = (
         account_details.get("name")
         or account_username
@@ -321,5 +366,10 @@ def parse_instagram_archive(
         account_name=account_name,
         account_username=account_username,
         owner_platform_user_id=owner_platform_user_id,
-        chats=list(chats_by_id.values()),
+        chats=[
+            chat
+            for chat in chats_by_id.values()
+            if chat.platform_chat_id not in owner_only_chat_ids
+        ],
+        owner_only_chat_ids=owner_only_chat_ids,
     )

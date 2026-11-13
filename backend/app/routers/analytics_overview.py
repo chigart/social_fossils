@@ -38,6 +38,8 @@ class ContactGroup(TypedDict):
     source_accounts: set[tuple[str, str]]
     source_contact_ids: set[int]
     total_messages_sent: int
+    personal_chat_messages_sent: int
+    group_chat_messages_sent: int
     ordinary_messages_sent: int
     service_events_attributed: int
 
@@ -120,9 +122,11 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
     response_model=PaginatedItems[ChatStatistics],
     summary="Get communication statistics by chat",
     description=(
-        "Returns a page of chats, including chats with no messages. The response "
+        "Returns a page of chats, including chats with no messages. The optional "
+        "chat_scope filter selects 'dm' (chat_type='personal_chat'), 'group' "
+        "(any other chat type), or 'all'. The response "
         "also includes the total row count and lightweight options for searching "
-        "all chats. Counts include "
+        "the selected scope. Counts include "
         "all stored message types; ordinary and service counts use the exact "
         "'message' and 'service' values. Distinct senders count non-null "
         "platform-scoped sender IDs as normalized and stored by the importer."
@@ -134,7 +138,20 @@ def get_chat_statistics(
     page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
     sort_by: Literal["title", "total_messages"] = "total_messages",
     sort_direction: Literal["asc", "desc"] = "desc",
+    chat_scope: Literal["dm", "group", "all"] = "all",
 ) -> PaginatedItems[ChatStatistics]:
+    chat_scope_filter = (
+        Chat.chat_type == "personal_chat"
+        if chat_scope == "dm"
+        else Chat.chat_type != "personal_chat"
+        if chat_scope == "group"
+        else None
+    )
+    chat_filters = [
+        Chat.platform == Account.platform,
+    ]
+    if chat_scope_filter is not None:
+        chat_filters.append(chat_scope_filter)
     statement = (
         select(
             Chat.id.label("chat_id"),
@@ -178,7 +195,7 @@ def get_chat_statistics(
             Chat.chat_type,
         )
         .where(
-            Chat.platform == Account.platform,
+            *chat_filters,
         )
     )
     primary_sort = (
@@ -213,7 +230,7 @@ def get_chat_statistics(
         db.scalar(
             select(func.count(Chat.id))
             .join(Account, Account.id == Chat.account_id)
-            .where(Chat.platform == Account.platform)
+            .where(*chat_filters)
         )
         or 0
     )
@@ -236,7 +253,7 @@ def get_chat_statistics(
                 Message.platform == Chat.platform,
             ),
         )
-        .where(Chat.platform == Account.platform)
+        .where(*chat_filters)
         .group_by(
             Chat.id,
             Chat.platform,
@@ -282,7 +299,8 @@ def get_chat_statistics(
         "unidentified senders remain account-local. Contacts without messages "
         "are included with zero counts. Incoming counts require reliable "
         "incoming direction; ordinary and service counts are reported "
-        "separately."
+        "separately. Total sender-attributed messages are also split between "
+        "personal_chat and non-one-to-one chats."
     ),
 )
 def get_contact_statistics(
@@ -308,6 +326,16 @@ def get_contact_statistics(
             Message.sender_contact_id.label("sender_contact_id"),
             Message.sender_id.label("platform_user_id"),
             func.count(Message.id).label("total_messages_sent"),
+            func.count(
+                case(
+                    (Chat.chat_type == "personal_chat", Message.id),
+                )
+            ).label("personal_chat_messages_sent"),
+            func.count(
+                case(
+                    (Chat.chat_type != "personal_chat", Message.id),
+                )
+            ).label("group_chat_messages_sent"),
             func.count(
                 case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
             ).label("ordinary_messages_sent"),
@@ -344,6 +372,8 @@ def get_contact_statistics(
             message_groups.c.platform_user_id,
             Contact.display_name.label("display_name"),
             message_groups.c.total_messages_sent,
+            message_groups.c.personal_chat_messages_sent,
+            message_groups.c.group_chat_messages_sent,
             message_groups.c.ordinary_messages_sent,
             message_groups.c.service_events_attributed,
         )
@@ -412,6 +442,8 @@ def get_contact_statistics(
                 "source_accounts": set(),
                 "source_contact_ids": set(),
                 "total_messages_sent": 0,
+                "personal_chat_messages_sent": 0,
+                "group_chat_messages_sent": 0,
                 "ordinary_messages_sent": 0,
                 "service_events_attributed": 0,
             },
@@ -454,6 +486,10 @@ def get_contact_statistics(
             display_name=row.display_name,
         )
         group["total_messages_sent"] += int(row.total_messages_sent)
+        group["personal_chat_messages_sent"] += int(
+            row.personal_chat_messages_sent
+        )
+        group["group_chat_messages_sent"] += int(row.group_chat_messages_sent)
         group["ordinary_messages_sent"] += int(row.ordinary_messages_sent)
         group["service_events_attributed"] += int(row.service_events_attributed)
 
@@ -525,6 +561,8 @@ def get_contact_statistics(
                 platform_user_ids=sorted(group["platform_user_ids"]),
                 display_name=display_names[0] if display_names else None,
                 total_messages_sent=group["total_messages_sent"],
+                personal_chat_messages_sent=group["personal_chat_messages_sent"],
+                group_chat_messages_sent=group["group_chat_messages_sent"],
                 ordinary_messages_sent=group["ordinary_messages_sent"],
                 service_events_attributed=group["service_events_attributed"],
             )

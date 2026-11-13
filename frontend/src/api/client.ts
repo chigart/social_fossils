@@ -1,6 +1,7 @@
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import type {
   ChatInsightsResponse,
+  ChatScope,
   ChatStatistics,
   CommunicationBalanceClassification,
   CommunicationBalanceStatistics,
@@ -238,11 +239,13 @@ export const getChats = (
   pageSize = DEFAULT_PAGE_SIZE,
   sortBy: "title" | "total_messages" = "total_messages",
   sortDirection: "asc" | "desc" = "desc",
+  chatScope: ChatScope = "all",
 ) =>
   getJson<PaginatedItems<ChatStatistics>>(
     `/api/analytics/chats${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
+      ...(chatScope === "all" ? {} : { chat_scope: chatScope }),
     })}`,
   );
 
@@ -300,11 +303,13 @@ export const getForgottenContacts = (
     | "display_name"
     | "days_since_last_communication" = "ranking_score",
   sortDirection: "asc" | "desc" = "desc",
+  scope: "private" | "group" = "private",
 ) =>
   getJson<ForgottenContactsStatistics>(
     `/api/analytics/forgotten-contacts${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
+      scope,
     })}`,
   );
 

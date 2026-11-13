@@ -65,6 +65,9 @@ class ForgottenContact(BaseModel):
         description="Known platform user IDs represented by this contact group."
     )
     display_name: str | None
+    interaction_chat_count: int = Field(
+        description="Distinct chats contributing to this interaction history."
+    )
     first_message_at: datetime | None
     last_message_at: datetime | None
     days_since_last_communication: int | None
@@ -114,7 +117,7 @@ class ForgottenContactsSummary(BaseModel):
         description="Number of imported source accounts included in the combined scope."
     )
     eligible_contacts: int = Field(
-        description="Identifiable contacts in private chats with exactly one non-owner sender."
+        description="Identifiable one-to-one contacts in private scope, or group participants in group scope."
     )
     meaningful_historical_contacts: int
     currently_inactive_contacts: int
@@ -235,5 +238,3 @@ class CommunicationBalanceStatistics(BaseModel):
     contacts: list[CommunicationBalanceContact]
     pagination: PaginationMetadata
     options: list[SearchOption] = Field(default_factory=list)
-
-

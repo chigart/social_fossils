@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DashboardContent } from "./components/DashboardContent";
 import {
   getSelectedChatInsights,
@@ -33,6 +33,8 @@ export default function App() {
   const [selectedTab, setSelectedTab] = useState<DashboardTab>(() =>
     dashboardTabFromHash(window.location.hash),
   );
+  const lastChatScope = useRef<"dm" | "group" | null>(null);
+  const lastForgottenScope = useRef<"private" | "group" | null>(null);
   const filters = useDashboardFilters({
     chats,
     contacts,
@@ -48,6 +50,17 @@ export default function App() {
     forgottenSortKey,
     forgottenSortDirection,
   } = filters;
+  const changeTab = useCallback((tab: DashboardTab) => {
+    const switchingChatScope =
+      (selectedTab === "dms" && tab === "chats") ||
+      (selectedTab === "chats" && tab === "dms");
+    const switchingForgottenScope =
+      (selectedTab === "forgotten-contacts" && tab === "interactions") ||
+      (selectedTab === "interactions" && tab === "forgotten-contacts");
+    if (switchingChatScope) filters.setChatSearch("");
+    if (switchingForgottenScope) filters.setForgottenSearch("");
+    setSelectedTab(tab);
+  }, [filters.setChatSearch, filters.setForgottenSearch, selectedTab]);
   const sortedInsightChats = useMemo(
     () => sortChatInsightsChats(chatInsights.data?.chats ?? []),
     [chatInsights.data],
@@ -59,14 +72,14 @@ export default function App() {
 
   useEffect(() => {
     const syncSelectedTab = () =>
-      setSelectedTab(dashboardTabFromHash(window.location.hash));
+      changeTab(dashboardTabFromHash(window.location.hash));
     window.addEventListener("hashchange", syncSelectedTab);
     window.addEventListener("popstate", syncSelectedTab);
     return () => {
       window.removeEventListener("hashchange", syncSelectedTab);
       window.removeEventListener("popstate", syncSelectedTab);
     };
-  }, []);
+  }, [changeTab]);
 
   useEffect(() => {
     switch (selectedTab) {
@@ -77,14 +90,24 @@ export default function App() {
         void loadOverview();
         void loadChatInsights(false, selectedInsightsChatId ?? undefined);
         break;
+      case "dms":
       case "chats":
         void loadOverview();
+        {
+          const scope = selectedTab === "dms" ? "dm" : "group";
+          const page =
+            lastChatScope.current === scope
+              ? chats.data?.pagination.page ?? 1
+              : 1;
+          lastChatScope.current = scope;
         void loadChats(
           false,
-          chats.data?.pagination.page ?? 1,
+          page,
           chatSort.key,
           chatSort.direction,
+          scope,
         );
+        }
         break;
       case "contacts":
         void loadOverview();
@@ -107,13 +130,23 @@ export default function App() {
         );
         break;
       case "forgotten-contacts":
+      case "interactions":
         void loadOverview();
+        {
+          const scope = selectedTab === "interactions" ? "group" : "private";
+          const page =
+            lastForgottenScope.current === scope
+              ? forgottenContacts.data?.pagination.page ?? 1
+              : 1;
+          lastForgottenScope.current = scope;
         void loadForgottenContacts(
           false,
-          forgottenContacts.data?.pagination.page ?? 1,
+          page,
           forgottenSortKey,
           forgottenSortDirection,
+          scope,
         );
+        }
         break;
       case "uploads":
         break;
@@ -154,7 +187,7 @@ export default function App() {
       dashboard={dashboard}
       filters={filters}
       selectedTab={selectedTab}
-      onTabSelect={setSelectedTab}
+      onTabSelect={changeTab}
       selectedInsightsChatId={selectedInsightsChatId}
       onSelectedInsightsChatChange={setSelectedInsightsChatId}
       selectedChat={selectedChat}
