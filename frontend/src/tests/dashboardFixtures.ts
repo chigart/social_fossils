@@ -52,6 +52,8 @@ export const timeline: CommunicationTimelineStatistics = {
     {
       month: "2023-01",
       ordinary_message_count: 4,
+      text_length: 20,
+      owner_text_length: 8,
       owner_message_count: 2,
       contact_message_count: 1,
       unknown_direction_message_count: 1,
@@ -63,6 +65,8 @@ export const timeline: CommunicationTimelineStatistics = {
     {
       month: "2023-02",
       ordinary_message_count: 0,
+      text_length: 0,
+      owner_text_length: 0,
       owner_message_count: 0,
       contact_message_count: 0,
       unknown_direction_message_count: 0,
@@ -74,6 +78,8 @@ export const timeline: CommunicationTimelineStatistics = {
     {
       month: "2023-03",
       ordinary_message_count: 2,
+      text_length: 10,
+      owner_text_length: 4,
       owner_message_count: 1,
       contact_message_count: 1,
       unknown_direction_message_count: 0,
@@ -85,6 +91,8 @@ export const timeline: CommunicationTimelineStatistics = {
     {
       month: "2023-04",
       ordinary_message_count: 7,
+      text_length: 42,
+      owner_text_length: 20,
       owner_message_count: 2,
       contact_message_count: 2,
       unknown_direction_message_count: 3,

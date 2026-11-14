@@ -7,6 +7,12 @@ class CommunicationTimelineMonth(BaseModel):
     ordinary_message_count: int = Field(
         description="Dated ordinary messages in this UTC month."
     )
+    text_length: int = Field(
+        description="Characters in dated ordinary messages in this UTC month."
+    )
+    owner_text_length: int = Field(
+        description="Characters in dated ordinary messages reliably identified as owner-sent."
+    )
     owner_message_count: int = Field(
         description="Dated ordinary messages reliably identified as owner-sent."
     )

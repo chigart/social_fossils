@@ -1,4 +1,5 @@
 import type { OverviewStatistics } from "../api";
+import type { CommunicationTimelineStatistics } from "../api";
 import { formatDate, formatNumber } from "../utils/format";
 import {
   numericTableCellClassName,
@@ -16,15 +17,20 @@ import {
 } from "../constants";
 import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
+import { CommunicationTimelineView } from "./CommunicationTimelineView";
 
 export function OverviewView({
   overview,
+  timeline,
   noImportedData,
   onRetry,
+  onRetryTimeline,
 }: {
   overview: Resource<OverviewStatistics>;
+  timeline: Resource<CommunicationTimelineStatistics>;
   noImportedData: boolean | undefined;
   onRetry: () => void;
+  onRetryTimeline: () => void;
 }) {
   return (
     <section
@@ -78,6 +84,17 @@ export function OverviewView({
             <MetricCard
               label="Latest message"
               value={formatDate(overview.data.latest_message_timestamp)}
+            />
+          </div>
+          <div className="mt-6">
+            <CommunicationTimelineView
+              timeline={timeline}
+              onRetry={onRetryTimeline}
+              senders={[]}
+              selectedSenderId={null}
+              onSenderChange={() => {}}
+              showSenderSelector={false}
+              period="year"
             />
           </div>
           <div className="mt-6">

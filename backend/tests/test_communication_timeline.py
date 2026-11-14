@@ -35,6 +35,7 @@ def test_owner_timeline_uses_utc_months_fills_gaps_and_reports_uncertainty(
         "user-owner-one",
         datetime(2024, 12, 31, 23, 0, tzinfo=timezone.utc),
         is_outgoing=True,
+        text_content="owner",
     )
     db_session.execute(
         text(
@@ -50,6 +51,7 @@ def test_owner_timeline_uses_utc_months_fills_gaps_and_reports_uncertainty(
         "user-peer",
         datetime(2025, 1, 2, 12, tzinfo=timezone.utc),
         is_outgoing=False,
+        text_content="hi!",
     )
     add_message(
         db_session,
@@ -59,6 +61,7 @@ def test_owner_timeline_uses_utc_months_fills_gaps_and_reports_uncertainty(
         "user-owner-one",
         datetime(2025, 3, 1, 9, tzinfo=timezone.utc),
         is_outgoing=False,
+        text_content="second",
     )
     add_message(
         db_session,
@@ -122,6 +125,8 @@ def test_owner_timeline_uses_utc_months_fills_gaps_and_reports_uncertainty(
          month.contact_message_count, month.unknown_direction_message_count)
         for month in result.months
     ] == [(2, 1, 1, 0), (0, 0, 0, 0), (3, 1, 0, 2)]
+    assert [month.text_length for month in result.months] == [8, 0, 6]
+    assert [month.owner_text_length for month in result.months] == [5, 0, 6]
     assert result.months[0].active_days == 2
     assert result.months[2].owner_active_days == 1
     assert result.months[2].unknown_direction_active_days == 2

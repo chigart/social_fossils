@@ -390,6 +390,8 @@ export type ForgottenContactsStatistics = {
 export type CommunicationTimelineMonth = {
   month: string;
   ordinary_message_count: number;
+  text_length: number;
+  owner_text_length: number;
   owner_message_count: number;
   contact_message_count: number;
   unknown_direction_message_count: number;

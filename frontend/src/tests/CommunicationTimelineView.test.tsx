@@ -10,6 +10,7 @@ function renderTimeline(
     error: null,
     loading: false,
   },
+  period: "month" | "year" = "month",
 ) {
   const onRetry = vi.fn();
   render(
@@ -20,6 +21,7 @@ function renderTimeline(
       selectedSenderId={null}
       onSenderChange={vi.fn()}
       showSenderSelector={false}
+      period={period}
     />,
   );
   return { onRetry };
@@ -88,10 +90,88 @@ describe("CommunicationTimelineView", () => {
     const chart = screen.getByRole("img", {
       name: "Monthly ordinary message activity",
     });
+    const firstBar = chart.querySelector("rect[data-month='2023-01']");
+    expect(Number(firstBar?.getAttribute("x"))).toBeGreaterThan(48);
     expect(chart.querySelector('[fill="var(--color-brand-strong)"]')).toBeTruthy();
     expect(
       chart.querySelector('[fill="var(--color-timeline-contact)"]'),
     ).toBeTruthy();
+  });
+
+  it("shows annual message counts and relative average message size", () => {
+    const laterYear = {
+      ...timeline.months[0],
+      month: "2024-01",
+      ordinary_message_count: 2,
+      text_length: 20,
+    };
+    renderTimeline(
+      {
+        data: {
+          ...timeline,
+          summary: { ...timeline.summary, scope: "owner" },
+          months: [...timeline.months, laterYear],
+        },
+        error: null,
+        loading: false,
+      },
+      "year",
+    );
+
+    expect(
+      screen.getByRole("img", {
+        name: "Yearly total and owner messages, with owner average message size",
+      })
+        .querySelector('[data-month="2023"][data-count="13"]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "Yearly total and owner messages, with owner average message size",
+      }).querySelector('[data-year="2023"][data-year-total-count="13"]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "Yearly total and owner messages, with owner average message size",
+      }).querySelector('[data-year="2023"][data-year-owner-count="5"]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "Yearly total and owner messages, with owner average message size",
+      }).querySelector('[data-year="2023"][data-average-size]'),
+    ).toBeTruthy();
+    const yearlyChart = screen.getByRole("img", {
+      name: "Yearly total and owner messages, with owner average message size",
+    });
+    const higherAverageMarker = yearlyChart.querySelector(
+      '[data-year="2023"][data-average-size]',
+    );
+    const lowerAverageMarker = yearlyChart.querySelector(
+      '[data-year="2024"][data-average-size]',
+    );
+    expect(higherAverageMarker?.getAttribute("data-average-size")).toBe("6.4");
+    expect(Number(higherAverageMarker?.getAttribute("cy"))).toBe(15);
+    expect(
+      Number(lowerAverageMarker?.getAttribute("cy")),
+    ).toBeGreaterThan(Number(higherAverageMarker?.getAttribute("cy")));
+    expect(Number(lowerAverageMarker?.getAttribute("cy"))).toBeCloseTo(76.875);
+    expect(
+      yearlyChart.querySelector('[data-series="average-message-size"]'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("img", { name: "Yearly text volume in characters" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("list", {
+        name: "Yearly communication activity details",
+      }),
+    ).toHaveTextContent(
+      "2023: 13 ordinary messages total, 5 from owner, 32 owner characters",
+    );
+    expect(
+      screen.getByText(
+        "Owner average message size (characters; highest year at top)",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("reports loading and error states and calls retry", () => {

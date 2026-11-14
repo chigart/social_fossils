@@ -79,12 +79,14 @@ export function DashboardContent({
   };
   const {
     overview,
+    communicationTimeline,
     chats,
     contacts,
     balance,
     forgottenContacts,
     identityLinks,
     loadOverview,
+    loadCommunicationTimeline,
     loadContacts,
     loadBalance,
     loadForgottenContacts,
@@ -286,8 +288,10 @@ export function DashboardContent({
           {selectedTab === "overview" && (
             <OverviewView
               overview={overview}
+              timeline={communicationTimeline}
               noImportedData={noImportedData}
               onRetry={() => void loadOverview(true)}
+              onRetryTimeline={() => void loadCommunicationTimeline()}
             />
           )}
         </div>

@@ -38,6 +38,21 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
+  it("shows a yearly owner timeline on the Overview tab", async () => {
+    await renderLoadedDashboard();
+
+    expect(
+      await screen.findByRole("img", {
+        name: "Yearly total and owner messages, with owner average message size",
+      }),
+    ).toBeInTheDocument();
+    expect(api.getCommunicationTimeline).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      undefined,
+    );
+  });
+
   it("uses one chat selection for the timeline and insight details", async () => {
     const user = userEvent.setup();
     const firstChat = {
@@ -70,6 +85,7 @@ describe("dashboard", () => {
       .mockResolvedValueOnce({ chats: [firstChat], options: insightOptions })
       .mockResolvedValueOnce({ chats: [secondChat], options: insightOptions });
     api.getCommunicationTimeline
+      .mockResolvedValueOnce(timeline)
       .mockResolvedValueOnce(timeline)
       .mockResolvedValueOnce({
         ...timeline,
@@ -146,7 +162,7 @@ describe("dashboard", () => {
     expect(api.getChatInsights).toHaveBeenNthCalledWith(1, undefined);
     expect(api.getChatInsights).toHaveBeenNthCalledWith(2, 11);
     expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(
-      2,
+      3,
       undefined,
       11,
       undefined,
@@ -208,6 +224,7 @@ describe("dashboard", () => {
   it("shows timeline retry errors and undated-only empty states", async () => {
     const user = userEvent.setup();
     api.getCommunicationTimeline
+      .mockResolvedValueOnce(timeline)
       .mockRejectedValueOnce(new Error("Timeline unavailable."))
       .mockResolvedValueOnce({
         ...timeline,

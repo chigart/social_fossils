@@ -5,7 +5,7 @@ from datetime import timedelta
 
 DEFAULT_PAGE_SIZE = 50
 # Increment when analytics response semantics change without a database revision change.
-ANALYTICS_CACHE_VERSION = 3
+ANALYTICS_CACHE_VERSION = 5
 
 TELEGRAM_PLATFORM_ID = "telegram"
 INSTAGRAM_PLATFORM_ID = "instagram"

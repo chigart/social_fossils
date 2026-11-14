@@ -18,9 +18,10 @@ router = APIRouter()
 @router.get(
     "/communication-timeline",
     response_model=CommunicationTimelineStatistics,
-    summary="Get monthly communication activity",
+    summary="Get monthly communication activity and text volume",
     description=(
-        "Returns ordinary-message counts in UTC calendar months across the "
+        "Returns ordinary-message counts and text character totals in UTC "
+        "calendar months across the "
         "combined imported owner history. Pass canonical_identity_id to limit "
         "the timeline to that identity in one-to-one personal chats; explicitly "
         "linked platform identities share one timeline. Pass chat_id to limit "
@@ -33,8 +34,9 @@ router = APIRouter()
         "is reported as unknown. Service events are excluded. Messages without "
         "timestamps are reported in the summary only and are not assigned to "
         "a month. Month rows between the earliest and latest dated ordinary "
-        "messages are returned, including zero-activity months. Source account "
-        "and contact identifiers identify the data provenance."
+        "messages are returned, including zero-activity months. Text volume "
+        "counts characters in dated ordinary messages. Source account and "
+        "contact identifiers identify the data provenance."
     ),
 )
 def get_communication_timeline(

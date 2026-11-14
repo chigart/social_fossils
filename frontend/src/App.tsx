@@ -21,6 +21,7 @@ export default function App() {
     balance,
     forgottenContacts,
     loadOverview,
+    loadCommunicationTimeline,
     loadChats,
     loadChatInsights,
     loadContacts,
@@ -102,6 +103,7 @@ export default function App() {
     switch (selectedTab) {
       case "overview":
         void loadOverview();
+        void loadCommunicationTimeline();
         break;
       case "conversation-insights":
         void loadOverview();
@@ -177,6 +179,7 @@ export default function App() {
     selectedTab,
     selectedInsightsChatId,
     loadOverview,
+    loadCommunicationTimeline,
     loadChats,
     loadChatInsights,
     loadContacts,

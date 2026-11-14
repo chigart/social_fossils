@@ -207,6 +207,20 @@ def build_communication_timeline_statistics(
         select(
             month_expression.label("month"),
             func.count().label("ordinary_message_count"),
+            func.sum(
+                func.length(func.coalesce(scoped_messages.c.text_content, ""))
+            ).label("text_length"),
+            func.sum(
+                case(
+                    (
+                        owner_direction,
+                        func.length(
+                            func.coalesce(scoped_messages.c.text_content, "")
+                        ),
+                    ),
+                    else_=0,
+                )
+            ).label("owner_text_length"),
             _count_when(owner_direction).label("owner_message_count"),
             _count_when(contact_direction).label("contact_message_count"),
             _count_when(unknown_direction == 1).label(
@@ -289,6 +303,8 @@ def build_communication_timeline_statistics(
     monthly_counts = {
         row.month: {
             "ordinary_message_count": int(row.ordinary_message_count),
+            "text_length": int(row.text_length or 0),
+            "owner_text_length": int(row.owner_text_length or 0),
             "owner_message_count": int(row.owner_message_count),
             "contact_message_count": int(row.contact_message_count),
             "unknown_direction_message_count": int(
@@ -317,6 +333,8 @@ def build_communication_timeline_statistics(
                         month_label,
                         {
                             "ordinary_message_count": 0,
+                            "text_length": 0,
+                            "owner_text_length": 0,
                             "owner_message_count": 0,
                             "contact_message_count": 0,
                             "unknown_direction_message_count": 0,
