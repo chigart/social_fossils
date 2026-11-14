@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
 
@@ -99,6 +99,93 @@ def test_chat_scope_filters_pages_and_options(db_session):
     assert [chat.title for chat in group_page.items] == ["Group"]
     assert group_page.pagination.total == 2
     assert [option.label for option in group_page.options] == ["Group", "Other"]
+
+
+def test_dm_statistics_include_average_time_for_measured_replies(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "dm-10", "First DM", chat_type="personal_chat")
+    start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        "user-owner",
+        message_date=start,
+        telegram_message_id="m1",
+    )
+    add_message(
+        db_session,
+        2,
+        10,
+        "message",
+        "peer",
+        message_date=start + timedelta(minutes=5),
+        telegram_message_id="m2",
+        reply_to_telegram_message_id="m1",
+    )
+    add_message(
+        db_session,
+        3,
+        10,
+        "message",
+        "user-owner",
+        message_date=start + timedelta(minutes=15),
+        telegram_message_id="m3",
+        reply_to_telegram_message_id="m2",
+    )
+
+    dm = get_chat_statistics(db_session, chat_scope="dm").items[0]
+
+    assert dm.average_response_seconds == 450
+
+
+def test_dm_statistics_sort_by_text_volume_and_average_response_time(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 10, 1, "dm-10", "Slow", chat_type="personal_chat")
+    add_chat(db_session, 20, 1, "dm-20", "Fast", chat_type="personal_chat")
+    start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    for chat_id, prefix, response_minutes, original_text, reply_text in [
+        (10, "slow", 10, "s", "r"),
+        (20, "fast", 1, "long message", "long reply"),
+    ]:
+        add_message(
+            db_session,
+            chat_id,
+            chat_id,
+            "message",
+            "user-owner",
+            message_date=start,
+            text_content=original_text,
+            telegram_message_id=f"{prefix}-original",
+        )
+        add_message(
+            db_session,
+            chat_id + 1,
+            chat_id,
+            "message",
+            "peer",
+            message_date=start + timedelta(minutes=response_minutes),
+            text_content=reply_text,
+            telegram_message_id=f"{prefix}-reply",
+            reply_to_telegram_message_id=f"{prefix}-original",
+        )
+
+    text_volume_ascending = get_chat_statistics(
+        db_session,
+        chat_scope="dm",
+        sort_by="text_length",
+        sort_direction="asc",
+    )
+    reply_time_ascending = get_chat_statistics(
+        db_session,
+        chat_scope="dm",
+        sort_by="average_response_seconds",
+        sort_direction="asc",
+    )
+
+    assert [chat.title for chat in text_volume_ascending.items] == ["Slow", "Fast"]
+    assert [chat.title for chat in reply_time_ascending.items] == ["Fast", "Slow"]
 
 
 def test_chat_platform_filters_pages_but_keeps_all_platform_picker_options(db_session):
@@ -291,6 +378,7 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
         "text_length": 0,
         "ordinary_messages": 0,
         "service_messages": 0,
+        "average_response_seconds": None,
         "earliest_message_timestamp": None,
         "latest_message_timestamp": None,
         "distinct_identified_senders": 0,

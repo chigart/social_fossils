@@ -58,6 +58,12 @@ class ReplyTempoStatistics(BaseModel):
     measured_reply_count: int = Field(
         description="References resolved to a dated ordinary message by a different identified sender."
     )
+    average_response_seconds: float | None = Field(
+        description="Mean elapsed time from the referenced message to its reply, for measured replies."
+    )
+    longest_response_seconds: float | None = Field(
+        description="Longest elapsed time from the referenced message to its reply, for measured replies."
+    )
     median_response_seconds: float | None = Field(
         description="Median elapsed time from the referenced message to its reply, for measured replies."
     )

@@ -31,6 +31,7 @@ import {
   SearchPicker,
   type SearchPickerOption,
 } from "./SearchPicker";
+import { formatResponseTime } from "../utils/formatResponseTime";
 
 export function ChatsView({
   chats,
@@ -149,7 +150,12 @@ export function ChatsView({
                   </th>
                   <th className={tableHeaderClassName} scope="col">Account</th>
                   <th className={tableHeaderClassName} scope="col">
-                    Text volume
+                    <SortButton
+                      label="Text volume"
+                      active={sort.key === "text_length"}
+                      direction={sort.direction}
+                      onClick={() => onSort("text_length")}
+                    />
                   </th>
                   <th className={tableHeaderClassName} scope="col">
                     <SortButton
@@ -185,6 +191,16 @@ export function ChatsView({
                       onClick={() => onSort("latest_message_timestamp")}
                     />
                   </th>
+                  {chatScope === "dm" && (
+                    <th className={tableHeaderClassName} scope="col">
+                      <SortButton
+                        label="Average time to reply"
+                        active={sort.key === "average_response_seconds"}
+                        direction={sort.direction}
+                        onClick={() => onSort("average_response_seconds")}
+                      />
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -222,6 +238,11 @@ export function ChatsView({
                     <td className={tableCellClassName}>
                       {formatDate(chat.latest_message_timestamp)}
                     </td>
+                    {chatScope === "dm" && (
+                      <td className={tableCellClassName}>
+                        {formatResponseTime(chat.average_response_seconds)}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

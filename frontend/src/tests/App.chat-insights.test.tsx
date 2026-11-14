@@ -110,6 +110,14 @@ describe("dashboard", () => {
     expect(
       screen.getByRole("heading", { name: "Chat insights" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Average time to reply")).toBeInTheDocument();
+    expect(screen.getByText("Longest time to reply")).toBeInTheDocument();
+    expect(screen.getAllByText("30 min")).toHaveLength(2);
+    expect(screen.getByText("2.0 hr")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Average time to reply" })
+        .parentElement?.parentElement,
+    ).toHaveClass("grid-rows-2", "grid-flow-col");
     await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));
     expect(
       within(
@@ -220,7 +228,7 @@ describe("dashboard", () => {
         name: "Anton, 20 messages, 100.0%",
       }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("30 min")).toBeInTheDocument();
+    expect(screen.getAllByText("30 min")).toHaveLength(2);
     expect(screen.getByText("Popular words and emojis by sender")).toBeInTheDocument();
     expect(screen.getByText("Observed reactions by person")).toBeInTheDocument();
     const popularWordChip = screen.getByRole("listitem", {

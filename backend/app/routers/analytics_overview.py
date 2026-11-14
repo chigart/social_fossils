@@ -163,7 +163,8 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
         "(any other chat type), or 'all'; the optional platform filter limits "
         "results and pagination to that platform. The response "
         "also includes the total row count and lightweight options for searching "
-        "the selected scope. Counts include "
+        "the selected scope. DM rows include average response time for measured "
+        "in-chat replies. Counts include "
         "all stored message types; ordinary and service counts use the exact "
         "'message' and 'service' values. Distinct senders count non-null "
         "platform-scoped sender IDs as normalized and stored by the importer."
@@ -176,6 +177,8 @@ def get_chat_statistics(
     sort_by: Literal[
         "title",
         "total_messages",
+        "text_length",
+        "average_response_seconds",
         "distinct_identified_senders",
         "earliest_message_timestamp",
         "latest_message_timestamp",
@@ -201,6 +204,66 @@ def get_chat_statistics(
     option_filters = [Chat.platform == Account.platform]
     if chat_scope_filter is not None:
         option_filters.append(chat_scope_filter)
+    text_length = func.coalesce(
+        func.sum(
+            case(
+                (
+                    Message.message_type == ORDINARY_MESSAGE_TYPE,
+                    func.length(func.coalesce(Message.text_content, "")),
+                ),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    reply_average = None
+    if chat_scope == "dm":
+        reply_message = aliased(Message)
+        original_message = aliased(Message)
+        reply_elapsed_seconds = (
+            (func.julianday(reply_message.message_date)
+             - func.julianday(original_message.message_date))
+            * 86400
+            if db.get_bind().dialect.name == "sqlite"
+            else func.extract(
+                "epoch",
+                reply_message.message_date - original_message.message_date,
+            )
+        )
+        average_response_seconds = func.avg(reply_elapsed_seconds)
+        if db.get_bind().dialect.name == "sqlite":
+            average_response_seconds = func.round(average_response_seconds, 3)
+        reply_average = (
+            select(
+                reply_message.chat_id.label("chat_id"),
+                average_response_seconds.label("average_response_seconds"),
+            )
+            .join(
+                original_message,
+                and_(
+                    original_message.chat_id == reply_message.chat_id,
+                    original_message.platform == reply_message.platform,
+                    original_message.message_id
+                    == func.coalesce(
+                        reply_message.source_reply_id,
+                        reply_message.reply_to_telegram_message_id,
+                    ),
+                    original_message.message_type == ORDINARY_MESSAGE_TYPE,
+                ),
+            )
+            .where(
+                reply_message.message_type == ORDINARY_MESSAGE_TYPE,
+                reply_message.sender_id.is_not(None),
+                original_message.sender_id.is_not(None),
+                reply_message.sender_id != original_message.sender_id,
+                reply_message.message_date.is_not(None),
+                original_message.message_date.is_not(None),
+                reply_elapsed_seconds >= 0,
+            )
+            .group_by(reply_message.chat_id)
+            .subquery()
+        )
+
     statement = (
         select(
             Chat.id.label("chat_id"),
@@ -212,18 +275,7 @@ def get_chat_statistics(
             Chat.title,
             Chat.chat_type,
             func.count(Message.id).label("total_messages"),
-            func.coalesce(
-                func.sum(
-                    case(
-                        (
-                            Message.message_type == ORDINARY_MESSAGE_TYPE,
-                            func.length(func.coalesce(Message.text_content, "")),
-                        ),
-                        else_=0,
-                    )
-                ),
-                0,
-            ).label("text_length"),
+            text_length.label("text_length"),
             func.count(
                 case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
             ).label("ordinary_messages"),
@@ -259,9 +311,26 @@ def get_chat_statistics(
             *chat_filters,
         )
     )
+    if reply_average is not None:
+        statement = statement.outerjoin(
+            reply_average,
+            reply_average.c.chat_id == Chat.id,
+        ).group_by(
+            reply_average.c.average_response_seconds,
+        ).add_columns(
+            reply_average.c.average_response_seconds.label(
+                "average_response_seconds"
+            )
+        )
     primary_sort = {
         "title": func.lower(func.coalesce(Chat.title, "")),
         "total_messages": func.count(Message.id),
+        "text_length": text_length,
+        "average_response_seconds": (
+            reply_average.c.average_response_seconds
+            if reply_average is not None
+            else Chat.id
+        ),
         "distinct_identified_senders": func.count(
             func.distinct(Message.sender_id)
         ),
@@ -276,8 +345,9 @@ def get_chat_statistics(
     statement = statement.order_by(primary_order, Chat.id.asc()).offset(
         (page - 1) * page_size
     ).limit(page_size)
+    chat_rows = list(db.execute(statement))
     chats = []
-    for row in db.execute(statement):
+    for row in chat_rows:
         source_account_label = (
             f"@{row.account_username}" if row.account_username else row.account_name
         )
@@ -286,9 +356,14 @@ def get_chat_statistics(
                 **{
                     key: value
                     for key, value in row._mapping.items()
-                    if key not in {"account_username", "account_name"}
+                    if key not in {
+                        "account_username",
+                        "account_name",
+                        "average_response_seconds",
+                    }
                 },
                 source_account_label=source_account_label,
+                average_response_seconds=row._mapping.get("average_response_seconds"),
             )
         )
     total = int(
@@ -328,8 +403,15 @@ def get_chat_statistics(
             Account.username,
             Account.name,
         )
-        .order_by(primary_order, Chat.id.asc())
     )
+    if reply_average is not None:
+        option_statement = option_statement.outerjoin(
+            reply_average,
+            reply_average.c.chat_id == Chat.id,
+        ).group_by(
+            reply_average.c.average_response_seconds,
+        )
+    option_statement = option_statement.order_by(primary_order, Chat.id.asc())
     return PaginatedItems(
         items=chats,
         pagination=PaginationMetadata(

@@ -48,7 +48,9 @@ it("requests DM and group-chat lists separately", async () => {
   expect(within(dmsTable).queryByRole("columnheader", { name: "Type" }))
     .not.toBeInTheDocument();
   expect(within(dmsTable).getAllByRole("columnheader").map((header) => header.textContent?.trim()))
-    .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "First message", "Latest message"]);
+    .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "First message", "Latest message", "Average time to reply"]);
+  expect(within(dmsTable).getByRole("row", { name: /Zebra group/ }))
+    .toHaveTextContent("15 min");
   await waitFor(() =>
     expect(api.getChats).toHaveBeenLastCalledWith(
       1,
@@ -436,6 +438,30 @@ describe("dashboard", () => {
     expect(
       within(dmsRegion).getByRole("button", { name: "Sort by Latest message" }),
     ).toBeInTheDocument();
+    const textVolumeSort = within(dmsRegion).getByRole("button", {
+      name: "Sort by Text volume",
+    });
+    expect(textVolumeSort).toBeInTheDocument();
+    await user.click(textVolumeSort);
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "text_length",
+      "asc",
+      "dm",
+    );
+    await user.click(
+      within(dmsRegion).getByRole("button", {
+        name: "Sort by Average time to reply",
+      }),
+    );
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "average_response_seconds",
+      "asc",
+      "dm",
+    );
   });
 
   it("toggles group-message sorting between ascending and descending", async () => {

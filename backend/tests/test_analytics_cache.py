@@ -9,12 +9,12 @@ from sqlalchemy.orm import sessionmaker
 
 from app import analytics_cache_middleware as middleware
 from app.analytics_cache import (
-    CACHE_VERSION,
     analytics_cache_key,
     analytics_revision,
     read_cached_response,
     store_cached_response,
 )
+from app.constants import ANALYTICS_CACHE_VERSION
 
 
 def test_response_shape_change_invalidates_previous_cache_version(tmp_path):
@@ -35,7 +35,7 @@ def test_response_shape_change_invalidates_previous_cache_version(tmp_path):
     with sessionmaker(bind=engine)() as session:
         revision = analytics_revision(session)
         previous_revision = json.dumps(
-            [CACHE_VERSION - 1, *json.loads(revision)[1:]]
+            [ANALYTICS_CACHE_VERSION - 1, *json.loads(revision)[1:]]
         )
         session.execute(
             text(

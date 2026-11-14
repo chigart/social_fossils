@@ -6,10 +6,8 @@ from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from app.constants import ANALYTICS_CACHE_VERSION
 from app.models import AnalyticsCacheEntry, IdentityLinkEvent, ImportSession
-
-# Increment when response semantics change without a database revision change.
-CACHE_VERSION = 2
 
 
 def analytics_revision(db: Session) -> str:
@@ -22,7 +20,7 @@ def analytics_revision(db: Session) -> str:
             select(func.max(IdentityLinkEvent.id)).scalar_subquery(),
         )
     ).one()
-    return json.dumps([CACHE_VERSION, *row], default=str)
+    return json.dumps([ANALYTICS_CACHE_VERSION, *row], default=str)
 
 
 def analytics_cache_key(path: str, query: str) -> str:

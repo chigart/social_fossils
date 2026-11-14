@@ -94,6 +94,8 @@ export const chatInsights: ChatInsightsResponse = {
       reply_tempo: {
         reply_reference_count: 7,
         measured_reply_count: 5,
+        average_response_seconds: 1800,
+        longest_response_seconds: 7200,
         median_response_seconds: 1800,
       },
       conversation_activity: {

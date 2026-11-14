@@ -95,6 +95,10 @@ class ChatStatistics(BaseModel):
     service_messages: int = Field(
         description="Rows whose message_type is exactly 'service'."
     )
+    average_response_seconds: float | None = Field(
+        default=None,
+        description="Mean elapsed time for measured, referenced replies in this chat."
+    )
     earliest_message_timestamp: datetime | None
     latest_message_timestamp: datetime | None
     distinct_identified_senders: int = Field(

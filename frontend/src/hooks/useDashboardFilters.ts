@@ -118,6 +118,17 @@ export function useDashboardFilters({
             comparison = (left.title ?? "").localeCompare(right.title ?? "");
           } else if (chatSort.key === "total_messages") {
             comparison = left.total_messages - right.total_messages;
+          } else if (chatSort.key === "text_length") {
+            comparison = left.text_length - right.text_length;
+          } else if (chatSort.key === "average_response_seconds") {
+            if (left.average_response_seconds === null) {
+              return right.average_response_seconds === null
+                ? 0
+                : 1;
+            }
+            if (right.average_response_seconds === null) return -1;
+            comparison =
+              left.average_response_seconds - right.average_response_seconds;
           } else if (chatSort.key === "distinct_identified_senders") {
             comparison =
               left.distinct_identified_senders -

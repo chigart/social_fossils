@@ -91,6 +91,8 @@ export type MessageTypeCount = {
 export type ReplyTempoStatistics = {
   reply_reference_count: number;
   measured_reply_count: number;
+  average_response_seconds: number | null;
+  longest_response_seconds: number | null;
   median_response_seconds: number | null;
 };
 
@@ -161,6 +163,7 @@ export type ChatStatistics = {
   text_length: number;
   ordinary_messages: number;
   service_messages: number;
+  average_response_seconds: number | null;
   earliest_message_timestamp: string | null;
   latest_message_timestamp: string | null;
   distinct_identified_senders: number;
@@ -171,6 +174,8 @@ export type ChatScope = "dm" | "group" | "all";
 export type ChatSortBy =
   | "title"
   | "total_messages"
+  | "text_length"
+  | "average_response_seconds"
   | "distinct_identified_senders"
   | "earliest_message_timestamp"
   | "latest_message_timestamp";

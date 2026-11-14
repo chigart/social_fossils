@@ -361,7 +361,7 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
         10,
         "message",
         "user-owner",
-        message_date=start + timedelta(minutes=10),
+        message_date=start + timedelta(minutes=15),
         text_content="Another reply",
         reply_to_telegram_message_id="2",
     )
@@ -371,7 +371,7 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
         10,
         "message",
         "user200",
-        message_date=start + timedelta(hours=12, minutes=10),
+        message_date=start + timedelta(hours=12, minutes=20),
         raw_payload={"media_type": "voice_message", "duration_seconds": 8},
     )
     add_message(
@@ -380,7 +380,7 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
         10,
         "message",
         "user-owner",
-        message_date=start + timedelta(hours=12, minutes=15),
+        message_date=start + timedelta(hours=12, minutes=25),
         raw_payload={"sticker_emoji": "🙂"},
         reply_to_telegram_message_id="missing",
     )
@@ -390,7 +390,7 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
         10,
         "service",
         "user200",
-        message_date=start + timedelta(hours=12, minutes=16),
+        message_date=start + timedelta(hours=12, minutes=26),
         raw_payload={"action": "join_group"},
     )
 
@@ -399,7 +399,9 @@ def test_chat_insights_measure_reply_tempo_sessions_and_media_categories(db_sess
 
     assert chat.reply_tempo.reply_reference_count == 3
     assert chat.reply_tempo.measured_reply_count == 2
-    assert chat.reply_tempo.median_response_seconds == 300
+    assert chat.reply_tempo.average_response_seconds == 450
+    assert chat.reply_tempo.longest_response_seconds == 600
+    assert chat.reply_tempo.median_response_seconds == 450
     assert chat.conversation_activity.session_gap_hours == 12
     assert chat.conversation_activity.session_count == 2
     assert chat.conversation_activity.sender_transition_count == 3

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from statistics import median
+from statistics import mean, median
 from typing import Any
 
 from app.constants import (
@@ -346,6 +346,10 @@ def _build_reply_tempo(messages: list[_ConversationMessage]) -> ReplyTempoStatis
     return ReplyTempoStatistics(
         reply_reference_count=reply_reference_count,
         measured_reply_count=len(response_times),
+        average_response_seconds=(
+            float(mean(response_times)) if response_times else None
+        ),
+        longest_response_seconds=max(response_times) if response_times else None,
         median_response_seconds=(
             float(median(response_times)) if response_times else None
         ),

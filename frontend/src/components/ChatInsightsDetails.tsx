@@ -18,6 +18,7 @@ import { RankingChips } from "./RankingChips";
 import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
 import { SenderShareChart } from "./SenderShareChart";
 import { filterRepeatedItems } from "../utils/chatInsights";
+import { formatResponseTime } from "../utils/formatResponseTime";
 
 export function ChatInsightsDetails({
   chat,
@@ -37,7 +38,7 @@ export function ChatInsightsDetails({
 
   return (
     <>
-      <div className="mb-5 grid grid-cols-3 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
+      <div className="mb-5 grid grid-flow-col grid-rows-2 auto-cols-[minmax(12rem,1fr)] gap-3 overflow-x-auto max-sm:gap-2">
         <MetricCard
           label="Ordinary messages"
           value={formatNumber(chat.ordinary_message_count)}
@@ -45,6 +46,14 @@ export function ChatInsightsDetails({
         <MetricCard
           label="Active days"
           value={activeDays === undefined ? "—" : formatNumber(activeDays)}
+        />
+        <MetricCard
+          label="Average time to reply"
+          value={formatResponseTime(chat.reply_tempo.average_response_seconds)}
+        />
+        <MetricCard
+          label="Longest time to reply"
+          value={formatResponseTime(chat.reply_tempo.longest_response_seconds)}
         />
         <MetricCard
           label="Owner messages"
