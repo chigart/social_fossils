@@ -102,19 +102,15 @@ export function PaginationControls({
       pageNumbers.add(page);
     }
   } else {
-    for (let page = 1; page <= 5; page += 1) {
-      pageNumbers.add(page);
-    }
+    pageNumbers.add(1);
     for (
-      let page = Math.max(1, currentPage - 1);
-      page <= Math.min(pageCount, currentPage + 1);
+      let page = Math.max(1, currentPage - 3);
+      page <= Math.min(pageCount, currentPage + 3);
       page += 1
     ) {
       pageNumbers.add(page);
     }
-    for (let page = pageCount - 2; page <= pageCount; page += 1) {
-      pageNumbers.add(page);
-    }
+    pageNumbers.add(pageCount);
   }
   const pages = [...pageNumbers].sort((left, right) => left - right);
   const pageItems: (number | "ellipsis")[] = [];
