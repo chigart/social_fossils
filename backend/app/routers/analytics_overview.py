@@ -86,7 +86,10 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
             username=row.username,
             platform_user_id=row.platform_user_id,
             total_messages=row.total_messages,
+            total_text_length=row.total_text_length,
             total_contacts=row.total_contacts,
+            earliest_message_timestamp=row.earliest_message_timestamp,
+            latest_message_timestamp=row.latest_message_timestamp,
         )
         for row in db.execute(
             select(
@@ -102,6 +105,39 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
                     .where(Chat.account_id == Account.id)
                     .scalar_subquery()
                 ).label("total_messages"),
+                (
+                    select(
+                        func.coalesce(
+                            func.sum(
+                                func.length(
+                                    func.coalesce(Message.text_content, "")
+                                )
+                            ),
+                            0,
+                        )
+                    )
+                    .select_from(Message)
+                    .join(Chat, Chat.id == Message.chat_id)
+                    .where(
+                        Chat.account_id == Account.id,
+                        Message.message_type == ORDINARY_MESSAGE_TYPE,
+                    )
+                    .scalar_subquery()
+                ).label("total_text_length"),
+                (
+                    select(func.min(Message.message_date))
+                    .select_from(Message)
+                    .join(Chat, Chat.id == Message.chat_id)
+                    .where(Chat.account_id == Account.id)
+                    .scalar_subquery()
+                ).label("earliest_message_timestamp"),
+                (
+                    select(func.max(Message.message_date))
+                    .select_from(Message)
+                    .join(Chat, Chat.id == Message.chat_id)
+                    .where(Chat.account_id == Account.id)
+                    .scalar_subquery()
+                ).label("latest_message_timestamp"),
                 (
                     select(func.count(Contact.id))
                     .where(Contact.account_id == Account.id)
@@ -176,6 +212,18 @@ def get_chat_statistics(
             Chat.title,
             Chat.chat_type,
             func.count(Message.id).label("total_messages"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Message.message_type == ORDINARY_MESSAGE_TYPE,
+                            func.length(func.coalesce(Message.text_content, "")),
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("text_length"),
             func.count(
                 case((Message.message_type == ORDINARY_MESSAGE_TYPE, Message.id))
             ).label("ordinary_messages"),

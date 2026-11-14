@@ -37,7 +37,12 @@ class ImportedAccountStatistics(BaseModel):
         description="Account ID assigned by the messaging platform."
     )
     total_messages: int = Field(description="All stored messages for this account.")
+    total_text_length: int = Field(
+        description="Total characters in ordinary message text for this account."
+    )
     total_contacts: int = Field(description="Contacts imported for this account.")
+    earliest_message_timestamp: datetime | None
+    latest_message_timestamp: datetime | None
 
 
 class OverviewStatistics(BaseModel):
@@ -80,6 +85,9 @@ class ChatStatistics(BaseModel):
     chat_type: str
     total_messages: int = Field(
         description="All stored message types; zero when the chat has no messages."
+    )
+    text_length: int = Field(
+        description="Total characters in ordinary message text for this chat."
     )
     ordinary_messages: int = Field(
         description="Rows whose message_type is exactly 'message'."

@@ -38,7 +38,10 @@ export type ImportedAccountStatistics = {
   username: string | null;
   platform_user_id: string | null;
   total_messages: number;
+  total_text_length: number;
   total_contacts: number;
+  earliest_message_timestamp: string | null;
+  latest_message_timestamp: string | null;
 };
 
 export type WordFrequency = {
@@ -155,6 +158,7 @@ export type ChatStatistics = {
   title: string | null;
   chat_type: string;
   total_messages: number;
+  text_length: number;
   ordinary_messages: number;
   service_messages: number;
   earliest_message_timestamp: string | null;

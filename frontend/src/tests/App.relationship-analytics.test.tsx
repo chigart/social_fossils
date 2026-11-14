@@ -193,12 +193,15 @@ describe("dashboard", () => {
     expect(
       within(contactsRegion).getAllByRole("row", { name: /Shared person/ }),
     ).toHaveLength(1);
-    expect(
-      within(contactsRegion).getByRole("row", { name: /Shared person/ }),
-    ).toHaveTextContent("17");
     const sharedPersonRow = within(contactsRegion).getByRole("row", {
       name: /Shared person/,
     });
+    expect(within(contactsRegion).queryByRole("columnheader", {
+      name: "Messages sent",
+    })).not.toBeInTheDocument();
+    expect(within(sharedPersonRow).getAllByRole("cell").slice(-2)
+      .map((cell) => cell.textContent))
+      .toEqual(["10", "7"]);
     expect(within(sharedPersonRow).getByText("IG@instagram-account"))
       .toBeInTheDocument();
     expect(within(sharedPersonRow).getByText("TG@telegram-account"))

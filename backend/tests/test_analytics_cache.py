@@ -1,10 +1,51 @@
+import asyncio
+import json
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app import analytics_cache_middleware as middleware
-from app.analytics_cache import analytics_cache_key, analytics_revision, store_cached_response
+from app.analytics_cache import (
+    CACHE_VERSION,
+    analytics_cache_key,
+    analytics_revision,
+    read_cached_response,
+    store_cached_response,
+)
+
+
+def test_response_shape_change_invalidates_previous_cache_version(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'version.db'}")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE import_sessions (id INTEGER PRIMARY KEY, finished_at DATETIME)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE identity_link_events (id INTEGER PRIMARY KEY)"
+        ))
+        connection.execute(text(
+            "CREATE TABLE analytics_cache (cache_key VARCHAR(64) PRIMARY KEY, "
+            "revision TEXT NOT NULL, response_body TEXT NOT NULL)"
+        ))
+
+    key = analytics_cache_key("/api/analytics/overview", "")
+    with sessionmaker(bind=engine)() as session:
+        revision = analytics_revision(session)
+        previous_revision = json.dumps(
+            [CACHE_VERSION - 1, *json.loads(revision)[1:]]
+        )
+        session.execute(
+            text(
+                "INSERT INTO analytics_cache (cache_key, revision, response_body) "
+                "VALUES (:key, :revision, :body)"
+            ),
+            {"key": key, "revision": previous_revision, "body": '{"old": true}'},
+        )
+
+        assert read_cached_response(session, key, revision) is None
 
 
 def test_persistent_cache_for_dashboard_and_live_uploads(tmp_path, monkeypatch):
@@ -134,5 +175,3 @@ def test_data_change_during_calculation_is_not_cached(tmp_path):
         key = analytics_cache_key("/api/analytics/overview", "")
         store_cached_response(session, key, revision, "{}")
         assert session.scalar(text("SELECT count(*) FROM analytics_cache")) == 0
-import asyncio
-from concurrent.futures import ThreadPoolExecutor

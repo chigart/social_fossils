@@ -160,14 +160,6 @@ export function ContactsView({
                       onClick={() => onSort("group_chat_messages_sent")}
                     />
                   </th>
-                  <th className={tableHeaderClassName} scope="col">
-                    <SortButton
-                      label="Messages sent"
-                      active={sort.key === "total_messages_sent"}
-                      direction={sort.direction}
-                      onClick={() => onSort("total_messages_sent")}
-                    />
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -202,9 +194,6 @@ export function ContactsView({
                     </td>
                     <td className={numericTableCellClassName}>
                       {formatNumber(contact.group_chat_messages_sent)}
-                    </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(contact.total_messages_sent)}
                     </td>
                   </tr>
                 ))}

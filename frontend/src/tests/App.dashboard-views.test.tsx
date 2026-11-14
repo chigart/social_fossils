@@ -43,6 +43,12 @@ it("requests DM and group-chat lists separately", async () => {
   await renderLoadedDashboard();
 
   await selectDashboardTab("DMs");
+  const dmsRegion = screen.getByRole("region", { name: "DMs" });
+  const dmsTable = within(dmsRegion).getByRole("table");
+  expect(within(dmsTable).queryByRole("columnheader", { name: "Type" }))
+    .not.toBeInTheDocument();
+  expect(within(dmsTable).getAllByRole("columnheader").map((header) => header.textContent?.trim()))
+    .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "First message", "Latest message"]);
   await waitFor(() =>
     expect(api.getChats).toHaveBeenLastCalledWith(
       1,
@@ -159,6 +165,12 @@ describe("dashboard", () => {
     await selectDashboardTab("Chats");
     const chatsRegion = screen.getByRole("region", { name: "Chats" });
     const chatsTable = within(chatsRegion).getByRole("table");
+    expect(within(chatsTable).queryByRole("columnheader", { name: "Type" }))
+      .not.toBeInTheDocument();
+    expect(within(chatsTable).getAllByRole("columnheader").map((header) => header.textContent?.trim()))
+      .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "Senders", "First message", "Latest message"]);
+    expect(within(chatsTable).getAllByRole("cell").some((cell) => cell.classList.contains("text-right")))
+      .toBe(false);
     await user.click(within(chatsRegion).getByRole("button", { name: "Choose a chat" }));
     await user.type(
       within(chatsRegion).getByRole("searchbox", { name: "Choose a chat search" }),
@@ -176,9 +188,11 @@ describe("dashboard", () => {
     await selectDashboardTab("Contacts");
     const contactsRegion = screen.getByRole("region", { name: "Contacts & senders" });
     const contactsTable = within(contactsRegion).getByRole("table");
+    expect(within(contactsTable).queryByRole("columnheader", { name: "Messages sent" }))
+      .not.toBeInTheDocument();
     const averyRow = within(contactsTable).getByRole("row", { name: /Avery/ });
     expect(within(averyRow).getAllByRole("cell").map((cell) => cell.textContent))
-      .toEqual(["12345", "TG@anton", "8", "4", "12"]);
+      .toEqual(["12345", "TG@anton", "8", "4"]);
     const rowCount = within(contactsTable).getAllByRole("row").length;
     await user.click(within(contactsRegion).getByRole("button", { name: "Choose a contact" }));
     await user.type(
@@ -424,7 +438,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
   });
 
-  it("toggles contact message sorting between ascending and descending", async () => {
+  it("toggles group-message sorting between ascending and descending", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();
     await selectDashboardTab("Contacts");
@@ -441,15 +455,21 @@ describe("dashboard", () => {
       }),
     ).toBeInTheDocument();
     const sortButton = within(contactsRegion).getByRole("button", {
-      name: "Sort by Messages sent, descending",
+      name: "Sort by Group messages",
     });
 
     expect(rowTitles(contactsTable)).toEqual(["Avery", "Morgan"]);
     await user.click(sortButton);
+    expect(rowTitles(contactsTable)).toEqual(["Avery", "Morgan"]);
+    expect(sortButton).toHaveAttribute(
+      "aria-label",
+      "Sort by Group messages, ascending",
+    );
+    await user.click(sortButton);
     expect(rowTitles(contactsTable)).toEqual(["Morgan", "Avery"]);
     expect(sortButton).toHaveAttribute(
       "aria-label",
-      "Sort by Messages sent, ascending",
+      "Sort by Group messages, descending",
     );
   });
 

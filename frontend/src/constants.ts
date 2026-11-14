@@ -154,7 +154,7 @@ export const tableRowTitleClassName =
 export const tableCellClassName =
   "border-b border-border-muted px-[13px] py-3 align-middle last:border-b-0";
 export const numericTableCellClassName =
-  "border-b border-border-muted px-[13px] py-3 text-right align-middle tabular-nums whitespace-nowrap last:border-b-0";
+  "border-b border-border-muted px-[13px] py-3 text-left align-middle tabular-nums whitespace-nowrap last:border-b-0";
 export const searchLabelClassName = "w-[min(270px,38vw)] max-sm:w-full";
 export const searchInputClassName =
   "min-h-[38px] w-full rounded-[7px] border border-border-input bg-surface px-3 py-2 text-small text-ink outline-none placeholder:text-ink-placeholder focus:border-brand focus:ring-[3px] focus:ring-focus-ring";

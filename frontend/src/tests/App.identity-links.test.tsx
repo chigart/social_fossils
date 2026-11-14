@@ -384,7 +384,10 @@ describe("dashboard", () => {
           username: "first",
           platform_user_id: "platform-1",
           total_messages: 30,
+          total_text_length: 1_500,
           total_contacts: 4,
+          earliest_message_timestamp: "2022-01-01T12:00:00Z",
+          latest_message_timestamp: "2023-01-01T12:00:00Z",
         },
         {
           id: 2,
@@ -393,7 +396,10 @@ describe("dashboard", () => {
           username: "second",
           platform_user_id: "platform-2",
           total_messages: 40,
+          total_text_length: 2_500,
           total_contacts: 7,
+          earliest_message_timestamp: "2023-01-01T12:00:00Z",
+          latest_message_timestamp: "2024-01-01T12:00:00Z",
         },
       ],
     });
@@ -489,34 +495,28 @@ describe("dashboard", () => {
         ".bg-platform-telegram-background",
       ),
     ).toHaveLength(2);
-    expect(combinedContactRows[0]).toHaveTextContent("24");
+    expect(within(combinedContactRows[0]).getAllByRole("cell").map((cell) => cell.textContent))
+      .toEqual(["12345", "TG@antonTG: Anton Malkov", "18", "6"]);
     await selectDashboardTab("Overview");
-    const sourceAccountsCard = within(
-      screen.getByRole("tabpanel", { name: "Overview" }),
-    )
-      .getByRole("heading", { name: "Source accounts" })
-      .closest("article");
-    expect(sourceAccountsCard).toHaveTextContent("2");
     const overviewRegion = screen.getByRole("region", { name: "Overview" });
+    expect(within(overviewRegion).queryByText("Source accounts")).not.toBeInTheDocument();
     expect(within(overviewRegion).getByRole("row", {
-      name: /telegram.*1.*30.*4/,
+      name: /telegram.*First account.*first.*30.*1,500.*Jan 1, 2022.*Jan 1, 2023.*4/,
     })).toBeInTheDocument();
     expect(within(overviewRegion).getByRole("row", {
-      name: /telegram.*2.*40.*7/,
+      name: /telegram.*Second account.*second.*40.*2,500.*Jan 1, 2023.*Jan 1, 2024.*7/,
     })).toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("row", {
-      name: /First account.*first.*platform-1/,
+    expect(within(overviewRegion).queryByRole("columnheader", {
+      name: "Account ID",
+    })).not.toBeInTheDocument();
+    expect(within(overviewRegion).queryByRole("columnheader", {
+      name: "Platform user ID",
+    })).not.toBeInTheDocument();
+    expect(within(overviewRegion).getByRole("columnheader", {
+      name: "Text volume",
     })).toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("row", {
-      name: /Second account.*second.*platform-2/,
+    expect(within(overviewRegion).getByRole("columnheader", {
+      name: "Activity interval",
     })).toBeInTheDocument();
-    expect(
-      within(overviewRegion).getByRole("columnheader", {
-        name: "Platform user ID",
-      }),
-    ).toBeInTheDocument();
-    const metricCards = within(overviewRegion).getByText("Source accounts")
-      .closest("div.grid");
-    expect(metricCards).toHaveClass("grid-cols-6");
   });
 });

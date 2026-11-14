@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import AnalyticsCacheEntry, IdentityLinkEvent, ImportSession
 
 # Increment when response semantics change without a database revision change.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def analytics_revision(db: Session) -> str:

@@ -147,8 +147,10 @@ export function ChatsView({
                       onClick={() => onSort("title")}
                     />
                   </th>
-                  <th className={tableHeaderClassName} scope="col">Type</th>
                   <th className={tableHeaderClassName} scope="col">Account</th>
+                  <th className={tableHeaderClassName} scope="col">
+                    Text volume
+                  </th>
                   <th className={tableHeaderClassName} scope="col">
                     <SortButton
                       label="Messages"
@@ -198,15 +200,13 @@ export function ChatsView({
                       </button>
                     </th>
                     <td className={tableCellClassName}>
-                      <span className="inline-block whitespace-nowrap rounded bg-surface-tag px-[7px] py-1 text-label font-semibold text-ink-tag">
-                        {chat.chat_type}
-                      </span>
-                    </td>
-                    <td className={tableCellClassName}>
                       <PlatformAccountBadge
                         platform={chat.platform}
                         accountLabel={chat.source_account_label}
                       />
+                    </td>
+                    <td className={numericTableCellClassName}>
+                      {formatNumber(chat.text_length)}
                     </td>
                     <td className={numericTableCellClassName}>
                       {formatNumber(chat.total_messages)}

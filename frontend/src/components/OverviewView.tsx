@@ -58,11 +58,7 @@ export function OverviewView({
               </span>
             </div>
           )}
-          <div className="grid grid-cols-6 gap-3 max-[1000px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-2">
-            <MetricCard
-              label="Source accounts"
-              value={formatNumber(overview.data.total_imported_accounts)}
-            />
+          <div className="grid grid-cols-5 gap-3 max-[1000px]:grid-cols-3 max-sm:grid-cols-2 max-sm:gap-2">
             <MetricCard
               label="Chats"
               value={formatNumber(overview.data.total_chats)}
@@ -97,19 +93,19 @@ export function OverviewView({
                         Platform
                       </th>
                       <th className={tableHeaderClassName} scope="col">
-                        Account ID
-                      </th>
-                      <th className={tableHeaderClassName} scope="col">
                         Name
                       </th>
                       <th className={tableHeaderClassName} scope="col">
                         Username
                       </th>
                       <th className={tableHeaderClassName} scope="col">
-                        Platform user ID
+                        Total messages
                       </th>
                       <th className={tableHeaderClassName} scope="col">
-                        Total messages
+                        Text volume
+                      </th>
+                      <th className={tableHeaderClassName} scope="col">
+                        Activity interval
                       </th>
                       <th className={tableHeaderClassName} scope="col">
                         Total contacts
@@ -122,16 +118,19 @@ export function OverviewView({
                         <th className={tableRowTitleClassName} scope="row">
                           {account.platform}
                         </th>
-                        <td className={tableCellClassName}>{account.id}</td>
                         <td className={tableCellClassName}>{account.name}</td>
                         <td className={tableCellClassName}>
                           {account.username || "—"}
                         </td>
-                        <td className={tableCellClassName}>
-                          {account.platform_user_id || "—"}
-                        </td>
                         <td className={numericTableCellClassName}>
                           {formatNumber(account.total_messages)}
+                        </td>
+                        <td className={numericTableCellClassName}>
+                          {formatNumber(account.total_text_length)}
+                        </td>
+                        <td className={tableCellClassName}>
+                          {formatDate(account.earliest_message_timestamp)} -{" "}
+                          {formatDate(account.latest_message_timestamp)}
                         </td>
                         <td className={numericTableCellClassName}>
                           {formatNumber(account.total_contacts)}

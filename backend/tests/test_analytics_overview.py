@@ -271,7 +271,10 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
             "username": "anton",
             "platform_user_id": "user-owner",
             "total_messages": 0,
+            "total_text_length": 0,
             "total_contacts": 0,
+            "earliest_message_timestamp": None,
+            "latest_message_timestamp": None,
         }
     ]
     assert overview.earliest_message_timestamp is None
@@ -285,6 +288,7 @@ def test_account_without_messages_and_empty_chat_are_included(db_session):
         "title": "No messages",
         "chat_type": "private",
         "total_messages": 0,
+        "text_length": 0,
         "ordinary_messages": 0,
         "service_messages": 0,
         "earliest_message_timestamp": None,
@@ -311,12 +315,12 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     first_date = datetime(2025, 1, 1, tzinfo=timezone.utc)
     second_date = datetime(2025, 1, 2, tzinfo=timezone.utc)
     latest_date = datetime(2025, 1, 5, tzinfo=timezone.utc)
-    add_message(db_session, 1, 10, "message", "user-alex", first_date, is_outgoing=False, sender_contact_id=20)
-    add_message(db_session, 2, 10, "service", "user-sam", is_outgoing=False, sender_contact_id=21)
-    add_message(db_session, 3, 10, "message", None, second_date, is_outgoing=False)
-    add_message(db_session, 4, 10, "message", "user-owner", is_outgoing=True)
-    add_message(db_session, 5, 10, "service", "user-unlinked", latest_date, is_outgoing=False)
-    add_message(db_session, 6, 11, "message", "user-alex", second_date, is_outgoing=False)
+    add_message(db_session, 1, 10, "message", "user-alex", first_date, is_outgoing=False, sender_contact_id=20, text_content="hello")
+    add_message(db_session, 2, 10, "service", "user-sam", is_outgoing=False, sender_contact_id=21, text_content="ignore service")
+    add_message(db_session, 3, 10, "message", None, second_date, is_outgoing=False, text_content="abc")
+    add_message(db_session, 4, 10, "message", "user-owner", is_outgoing=True, text_content="hey")
+    add_message(db_session, 5, 10, "service", "user-unlinked", latest_date, is_outgoing=False, text_content="ignore")
+    add_message(db_session, 6, 11, "message", "user-alex", second_date, is_outgoing=False, text_content="x")
 
     overview = OverviewStatistics.model_validate(get_overview(db_session))
     chats = [
@@ -343,7 +347,10 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
             "username": None,
             "platform_user_id": "user-owner",
             "total_messages": 6,
+            "total_text_length": 12,
             "total_contacts": 2,
+            "earliest_message_timestamp": first_date,
+            "latest_message_timestamp": latest_date,
         }
     ]
     assert overview.earliest_message_timestamp == first_date
@@ -352,10 +359,12 @@ def test_aggregates_types_dates_senders_contacts_and_owner(db_session):
     by_chat_id = {chat.chat_id: chat for chat in chats}
     assert by_chat_id[10].platform_chat_id == "telegram-chat-10"
     assert by_chat_id[10].total_messages == 5
+    assert by_chat_id[10].text_length == 11
     assert by_chat_id[10].ordinary_messages == 3
     assert by_chat_id[10].service_messages == 2
     assert by_chat_id[10].distinct_identified_senders == 4
     assert by_chat_id[11].total_messages == 1
+    assert by_chat_id[11].text_length == 1
     assert by_chat_id[11].distinct_identified_senders == 1
     assert by_chat_id[12].total_messages == 0
 
