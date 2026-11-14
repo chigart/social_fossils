@@ -36,6 +36,7 @@ export default function App() {
   const lastChatScope = useRef<"dm" | "group" | null>(null);
   const lastForgottenScope = useRef<"private" | "group" | null>(null);
   const filters = useDashboardFilters({
+    chatScope: selectedTab === "dms" ? "dm" : "group",
     chats,
     contacts,
     balance,
@@ -43,7 +44,7 @@ export default function App() {
   });
   const {
     chatSort,
-    contactSortDirection,
+    contactSort,
     balanceClassification,
     balanceSortKey,
     balanceSortDirection,
@@ -114,7 +115,8 @@ export default function App() {
         void loadContacts(
           false,
           contacts.data?.pagination.page ?? 1,
-          contactSortDirection,
+          contactSort.key,
+          contactSort.direction,
         );
         break;
       case "identity-links":

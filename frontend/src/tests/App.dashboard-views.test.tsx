@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { paginated, resetDashboardApi } from "./dashboardTestHelpers";
 import {
   chats,
-  forgotten,
   overview,
 } from "./App.testFixtures";
 import {
@@ -102,62 +101,6 @@ describe("dashboard", () => {
       "hidden",
     );
     expect(document.getElementById("overview-panel")).toHaveAttribute("hidden");
-  });
-
-  it("loads private Forgotten and group Interactions scopes separately", async () => {
-    api.getForgottenContacts.mockImplementation(
-      async (_page, _pageSize, _sortBy, _sortDirection, scope) =>
-        scope === "group"
-          ? {
-              ...forgotten,
-              summary: { ...forgotten.summary, eligible_contacts: 1 },
-              pagination: { ...forgotten.pagination, total: 1 },
-              contacts: [
-                {
-                  ...forgotten.contacts[0],
-                  display_name: "Group participant",
-                  interaction_chat_count: 4,
-                },
-              ],
-            }
-          : forgotten,
-    );
-    await renderLoadedDashboard();
-
-    await selectDashboardTab("Interactions");
-    const interactions = await screen.findByRole("region", {
-      name: "Group interactions",
-    });
-    expect(api.getForgottenContacts).toHaveBeenLastCalledWith(
-      1,
-      50,
-      "ranking_score",
-      "desc",
-      "group",
-    );
-    expect(
-      within(interactions).getByRole("row", {
-        name: /Group participant.*4/,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(interactions).getByRole("columnheader", { name: "Group chats" }),
-    ).toBeInTheDocument();
-
-    await selectDashboardTab("Forgotten");
-    const forgottenRegion = screen.getByRole("region", {
-      name: "Forgotten contacts",
-    });
-    expect(api.getForgottenContacts).toHaveBeenLastCalledWith(
-      1,
-      50,
-      "ranking_score",
-      "desc",
-      "private",
-    );
-    expect(
-      within(forgottenRegion).getByRole("row", { name: /Mika/ }),
-    ).toBeInTheDocument();
   });
 
   it("shows the no-import guidance when analytics contain no imported data", async () => {
@@ -318,6 +261,9 @@ describe("dashboard", () => {
     const chatsRegion = screen.getByRole("region", { name: "Chats" });
     const chatsTable = within(chatsRegion).getByRole("table");
 
+    expect(
+      within(chatsTable).queryByRole("columnheader", { name: "Ordinary" }),
+    ).not.toBeInTheDocument();
     expect(rowTitles(chatsTable)).toEqual([
       "Aurora group",
       "Zebra group",
@@ -342,6 +288,65 @@ describe("dashboard", () => {
       "Untitled chat",
     ]);
     expect(titleSort).toHaveAttribute("aria-label", "Sort by Chat title, descending");
+  });
+
+  it("sorts chats by senders and message dates, and DMs omit senders", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    await selectDashboardTab("Chats");
+    const chatsRegion = screen.getByRole("region", { name: "Chats" });
+    const chatsTable = within(chatsRegion).getByRole("table");
+
+    await user.click(
+      within(chatsRegion).getByRole("button", { name: "Sort by Senders" }),
+    );
+    expect(rowTitles(chatsTable)).toEqual([
+      "Untitled chat",
+      "Zebra group",
+      "Aurora group",
+    ]);
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "distinct_identified_senders",
+      "asc",
+      "group",
+    );
+
+    await user.click(
+      within(chatsRegion).getByRole("button", { name: "Sort by First message" }),
+    );
+    expect(rowTitles(chatsTable)).toEqual([
+      "Zebra group",
+      "Aurora group",
+      "Untitled chat",
+    ]);
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "earliest_message_timestamp",
+      "asc",
+      "group",
+    );
+
+    await selectDashboardTab("DMs");
+    await waitFor(() =>
+      expect(api.getChats).toHaveBeenLastCalledWith(
+        1,
+        50,
+        "total_messages",
+        "desc",
+        "dm",
+      ),
+    );
+    const dmsRegion = screen.getByRole("region", { name: "DMs" });
+    const dmsTable = within(dmsRegion).getByRole("table");
+    expect(
+      within(dmsTable).queryByRole("columnheader", { name: "Senders" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dmsRegion).getByRole("button", { name: "Sort by Latest message" }),
+    ).toBeInTheDocument();
   });
 
   it("toggles contact message sorting between ascending and descending", async () => {
@@ -370,6 +375,42 @@ describe("dashboard", () => {
     expect(sortButton).toHaveAttribute(
       "aria-label",
       "Sort by Messages sent, ascending",
+    );
+  });
+
+  it("sorts contacts by DM and group message counts", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    await selectDashboardTab("Contacts");
+    const contactsRegion = screen.getByRole("region", {
+      name: "Contacts & senders",
+    });
+    const contactsTable = within(contactsRegion).getByRole("table");
+
+    await user.click(
+      within(contactsRegion).getByRole("button", {
+        name: "Sort by Group messages",
+      }),
+    );
+    expect(rowTitles(contactsTable)).toEqual(["Avery", "Morgan"]);
+    expect(api.getContacts).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "group_chat_messages_sent",
+      "asc",
+    );
+
+    await user.click(
+      within(contactsRegion).getByRole("button", {
+        name: "Sort by DM messages",
+      }),
+    );
+    expect(rowTitles(contactsTable)).toEqual(["Morgan", "Avery"]);
+    expect(api.getContacts).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "personal_chat_messages_sent",
+      "asc",
     );
   });
 
@@ -435,125 +476,4 @@ describe("dashboard", () => {
     expect(api.getContacts).toHaveBeenCalledTimes(2);
   });
 
-  it("shows ranked Forgotten Contacts with monthly activity, evidence, and filtering", async () => {
-    const user = userEvent.setup();
-    await renderLoadedDashboard();
-    await selectDashboardTab("Forgotten");
-
-    const region = screen.getByRole("region", { name: "Forgotten contacts" });
-    expect(within(region).getByText(/Scope: Combined owner data/)).toBeInTheDocument();
-    expect(
-      within(region).getByRole("columnheader", { name: "Monthly activity" }),
-    ).toBeInTheDocument();
-    expect(
-      within(region).getAllByRole("img", { name: /Historical monthly activity/ }),
-    ).toHaveLength(forgotten.contacts.length);
-    expect(within(region).getAllByText("Inactive")).toHaveLength(2);
-    expect(within(region).getAllByText("Reliable baseline")).toHaveLength(
-      forgotten.contacts.length,
-    );
-    expect(within(region).getByText(/descriptive heuristics/)).toBeInTheDocument();
-
-    const table = within(region).getByRole("table");
-    expect(rowTitles(table)).toEqual(["Mika", "Zoe", "Lena"]);
-
-    await user.click(within(region).getByRole("button", { name: "Sort by Name" }));
-    expect(rowTitles(table)).toEqual(["Lena", "Mika", "Zoe"]);
-    await user.click(within(region).getByRole("button", {
-      name: "Choose a forgotten contact",
-    }));
-    await user.click(
-      within(
-        screen.getByRole("listbox", {
-          name: "Choose a forgotten contact options",
-        }),
-      ).getByRole("option", { name: /Zoe/ }),
-    );
-    expect(rowTitles(table)).toEqual(["Zoe"]);
-  });
-
-  it("shows insufficient-history evidence and a no-match state", async () => {
-    const user = userEvent.setup();
-    api.getForgottenContacts.mockResolvedValue({
-      ...forgotten,
-      summary: {
-        ...forgotten.summary,
-        insufficient_data_contacts: 1,
-      },
-      contacts: [
-        {
-          ...forgotten.contacts[0],
-          classification: "insufficient_data",
-          evidence_status: "insufficient_history",
-          ranking_score: null,
-        },
-      ],
-    });
-    await renderLoadedDashboard();
-    await selectDashboardTab("Forgotten");
-
-    const region = screen.getByRole("region", { name: "Forgotten contacts" });
-    expect(
-      within(region).getByText(/insufficient history or ambiguous message direction/),
-    ).toBeInTheDocument();
-    expect(within(region).getByText("Insufficient history")).toBeInTheDocument();
-    await user.click(within(region).getByRole("button", {
-      name: "Choose a forgotten contact",
-    }));
-    await user.type(
-      within(region).getByRole("searchbox", {
-        name: "Choose a forgotten contact search",
-      }),
-      "nobody",
-    );
-    expect(
-      within(region).getByText("No contacts match these filters."),
-    ).toBeInTheDocument();
-  });
-
-  it("shows a distinct no-eligible-contact state after imports exist", async () => {
-    api.getForgottenContacts.mockResolvedValue({
-      ...forgotten,
-      summary: {
-        ...forgotten.summary,
-        eligible_contacts: 0,
-        meaningful_historical_contacts: 0,
-        currently_inactive_contacts: 0,
-        declining_activity_contacts: 0,
-        insufficient_data_contacts: 0,
-      },
-      contacts: [],
-    });
-    await renderLoadedDashboard();
-    await selectDashboardTab("Forgotten");
-
-    const region = screen.getByRole("region", { name: "Forgotten contacts" });
-    expect(
-      within(region).getByRole("heading", {
-        name: "No eligible contacts available",
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(region).getByText(
-        "No identifiable one-to-one contacts are available for comparison.",
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it("retries a failed Forgotten Contacts request", async () => {
-    const user = userEvent.setup();
-    api.getForgottenContacts.mockRejectedValueOnce(
-      new Error("Forgotten contacts unavailable."),
-    );
-    render(<App />);
-    await selectDashboardTab("Forgotten");
-
-    const region = screen.getByRole("region", { name: "Forgotten contacts" });
-    expect(await within(region).findByRole("alert")).toHaveTextContent(
-      "Forgotten contacts unavailable.",
-    );
-    await user.click(within(region).getByRole("button", { name: "Retry" }));
-    expect(await within(region).findByText("Mika")).toBeInTheDocument();
-    expect(api.getForgottenContacts).toHaveBeenCalledTimes(2);
-  });
 });

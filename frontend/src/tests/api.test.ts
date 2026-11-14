@@ -115,7 +115,7 @@ describe("analytics API helpers", () => {
       ["/api/analytics/overview"],
       ["/api/analytics/chat-insights"],
       [`/api/analytics/chats?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages&sort_direction=desc`],
-      [`/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_direction=desc`],
+      [`/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages_sent&sort_direction=desc`],
       [`/api/analytics/communication-balance?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=text_volume&sort_direction=desc`],
       [`/api/analytics/forgotten-contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=ranking_score&sort_direction=desc&scope=private`],
       ["/api/analytics/communication-timeline"],
@@ -172,6 +172,37 @@ describe("analytics API helpers", () => {
       ],
       [
         "/api/analytics/forgotten-contacts?page=2&page_size=25&sort_by=ranking_score&sort_direction=asc&scope=group",
+      ],
+    ]);
+  });
+
+  it("requests the selected chat and contact sort fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getChats(
+      1,
+      DEFAULT_PAGE_SIZE,
+      "earliest_message_timestamp",
+      "asc",
+      "dm",
+    );
+    await getContacts(
+      2,
+      DEFAULT_PAGE_SIZE,
+      "group_chat_messages_sent",
+      "desc",
+    );
+
+    expect(fetchMock.mock.calls).toEqual([
+      [
+        `/api/analytics/chats?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=earliest_message_timestamp&sort_direction=asc&chat_scope=dm`,
+      ],
+      [
+        `/api/analytics/contacts?page=2&page_size=${DEFAULT_PAGE_SIZE}&sort_by=group_chat_messages_sent&sort_direction=desc`,
       ],
     ]);
   });

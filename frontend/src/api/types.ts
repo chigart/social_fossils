@@ -163,6 +163,13 @@ export type ChatStatistics = {
 
 export type ChatScope = "dm" | "group" | "all";
 
+export type ChatSortBy =
+  | "title"
+  | "total_messages"
+  | "distinct_identified_senders"
+  | "earliest_message_timestamp"
+  | "latest_message_timestamp";
+
 export type ContactStatistics = {
   platforms: string[];
   account_id: number | null;
@@ -180,6 +187,11 @@ export type ContactStatistics = {
   ordinary_messages_sent: number;
   service_events_attributed: number;
 };
+
+export type ContactSortBy =
+  | "total_messages_sent"
+  | "personal_chat_messages_sent"
+  | "group_chat_messages_sent";
 
 export type IdentityContactSource = {
   contact_id: number;

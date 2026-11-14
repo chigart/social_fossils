@@ -1,4 +1,8 @@
-import type { ContactStatistics, PaginatedItems } from "../api";
+import type {
+  ContactSortBy,
+  ContactStatistics,
+  PaginatedItems,
+} from "../api";
 import { formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
@@ -33,7 +37,7 @@ export function ContactsView({
   search,
   searchOptions,
   onSearchChange,
-  sortDirection,
+  sort,
   onSort,
   hasMessages,
   onRetry,
@@ -44,8 +48,8 @@ export function ContactsView({
   search: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
-  sortDirection: SortDirection;
-  onSort: () => void;
+  sort: { key: ContactSortBy; direction: SortDirection };
+  onSort: (key: ContactSortBy) => void;
   hasMessages: boolean;
   onRetry: () => void;
   onPageChange: (page: number) => void;
@@ -118,14 +122,28 @@ export function ContactsView({
                   <th className={tableHeaderClassName} scope="col">Contact / sender</th>
                   <th className={tableHeaderClassName} scope="col">User ID</th>
                   <th className={tableHeaderClassName} scope="col">Accounts</th>
-                  <th className={tableHeaderClassName} scope="col">DM messages</th>
-                  <th className={tableHeaderClassName} scope="col">Group messages</th>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="DM messages"
+                      active={sort.key === "personal_chat_messages_sent"}
+                      direction={sort.direction}
+                      onClick={() => onSort("personal_chat_messages_sent")}
+                    />
+                  </th>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="Group messages"
+                      active={sort.key === "group_chat_messages_sent"}
+                      direction={sort.direction}
+                      onClick={() => onSort("group_chat_messages_sent")}
+                    />
+                  </th>
                   <th className={tableHeaderClassName} scope="col">
                     <SortButton
                       label="Messages sent"
-                      active
-                      direction={sortDirection}
-                      onClick={onSort}
+                      active={sort.key === "total_messages_sent"}
+                      direction={sort.direction}
+                      onClick={() => onSort("total_messages_sent")}
                     />
                   </th>
                 </tr>

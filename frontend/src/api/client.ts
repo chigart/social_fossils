@@ -1,12 +1,14 @@
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import type {
   ChatInsightsResponse,
+  ChatSortBy,
   ChatScope,
   ChatStatistics,
   CommunicationBalanceClassification,
   CommunicationBalanceStatistics,
   CommunicationTimelineStatistics,
   ContactStatistics,
+  ContactSortBy,
   ForgottenContactsStatistics,
   IdentityLinkActionResponse,
   IdentityLinksResponse,
@@ -237,7 +239,7 @@ function pageQuery(
 export const getChats = (
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
-  sortBy: "title" | "total_messages" = "total_messages",
+  sortBy: ChatSortBy = "total_messages",
   sortDirection: "asc" | "desc" = "desc",
   chatScope: ChatScope = "all",
 ) =>
@@ -252,10 +254,12 @@ export const getChats = (
 export const getContacts = (
   page = 1,
   pageSize = DEFAULT_PAGE_SIZE,
+  sortBy: ContactSortBy = "total_messages_sent",
   sortDirection: "asc" | "desc" = "desc",
 ) =>
   getJson<PaginatedItems<ContactStatistics>>(
     `/api/analytics/contacts${pageQuery(page, pageSize, {
+      sort_by: sortBy,
       sort_direction: sortDirection,
     })}`,
   );

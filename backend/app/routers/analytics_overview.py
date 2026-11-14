@@ -136,7 +136,13 @@ def get_chat_statistics(
     db: Session = Depends(get_db),
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
-    sort_by: Literal["title", "total_messages"] = "total_messages",
+    sort_by: Literal[
+        "title",
+        "total_messages",
+        "distinct_identified_senders",
+        "earliest_message_timestamp",
+        "latest_message_timestamp",
+    ] = "total_messages",
     sort_direction: Literal["asc", "desc"] = "desc",
     chat_scope: Literal["dm", "group", "all"] = "all",
 ) -> PaginatedItems[ChatStatistics]:
@@ -198,15 +204,19 @@ def get_chat_statistics(
             *chat_filters,
         )
     )
-    primary_sort = (
-        func.lower(func.coalesce(Chat.title, ""))
-        if sort_by == "title"
-        else func.count(Message.id)
-    )
+    primary_sort = {
+        "title": func.lower(func.coalesce(Chat.title, "")),
+        "total_messages": func.count(Message.id),
+        "distinct_identified_senders": func.count(
+            func.distinct(Message.sender_id)
+        ),
+        "earliest_message_timestamp": func.min(Message.message_date),
+        "latest_message_timestamp": func.max(Message.message_date),
+    }[sort_by]
     primary_order = (
-        primary_sort.asc()
+        primary_sort.asc().nulls_last()
         if sort_direction == "asc"
-        else primary_sort.desc()
+        else primary_sort.desc().nulls_last()
     )
     statement = statement.order_by(primary_order, Chat.id.asc()).offset(
         (page - 1) * page_size
@@ -300,13 +310,19 @@ def get_chat_statistics(
         "are included with zero counts. Incoming counts require reliable "
         "incoming direction; ordinary and service counts are reported "
         "separately. Total sender-attributed messages are also split between "
-        "personal_chat and non-one-to-one chats."
+        "personal_chat and non-one-to-one chats. Results can be sorted by total, "
+        "DM, or group messages."
     ),
 )
 def get_contact_statistics(
     db: Session = Depends(get_db),
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
+    sort_by: Literal[
+        "total_messages_sent",
+        "personal_chat_messages_sent",
+        "group_chat_messages_sent",
+    ] = "total_messages_sent",
     sort_direction: Literal["asc", "desc"] = "desc",
 ) -> PaginatedItems[ContactStatistics]:
     owner_account = aliased(Account)
@@ -575,8 +591,17 @@ def get_contact_statistics(
             contact.source_account_ids,
         )
     )
+    contact_sort_value = {
+        "total_messages_sent": lambda contact: contact.total_messages_sent,
+        "personal_chat_messages_sent": lambda contact: (
+            contact.personal_chat_messages_sent
+        ),
+        "group_chat_messages_sent": lambda contact: (
+            contact.group_chat_messages_sent
+        ),
+    }[sort_by]
     contacts.sort(
-        key=lambda contact: contact.total_messages_sent,
+        key=contact_sort_value,
         reverse=sort_direction == "desc",
     )
     offset = (page - 1) * page_size

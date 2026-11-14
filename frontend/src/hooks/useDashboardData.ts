@@ -11,12 +11,14 @@ import {
   linkPlatformIdentities,
   unlinkPlatformIdentity,
   type ChatScope,
+  type ChatSortBy,
   type ChatInsightsResponse,
   type ChatStatistics,
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
   type CommunicationTimelineStatistics,
   type ContactStatistics,
+  type ContactSortBy,
   type ForgottenContactsStatistics,
   type IdentityLinksResponse,
   type OverviewStatistics,
@@ -85,7 +87,7 @@ export function useDashboardData() {
   const loadChats = useCallback(async (
     force = false,
     page = 1,
-    sortBy: "title" | "total_messages" = "total_messages",
+    sortBy: ChatSortBy = "total_messages",
     sortDirection: "asc" | "desc" = "desc",
     chatScope: ChatScope = "all",
   ) => {
@@ -169,10 +171,11 @@ export function useDashboardData() {
   const loadContacts = useCallback(async (
     force = false,
     page = 1,
+    sortBy: ContactSortBy = "total_messages_sent",
     sortDirection: "asc" | "desc" = "desc",
   ) => {
     const requestId = ++contactRequestId.current;
-    const cacheKey = `${page}:${sortDirection}`;
+    const cacheKey = `${page}:${sortBy}:${sortDirection}`;
     const cachedPage = contactPages.current.get(cacheKey);
     if (!force && cachedPage) {
       setContacts({ data: cachedPage, error: null, loading: false });
@@ -180,7 +183,12 @@ export function useDashboardData() {
     }
     setContacts((current) => ({ ...current, error: null, loading: true }));
     try {
-      const data = await getContacts(page, DEFAULT_PAGE_SIZE, sortDirection);
+      const data = await getContacts(
+        page,
+        DEFAULT_PAGE_SIZE,
+        sortBy,
+        sortDirection,
+      );
       contactPages.current.set(cacheKey, data);
       if (requestId !== contactRequestId.current) return;
       setContacts({

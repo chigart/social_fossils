@@ -77,8 +77,8 @@ export function DashboardContent({
     setBalanceSortDirection,
     chatSort,
     changeChatSort,
-    contactSortDirection,
-    setContactSortDirection,
+    contactSort,
+    changeContactSort,
     visibleChats,
     visibleContacts,
     visibleBalanceContacts,
@@ -316,23 +316,41 @@ export function DashboardContent({
                     contacts.data?.options,
                     contacts.data?.pagination.page_size,
                   ),
-                  contactSortDirection,
+                  contactSort.key,
+                    contactSort.direction,
                 );
               }}
-              sortDirection={contactSortDirection}
-              onSort={() => {
+              sort={contactSort}
+              onSort={(key) => {
                 setContactSearch("");
-                const next = contactSortDirection === "asc" ? "desc" : "asc";
-                setContactSortDirection(next);
-                void loadContacts(false, 1, next);
+                const next = {
+                  key,
+                  direction:
+                    contactSort.key === key &&
+                    contactSort.direction === "asc"
+                      ? "desc"
+                      : "asc",
+                } as const;
+                changeContactSort(key);
+                void loadContacts(false, 1, next.key, next.direction);
               }}
               hasMessages={(overview.data?.total_messages ?? 0) > 0}
               onRetry={() =>
-                void loadContacts(true, 1, contactSortDirection)
+                void loadContacts(
+                  true,
+                  1,
+                  contactSort.key,
+                  contactSort.direction,
+                )
               }
               onPageChange={(page) => {
                 setContactSearch("");
-                void loadContacts(false, page, contactSortDirection);
+                void loadContacts(
+                  false,
+                  page,
+                  contactSort.key,
+                  contactSort.direction,
+                );
               }}
             />
           )}

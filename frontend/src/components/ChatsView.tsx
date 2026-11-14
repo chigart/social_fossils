@@ -1,4 +1,4 @@
-import type { ChatStatistics, PaginatedItems } from "../api";
+import type { ChatSortBy, ChatStatistics, PaginatedItems } from "../api";
 import { formatDate, formatNumber } from "../utils/format";
 import {
   emptyStateClassName,
@@ -48,8 +48,8 @@ export function ChatsView({
   search: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
-  sort: { key: "title" | "total_messages"; direction: SortDirection };
-  onSort: (key: "title" | "total_messages") => void;
+  sort: { key: ChatSortBy; direction: SortDirection };
+  onSort: (key: ChatSortBy) => void;
   hasImportedAccounts: boolean;
   onRetry: () => void;
   onPageChange: (page: number) => void;
@@ -135,10 +135,32 @@ export function ChatsView({
                       onClick={() => onSort("total_messages")}
                     />
                   </th>
-                  <th className={tableHeaderClassName} scope="col">Ordinary</th>
-                  <th className={tableHeaderClassName} scope="col">Senders</th>
-                  <th className={tableHeaderClassName} scope="col">First message</th>
-                  <th className={tableHeaderClassName} scope="col">Latest message</th>
+                  {chatScope === "group" && (
+                    <th className={tableHeaderClassName} scope="col">
+                      <SortButton
+                        label="Senders"
+                        active={sort.key === "distinct_identified_senders"}
+                        direction={sort.direction}
+                        onClick={() => onSort("distinct_identified_senders")}
+                      />
+                    </th>
+                  )}
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="First message"
+                      active={sort.key === "earliest_message_timestamp"}
+                      direction={sort.direction}
+                      onClick={() => onSort("earliest_message_timestamp")}
+                    />
+                  </th>
+                  <th className={tableHeaderClassName} scope="col">
+                    <SortButton
+                      label="Latest message"
+                      active={sort.key === "latest_message_timestamp"}
+                      direction={sort.direction}
+                      onClick={() => onSort("latest_message_timestamp")}
+                    />
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -167,12 +189,11 @@ export function ChatsView({
                     <td className={numericTableCellClassName}>
                       {formatNumber(chat.total_messages)}
                     </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(chat.ordinary_messages)}
-                    </td>
-                    <td className={numericTableCellClassName}>
-                      {formatNumber(chat.distinct_identified_senders)}
-                    </td>
+                    {chatScope === "group" && (
+                      <td className={numericTableCellClassName}>
+                        {formatNumber(chat.distinct_identified_senders)}
+                      </td>
+                    )}
                     <td className={tableCellClassName}>
                       {formatDate(chat.earliest_message_timestamp)}
                     </td>
