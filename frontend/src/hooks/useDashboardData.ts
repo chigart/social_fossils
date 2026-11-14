@@ -90,9 +90,10 @@ export function useDashboardData() {
     sortBy: ChatSortBy = "total_messages",
     sortDirection: "asc" | "desc" = "desc",
     chatScope: ChatScope = "all",
+    platform = "",
   ) => {
     const requestId = ++chatRequestId.current;
-    const cacheKey = `${chatScope}:${page}:${sortBy}:${sortDirection}`;
+    const cacheKey = `${chatScope}:${page}:${sortBy}:${sortDirection}:${platform}`;
     const cachedPage = chatPages.current.get(cacheKey);
     const scopeChanged = activeChatScope.current !== chatScope;
     activeChatScope.current = chatScope;
@@ -107,13 +108,22 @@ export function useDashboardData() {
       loading: true,
     }));
     try {
-      const data = await getChats(
-        page,
-        DEFAULT_PAGE_SIZE,
-        sortBy,
-        sortDirection,
-        chatScope,
-      );
+      const data = platform
+        ? await getChats(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            chatScope,
+            platform,
+          )
+        : await getChats(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            chatScope,
+          );
       chatPages.current.set(cacheKey, data);
       if (requestId !== chatRequestId.current) return;
       setChats({
@@ -173,9 +183,10 @@ export function useDashboardData() {
     page = 1,
     sortBy: ContactSortBy = "total_messages_sent",
     sortDirection: "asc" | "desc" = "desc",
+    platform = "",
   ) => {
     const requestId = ++contactRequestId.current;
-    const cacheKey = `${page}:${sortBy}:${sortDirection}`;
+    const cacheKey = `${page}:${sortBy}:${sortDirection}:${platform}`;
     const cachedPage = contactPages.current.get(cacheKey);
     if (!force && cachedPage) {
       setContacts({ data: cachedPage, error: null, loading: false });
@@ -183,12 +194,15 @@ export function useDashboardData() {
     }
     setContacts((current) => ({ ...current, error: null, loading: true }));
     try {
-      const data = await getContacts(
-        page,
-        DEFAULT_PAGE_SIZE,
-        sortBy,
-        sortDirection,
-      );
+      const data = platform
+        ? await getContacts(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            platform,
+          )
+        : await getContacts(page, DEFAULT_PAGE_SIZE, sortBy, sortDirection);
       contactPages.current.set(cacheKey, data);
       if (requestId !== contactRequestId.current) return;
       setContacts({
@@ -215,9 +229,11 @@ export function useDashboardData() {
     sortBy: "text_volume" | "owner_share" | "recent_activity" = "text_volume",
     sortDirection: "asc" | "desc" = "desc",
     classification: CommunicationBalanceClassification | "all" = "all",
+    platform = "",
   ) => {
     const requestId = ++balanceRequestId.current;
-    const cacheKey = `${page}:${sortBy}:${sortDirection}:${classification}`;
+    const cacheKey =
+      `${page}:${sortBy}:${sortDirection}:${classification}:${platform}`;
     const cachedPage = balancePages.current.get(cacheKey);
     if (!force && cachedPage) {
       setBalance({ data: cachedPage, error: null, loading: false });
@@ -225,13 +241,22 @@ export function useDashboardData() {
     }
     setBalance((current) => ({ ...current, error: null, loading: true }));
     try {
-      const data = await getCommunicationBalance(
-        page,
-        DEFAULT_PAGE_SIZE,
-        sortBy,
-        sortDirection,
-        classification,
-      );
+      const data = platform
+        ? await getCommunicationBalance(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            classification,
+            platform,
+          )
+        : await getCommunicationBalance(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            classification,
+          );
       balancePages.current.set(cacheKey, data);
       if (requestId !== balanceRequestId.current) return;
       setBalance({
@@ -261,9 +286,10 @@ export function useDashboardData() {
       | "days_since_last_communication" = "ranking_score",
     sortDirection: "asc" | "desc" = "desc",
     scope: "private" | "group" = "private",
+    platform = "",
   ) => {
     const requestId = ++forgottenContactRequestId.current;
-    const cacheKey = `${scope}:${page}:${sortBy}:${sortDirection}`;
+    const cacheKey = `${scope}:${page}:${sortBy}:${sortDirection}:${platform}`;
     const cachedPage = forgottenContactPages.current.get(cacheKey);
     const scopeChanged = activeForgottenScope.current !== scope;
     activeForgottenScope.current = scope;
@@ -282,13 +308,22 @@ export function useDashboardData() {
       loading: true,
     }));
     try {
-      const data = await getForgottenContacts(
-        page,
-        DEFAULT_PAGE_SIZE,
-        sortBy,
-        sortDirection,
-        scope,
-      );
+      const data = platform
+        ? await getForgottenContacts(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            scope,
+            platform,
+          )
+        : await getForgottenContacts(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            scope,
+          );
       forgottenContactPages.current.set(cacheKey, data);
       if (requestId !== forgottenContactRequestId.current) return;
       setForgottenContacts({

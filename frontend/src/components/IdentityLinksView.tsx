@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { IdentityLinksResponse } from "../api";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 import {
@@ -16,7 +17,10 @@ import {
   PaginationControls,
   SectionError,
 } from "./Feedback";
-import { SearchPicker } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+} from "./SearchPicker";
 import { useIdentityLinks } from "../hooks/useIdentityLinks";
 
 export function IdentityLinksView({
@@ -30,6 +34,8 @@ export function IdentityLinksView({
   onLink: (firstIdentityId: number, secondIdentityId: number) => Promise<void>;
   onUnlink: (identityId: number) => Promise<void>;
 }) {
+  const [firstPlatformFilter, setFirstPlatformFilter] = useState("");
+  const [secondPlatformFilter, setSecondPlatformFilter] = useState("");
   const {
     firstIdentityId,
     setFirstIdentityId,
@@ -94,26 +100,68 @@ export function IdentityLinksView({
               Link or extend an identity group
             </h3>
             <div className="flex flex-wrap items-end gap-3">
-              <SearchPicker
-                label="First platform identity"
-                value={firstIdentityId}
-                options={identityOptions}
-                onChange={setFirstIdentityId}
-                placeholder="Select identity"
-                searchPlaceholder="Search name, username, or ID"
-                allLabel="Select identity"
-                emptyMessage="No identities match these filters."
-              />
-              <SearchPicker
-                label="Second platform identity"
-                value={secondIdentityId}
-                options={identityOptions}
-                onChange={setSecondIdentityId}
-                placeholder="Select identity"
-                searchPlaceholder="Search name, username, or ID"
-                allLabel="Select identity"
-                emptyMessage="No identities match these filters."
-              />
+              <div className="flex flex-wrap gap-2">
+                <PlatformFilterSelect
+                  label="Filter first identity by platform"
+                  value={firstPlatformFilter}
+                  options={identityOptions}
+                  onChange={(platform) => {
+                    setFirstPlatformFilter(platform);
+                    if (
+                      firstIdentityId &&
+                      !identityOptions.some(
+                        (option) =>
+                          option.value === firstIdentityId &&
+                          (!platform || option.platforms.includes(platform)),
+                      )
+                    ) {
+                      setFirstIdentityId("");
+                    }
+                  }}
+                />
+                <SearchPicker
+                  label="First platform identity"
+                  value={firstIdentityId}
+                  platformFilter={firstPlatformFilter}
+                  options={identityOptions}
+                  onChange={setFirstIdentityId}
+                  placeholder="Select identity"
+                  searchPlaceholder="Search name, username, or ID"
+                  allLabel="Select identity"
+                  emptyMessage="No identities match these filters."
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <PlatformFilterSelect
+                  label="Filter second identity by platform"
+                  value={secondPlatformFilter}
+                  options={identityOptions}
+                  onChange={(platform) => {
+                    setSecondPlatformFilter(platform);
+                    if (
+                      secondIdentityId &&
+                      !identityOptions.some(
+                        (option) =>
+                          option.value === secondIdentityId &&
+                          (!platform || option.platforms.includes(platform)),
+                      )
+                    ) {
+                      setSecondIdentityId("");
+                    }
+                  }}
+                />
+                <SearchPicker
+                  label="Second platform identity"
+                  value={secondIdentityId}
+                  platformFilter={secondPlatformFilter}
+                  options={identityOptions}
+                  onChange={setSecondIdentityId}
+                  placeholder="Select identity"
+                  searchPlaceholder="Search name, username, or ID"
+                  allLabel="Select identity"
+                  emptyMessage="No identities match these filters."
+                />
+              </div>
               <Button
                 variant="positive"
                 type="button"

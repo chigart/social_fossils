@@ -466,7 +466,7 @@ describe("dashboard", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("combobox", {
-        name: "Choose a chat platform filter",
+        name: "Filter chats by platform",
       }).querySelector('option[value="telegram"]'),
     ).not.toHaveClass("bg-platform-telegram-background");
     await user.click(secondChatOption);

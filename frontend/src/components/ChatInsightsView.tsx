@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type {
   ChatInsightsResponse,
   CommunicationTimelineStatistics,
@@ -22,7 +23,10 @@ import {
   getSelectedChatInsights,
   sortChatInsightsChats,
 } from "../utils/chatInsights";
-import { SearchPicker } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+} from "./SearchPicker";
 
 export function ChatInsightsView({
   insights,
@@ -41,7 +45,29 @@ export function ChatInsightsView({
   onRetryInsights: () => void;
   onRetryTimeline: () => void;
 }) {
-  const sortedChats = sortChatInsightsChats(insights.data?.chats ?? []);
+  const [platformFilter, setPlatformFilter] = useState("");
+  const searchOptions = insights.data?.options?.length
+    ? insights.data.options.map((option) => ({
+        value: option.value,
+        label: option.label,
+        platforms: option.platforms,
+        searchTerms: option.search_terms,
+      }))
+    : sortChatInsightsChats(insights.data?.chats ?? []).map((chat) => ({
+        value: String(chat.chat_id),
+        label: chat.title || "Untitled chat",
+        platforms: [chat.platform],
+        searchTerms: [
+          chat.chat_type,
+          chat.source_account_label,
+          String(chat.chat_id),
+        ],
+      }));
+  const sortedChats = sortChatInsightsChats(
+    (insights.data?.chats ?? []).filter(
+      (chat) => !platformFilter || chat.platform === platformFilter,
+    ),
+  );
   const selectedChat = getSelectedChatInsights(sortedChats, selectedChatId);
   const timelineMatchesSelectedChat =
     selectedChat !== undefined &&
@@ -71,27 +97,21 @@ export function ChatInsightsView({
         {insights.data &&
           ((insights.data.options?.length ?? 0) > 0 ||
             insights.data.chats.length > 0) && (
-          <div className="w-full max-w-[420px]">
+          <div className="flex w-full max-w-[520px] flex-wrap gap-2">
+            <PlatformFilterSelect
+              label="Filter insight chats by platform"
+              value={platformFilter}
+              options={searchOptions}
+              onChange={(platform) => {
+                setPlatformFilter(platform);
+                onChatChange(null);
+              }}
+            />
             <SearchPicker
               label="Choose an insight chat"
               value={selectedChat ? String(selectedChat.chat_id) : ""}
-              options={insights.data.options?.length
-                ? insights.data.options.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                    platforms: option.platforms,
-                    searchTerms: option.search_terms,
-                  }))
-                : sortedChats.map((chat) => ({
-                    value: String(chat.chat_id),
-                    label: chat.title || "Untitled chat",
-                    platforms: [chat.platform],
-                    searchTerms: [
-                      chat.chat_type,
-                      chat.source_account_label,
-                      String(chat.chat_id),
-                    ],
-                  }))}
+              platformFilter={platformFilter}
+              options={searchOptions}
               onChange={(value) =>
                 onChatChange(value === "" ? null : Number(value))
               }

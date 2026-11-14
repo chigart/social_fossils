@@ -389,10 +389,13 @@ describe("dashboard", () => {
     await user.clear(search);
     await user.selectOptions(
       screen.getByRole("combobox", {
-        name: "First platform identity platform filter",
+        name: "Filter first identity by platform",
       }),
       "telegram",
     );
+    await user.click(screen.getByRole("button", {
+      name: "First platform identity",
+    }));
     options = screen.getByRole("listbox", {
       name: "First platform identity options",
     });

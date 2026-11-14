@@ -4,8 +4,7 @@ import type { useDashboardFilters } from "../hooks/useDashboardFilters";
 import { useViewSearchOptions } from "../hooks/useViewSearchOptions";
 import type { DashboardTab } from "../utils/dashboardTabs";
 import { pageForSearchOption } from "../utils/dashboard";
-import { ChatsView } from "./ChatsView";
-import { ChatInsightsView } from "./ChatInsightsView";
+import { DashboardConversationPanels } from "./DashboardConversationPanels";
 import { CommunicationBalanceView } from "./CommunicationBalanceView";
 import { ContactsView } from "./ContactsView";
 import { DashboardHeader } from "./DashboardHeader";
@@ -39,32 +38,31 @@ export function DashboardContent({
   const {
     overview,
     chats,
-    chatInsights,
     contacts,
     balance,
     forgottenContacts,
     identityLinks,
-    communicationTimeline,
     loadOverview,
-    loadChats,
-    loadChatInsights,
     loadContacts,
     loadBalance,
     loadForgottenContacts,
     loadIdentityLinks,
-    loadCommunicationTimeline,
     createIdentityLink,
     removeIdentityLink,
   } = dashboard;
   const {
-    chatSearch,
-    setChatSearch,
     contactSearch,
     setContactSearch,
+    contactPlatformFilter,
+    setContactPlatformFilter,
     balanceSearch,
     setBalanceSearch,
+    balancePlatformFilter,
+    setBalancePlatformFilter,
     forgottenSearch,
     setForgottenSearch,
+    forgottenPlatformFilter,
+    setForgottenPlatformFilter,
     balanceClassification,
     setBalanceClassification,
     forgottenSortKey,
@@ -75,11 +73,8 @@ export function DashboardContent({
     setBalanceSortKey,
     balanceSortDirection,
     setBalanceSortDirection,
-    chatSort,
-    changeChatSort,
     contactSort,
     changeContactSort,
-    visibleChats,
     visibleContacts,
     visibleBalanceContacts,
     visibleForgottenContacts,
@@ -91,53 +86,6 @@ export function DashboardContent({
       balance: balance.data,
       forgotten: forgottenContacts.data,
     });
-  const renderChatsView = (chatScope: "dm" | "group") => (
-    <ChatsView
-      chats={chats}
-      chatScope={chatScope}
-      visibleChats={visibleChats}
-      search={chatSearch}
-      searchOptions={chatOptions}
-      onSearchChange={(value) => {
-        setChatSearch(value);
-        void loadChats(
-          false,
-          pageForSearchOption(
-            value,
-            chats.data?.options,
-            chats.data?.pagination.page_size,
-          ),
-          chatSort.key,
-          chatSort.direction,
-          chatScope,
-        );
-      }}
-      sort={chatSort}
-      onSort={(key) => {
-        setChatSearch("");
-        const next = {
-          key,
-          direction:
-            chatSort.key === key && chatSort.direction === "asc"
-              ? "desc"
-              : "asc",
-        } as const;
-        changeChatSort(key);
-        void loadChats(false, 1, next.key, next.direction, chatScope);
-      }}
-      hasImportedAccounts={
-        (overview.data?.total_imported_accounts ?? 0) > 0
-      }
-      onRetry={() =>
-        void loadChats(true, 1, chatSort.key, chatSort.direction, chatScope)
-      }
-      onPageChange={(page) => {
-        setChatSearch("");
-        void loadChats(false, page, chatSort.key, chatSort.direction, chatScope);
-      }}
-      onOpenChatInsights={onOpenChatInsights}
-    />
-  );
   const changeForgottenSort = (
     sortKey:
       | "ranking_score"
@@ -155,7 +103,14 @@ export function DashboardContent({
     setForgottenSearch("");
     setForgottenSortKey(sortKey);
     setForgottenSortDirection(direction);
-    void loadForgottenContacts(false, 1, sortKey, direction, scope);
+    void loadForgottenContacts(
+      false,
+      1,
+      sortKey,
+      direction,
+      scope,
+      forgottenPlatformFilter,
+    );
   };
   const renderForgottenView = (scope: "private" | "group") => (
     <ForgottenContactsView
@@ -164,6 +119,7 @@ export function DashboardContent({
       noImportedData={noImportedData}
       visibleContacts={visibleForgottenContacts}
       search={forgottenSearch}
+      platformFilter={forgottenPlatformFilter}
       searchOptions={forgottenOptions}
       onSearchChange={(value) => {
         setForgottenSearch(value);
@@ -173,10 +129,25 @@ export function DashboardContent({
             value,
             forgottenContacts.data?.options,
             forgottenContacts.data?.pagination.page_size,
+            forgottenPlatformFilter,
+            true,
           ),
           forgottenSortKey,
           forgottenSortDirection,
           scope,
+          forgottenPlatformFilter,
+        );
+      }}
+      onPlatformFilterChange={(platform) => {
+        setForgottenPlatformFilter(platform);
+        setForgottenSearch("");
+        void loadForgottenContacts(
+          false,
+          1,
+          forgottenSortKey,
+          forgottenSortDirection,
+          scope,
+          platform,
         );
       }}
       sortKey={forgottenSortKey}
@@ -201,6 +172,7 @@ export function DashboardContent({
           forgottenSortKey,
           forgottenSortDirection,
           scope,
+          forgottenPlatformFilter,
         )
       }
       onPageChange={(page) => {
@@ -211,6 +183,7 @@ export function DashboardContent({
           forgottenSortKey,
           forgottenSortDirection,
           scope,
+          forgottenPlatformFilter,
         );
       }}
     />
@@ -237,52 +210,17 @@ export function DashboardContent({
             />
           )}
         </div>
-        <div
-          id="conversation-insights-panel"
-          role="tabpanel"
-          aria-labelledby="conversation-insights-tab"
-          tabIndex={0}
-          hidden={selectedTab !== "conversation-insights"}
-        >
-          {selectedTab === "conversation-insights" && (
-            <ChatInsightsView
-              insights={chatInsights}
-              timeline={communicationTimeline}
-              selectedChatId={selectedInsightsChatId}
-              onChatChange={onSelectedInsightsChatChange}
-              noImportedData={noImportedData}
-              onRetryInsights={() =>
-                void loadChatInsights(
-                  true,
-                  selectedInsightsChatId ?? undefined,
-                )
-              }
-              onRetryTimeline={() =>
-                void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
-              }
-            />
-          )}
-        </div>
-        <div
-          id="dms-panel"
-          role="tabpanel"
-          aria-labelledby="dms-tab"
-          aria-label="DMs"
-          tabIndex={0}
-          hidden={selectedTab !== "dms"}
-        >
-          {selectedTab === "dms" && renderChatsView("dm")}
-        </div>
-        <div
-          id="chats-panel"
-          role="tabpanel"
-          aria-labelledby="chats-tab"
-          aria-label="Chats"
-          tabIndex={0}
-          hidden={selectedTab !== "chats"}
-        >
-          {selectedTab === "chats" && renderChatsView("group")}
-        </div>
+        <DashboardConversationPanels
+          dashboard={dashboard}
+          filters={filters}
+          selectedTab={selectedTab}
+          selectedInsightsChatId={selectedInsightsChatId}
+          onSelectedInsightsChatChange={onSelectedInsightsChatChange}
+          selectedChat={selectedChat}
+          onOpenChatInsights={onOpenChatInsights}
+          noImportedData={noImportedData}
+          chatOptions={chatOptions}
+        />
         <div
           id="uploads-panel"
           role="tabpanel"
@@ -306,6 +244,7 @@ export function DashboardContent({
               contacts={contacts}
               visibleContacts={visibleContacts}
               search={contactSearch}
+              platformFilter={contactPlatformFilter}
               searchOptions={contactOptions}
               onSearchChange={(value) => {
                 setContactSearch(value);
@@ -315,9 +254,23 @@ export function DashboardContent({
                     value,
                     contacts.data?.options,
                     contacts.data?.pagination.page_size,
+                    contactPlatformFilter,
+                    true,
                   ),
                   contactSort.key,
-                    contactSort.direction,
+                  contactSort.direction,
+                  contactPlatformFilter,
+                );
+              }}
+              onPlatformFilterChange={(platform) => {
+                setContactPlatformFilter(platform);
+                setContactSearch("");
+                void loadContacts(
+                  false,
+                  1,
+                  contactSort.key,
+                  contactSort.direction,
+                  platform,
                 );
               }}
               sort={contactSort}
@@ -332,7 +285,13 @@ export function DashboardContent({
                       : "asc",
                 } as const;
                 changeContactSort(key);
-                void loadContacts(false, 1, next.key, next.direction);
+                void loadContacts(
+                  false,
+                  1,
+                  next.key,
+                  next.direction,
+                  contactPlatformFilter,
+                );
               }}
               hasMessages={(overview.data?.total_messages ?? 0) > 0}
               onRetry={() =>
@@ -341,6 +300,7 @@ export function DashboardContent({
                   1,
                   contactSort.key,
                   contactSort.direction,
+                  contactPlatformFilter,
                 )
               }
               onPageChange={(page) => {
@@ -350,6 +310,7 @@ export function DashboardContent({
                   page,
                   contactSort.key,
                   contactSort.direction,
+                  contactPlatformFilter,
                 );
               }}
             />
@@ -384,6 +345,7 @@ export function DashboardContent({
               balance={balance}
               visibleContacts={visibleBalanceContacts}
               search={balanceSearch}
+              platformFilter={balancePlatformFilter}
               searchOptions={balanceOptions}
               onSearchChange={(value) => {
                 setBalanceSearch(value);
@@ -393,10 +355,25 @@ export function DashboardContent({
                     value,
                     balance.data?.options,
                     balance.data?.pagination.page_size,
+                    balancePlatformFilter,
+                    true,
                   ),
                   balanceSortKey,
                   balanceSortDirection,
                   balanceClassification,
+                  balancePlatformFilter,
+                );
+              }}
+              onPlatformFilterChange={(platform) => {
+                setBalancePlatformFilter(platform);
+                setBalanceSearch("");
+                void loadBalance(
+                  false,
+                  1,
+                  balanceSortKey,
+                  balanceSortDirection,
+                  balanceClassification,
+                  platform,
                 );
               }}
               classification={balanceClassification}
@@ -409,6 +386,7 @@ export function DashboardContent({
                   balanceSortKey,
                   balanceSortDirection,
                   classification,
+                  balancePlatformFilter,
                 );
               }}
               sortKey={balanceSortKey}
@@ -422,6 +400,7 @@ export function DashboardContent({
                   sortKey,
                   balanceSortDirection,
                   balanceClassification,
+                  balancePlatformFilter,
                 );
               }}
               onSortDirectionChange={(direction) => {
@@ -433,6 +412,7 @@ export function DashboardContent({
                   balanceSortKey,
                   direction,
                   balanceClassification,
+                  balancePlatformFilter,
                 );
               }}
               onRetry={() =>
@@ -442,6 +422,7 @@ export function DashboardContent({
                   balanceSortKey,
                   balanceSortDirection,
                   balanceClassification,
+                  balancePlatformFilter,
                 )
               }
               onPageChange={(page) => {
@@ -452,6 +433,7 @@ export function DashboardContent({
                   balanceSortKey,
                   balanceSortDirection,
                   balanceClassification,
+                  balancePlatformFilter,
                 );
               }}
             />

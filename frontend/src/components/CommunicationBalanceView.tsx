@@ -28,8 +28,10 @@ export function CommunicationBalanceView({
   balance,
   visibleContacts,
   search,
+  platformFilter,
   searchOptions,
   onSearchChange,
+  onPlatformFilterChange,
   classification,
   onClassificationChange,
   sortKey,
@@ -42,8 +44,10 @@ export function CommunicationBalanceView({
   balance: Resource<CommunicationBalanceStatistics>;
   visibleContacts: CommunicationBalanceContact[];
   search: string;
+  platformFilter: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
+  onPlatformFilterChange: (value: string) => void;
   classification: CommunicationBalanceClassification | "all";
   onClassificationChange: (
     value: CommunicationBalanceClassification | "all",
@@ -68,10 +72,15 @@ export function CommunicationBalanceView({
             Communication balance
           </h2>
         </div>
-        {balance.data && balance.data.contacts.length > 0 && (
+        {balance.data &&
+          (balance.data.contacts.length > 0 ||
+            searchOptions.length > 0 ||
+            platformFilter !== "") && (
           <CommunicationBalanceControls
             search={search}
+            platformFilter={platformFilter}
             onSearchChange={onSearchChange}
+            onPlatformFilterChange={onPlatformFilterChange}
             searchOptions={searchOptions}
             classification={classification}
             onClassificationChange={onClassificationChange}
@@ -116,7 +125,9 @@ export function CommunicationBalanceView({
           ) : (
             <>
               <PaginationControls
-                pagination={balance.data.pagination}
+                pagination={search
+                  ? { ...balance.data.pagination, page: 1, total: 1 }
+                  : balance.data.pagination}
                 onPageChange={onPageChange}
                 label="Communication balance pagination above table"
               />
@@ -124,7 +135,9 @@ export function CommunicationBalanceView({
             </>
           )}
           <PaginationControls
-            pagination={balance.data.pagination}
+            pagination={search
+              ? { ...balance.data.pagination, page: 1, total: 1 }
+              : balance.data.pagination}
             onPageChange={onPageChange}
             label="Communication balance pagination below table"
           />

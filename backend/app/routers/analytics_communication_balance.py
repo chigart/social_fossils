@@ -69,7 +69,9 @@ def classify_communication_balance(
         "combined across source accounts. "
         "group chats and ambiguous records are excluded. Any known owner alias "
         "counts as owner-sent regardless of source-local is_outgoing flags; "
-        "contact messages require a matching sender ID and is_outgoing=false."
+        "contact messages require a matching sender ID and is_outgoing=false. "
+        "The optional platform filter limits result contacts and pagination to "
+        "identities associated with that platform."
     ),
 )
 def get_communication_balance(
@@ -82,6 +84,7 @@ def get_communication_balance(
     classification: CommunicationBalanceClassification | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
+    platform: str | None = None,
 ) -> CommunicationBalanceStatistics:
     owner_account = aliased(Account)
     owner_sender = (
@@ -446,6 +449,12 @@ def get_communication_balance(
         )
     contacts = sortable + unsortable
 
+    options_contacts = contacts
+    if platform:
+        contacts = [
+            contact for contact in contacts if platform in contact.platforms
+        ]
+
     summary = CommunicationBalanceSummary(
         eligible_contacts=len(contacts),
         balanced_contacts=sum(c.classification == "balanced" for c in contacts),
@@ -477,6 +486,11 @@ def get_communication_balance(
         for contact in contacts
         if classification is None or contact.classification == classification
     ]
+    option_contacts = [
+        contact
+        for contact in options_contacts
+        if classification is None or contact.classification == classification
+    ]
     offset = (page - 1) * page_size
     return CommunicationBalanceStatistics(
         summary=summary,
@@ -496,6 +510,6 @@ def get_communication_balance(
                     *contact.source_account_labels,
                 ],
             )
-            for index, contact in enumerate(filtered_contacts)
+            for index, contact in enumerate(option_contacts)
         ],
     )

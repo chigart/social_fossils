@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { SEARCH_PICKER_OPTION_LIMIT } from "../constants";
+import {
+  SEARCH_PICKER_OPTION_LIMIT,
+  screenReaderOnlyClassName,
+} from "../constants";
 import { platformAccountPrefix } from "../utils/platforms";
 import { PlatformAccountBadge } from "./PlatformAccountBadge";
 
@@ -39,9 +42,10 @@ export function SearchPicker({
   options,
   onChange,
   placeholder = "Select a name",
-  searchPlaceholder = "Search name, platform, or ID",
+  searchPlaceholder = "Search name or ID",
   allLabel = "Show all",
   emptyMessage = "No names match these filters.",
+  platformFilter = "",
 }: {
   label: string;
   value: string;
@@ -51,14 +55,12 @@ export function SearchPicker({
   searchPlaceholder?: string;
   allLabel?: string;
   emptyMessage?: string;
+  platformFilter?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [platformFilter, setPlatformFilter] = useState("");
   const isInteractingWithOptions = useRef(false);
   const selected = options.find((option) => option.value === value);
-  const platforms = [...new Set(options.flatMap((option) => option.platforms))]
-    .sort();
   const normalizedSearch = search.trim().toLocaleLowerCase();
   const matchingOptions = useMemo(
     () => options.filter((option) => {
@@ -79,12 +81,16 @@ export function SearchPicker({
   const close = () => {
     setOpen(false);
     setSearch("");
-    setPlatformFilter("");
+  };
+
+  const clear = () => {
+    onChange("");
+    setSearch("");
   };
 
   return (
     <div className="flex min-w-[220px] flex-1 flex-col gap-1 text-caption font-semibold text-ink-subtle">
-      <span>{label}</span>
+      <span className={screenReaderOnlyClassName}>{label}</span>
       <div
         className="relative"
         onBlur={(event) => {
@@ -128,29 +134,25 @@ export function SearchPicker({
               type="search"
               value={search}
             />
-            <select
-              aria-label={`${label} platform filter`}
-              className="mb-2 w-full rounded-md border border-border bg-surface px-2 py-1.5 text-small font-normal text-ink"
-              onChange={(event) => setPlatformFilter(event.target.value)}
-              value={platformFilter}
-            >
-              <option value="">All platforms</option>
-              {platforms.map((platform) => (
-                <option key={platform} value={platform}>
-                  {platformAccountPrefix(platform)}
-                </option>
-              ))}
-            </select>
-            <button
-              className="mb-2 w-full rounded px-2 py-2 text-left text-small font-normal text-ink-muted hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-focus"
-              type="button"
-              onClick={() => {
-                onChange("");
-                close();
-              }}
-            >
-              {allLabel}
-            </button>
+            <div className="mb-2 flex gap-2">
+              <button
+                className="flex-1 rounded px-2 py-2 text-left text-small font-normal text-ink-muted hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-focus"
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  close();
+                }}
+              >
+                {allLabel}
+              </button>
+              <button
+                className="rounded px-2 py-2 text-small font-normal text-ink-muted hover:bg-surface-subtle focus-visible:outline-2 focus-visible:outline-focus"
+                type="button"
+                onClick={clear}
+              >
+                Clear
+              </button>
+            </div>
             <ul
               aria-label={`${label} options`}
               className="max-h-48 overflow-y-auto"
@@ -197,5 +199,39 @@ export function SearchPicker({
         )}
       </div>
     </div>
+  );
+}
+
+export function PlatformFilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: SearchPickerOption[];
+  onChange: (value: string) => void;
+}) {
+  const platforms = [...new Set(options.flatMap((option) => option.platforms))]
+    .sort();
+
+  return (
+    <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-caption font-semibold text-ink-subtle">
+      <span className={screenReaderOnlyClassName}>{label}</span>
+      <select
+        aria-label={label}
+        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-small font-normal text-ink"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        <option value="">All platforms</option>
+        {platforms.map((platform) => (
+          <option key={platform} value={platform}>
+            {platformAccountPrefix(platform)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

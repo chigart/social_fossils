@@ -238,6 +238,81 @@ describe("dashboard", () => {
     );
   });
 
+  it("filters chat pages by platform and keeps the platform when clearing the name", async () => {
+    const user = userEvent.setup();
+    const instagramChat = {
+      ...chats[0],
+      chat_id: 99,
+      platform: "instagram",
+      title: "Instagram group",
+    };
+    api.getChats.mockResolvedValue({
+      items: [chats[0], instagramChat],
+      pagination: { page: 1, page_size: 50, total: 60 },
+      options: [
+        {
+          value: String(chats[0].chat_id),
+          label: chats[0].title ?? "Untitled chat",
+          platforms: ["telegram"],
+          search_terms: [chats[0].platform_chat_id],
+        },
+        {
+          value: String(instagramChat.chat_id),
+          label: instagramChat.title ?? "Untitled chat",
+          platforms: ["instagram"],
+          search_terms: [instagramChat.platform_chat_id],
+        },
+      ],
+    });
+
+    await renderLoadedDashboard();
+    await selectDashboardTab("Chats");
+    const region = screen.getByRole("region", { name: "Chats" });
+    await screen.findByRole("row", { name: /Instagram group/ });
+
+    await user.selectOptions(
+      within(region).getByRole("combobox", {
+        name: "Filter chats by platform",
+      }),
+      "telegram",
+    );
+
+    expect(api.getChats).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "total_messages",
+      "desc",
+      "group",
+      "telegram",
+    );
+    expect(within(region).getByRole("row", { name: /Zebra group/ }))
+      .toBeInTheDocument();
+    expect(within(region).queryByRole("row", { name: /Instagram group/ }))
+      .not.toBeInTheDocument();
+    expect(within(region).getAllByText("Page 1 of 2 · 60 items"))
+      .toHaveLength(2);
+    expect(within(region).getAllByRole("button", { name: "Go to page 2" }))
+      .toHaveLength(2);
+
+    await user.click(within(region).getByRole("button", { name: "Choose a chat" }));
+    await user.click(
+      within(screen.getByRole("listbox", { name: "Choose a chat options" }))
+        .getByRole("option", { name: /Zebra group/ }),
+    );
+    expect(within(region).getAllByText("Page 1 of 1 · 1 items"))
+      .toHaveLength(2);
+    await user.click(within(region).getByRole("button", { name: "Choose a chat" }));
+    await user.click(within(region).getByRole("button", { name: "Clear" }));
+
+    expect(
+      within(region).getByRole("combobox", {
+        name: "Filter chats by platform",
+      }),
+    ).toHaveValue("telegram");
+    expect(within(region).getByRole("button", { name: "Choose a chat" }))
+      .toBeInTheDocument();
+  });
+
   it("shows no matching options without filtering the page while typing", async () => {
     const user = userEvent.setup();
     await renderLoadedDashboard();

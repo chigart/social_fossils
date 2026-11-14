@@ -8,11 +8,17 @@ import {
 } from "../utils/communicationBalance";
 import { screenReaderOnlyClassName } from "../constants";
 import type { SortDirection } from "../types";
-import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+  type SearchPickerOption,
+} from "./SearchPicker";
 
 export function CommunicationBalanceControls({
   search,
+  platformFilter,
   onSearchChange,
+  onPlatformFilterChange,
   searchOptions,
   classification,
   onClassificationChange,
@@ -22,7 +28,9 @@ export function CommunicationBalanceControls({
   onSortDirectionChange,
 }: {
   search: string;
+  platformFilter: string;
   onSearchChange: (value: string) => void;
+  onPlatformFilterChange: (value: string) => void;
   searchOptions: SearchPickerOption[];
   classification: CommunicationBalanceClassification | "all";
   onClassificationChange: (
@@ -35,9 +43,16 @@ export function CommunicationBalanceControls({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+      <PlatformFilterSelect
+        label="Filter balance contacts by platform"
+        value={platformFilter}
+        options={searchOptions}
+        onChange={onPlatformFilterChange}
+      />
       <SearchPicker
         label="Choose a balance contact"
         value={search}
+        platformFilter={platformFilter}
         options={searchOptions}
         onChange={onSearchChange}
         placeholder="All contacts"

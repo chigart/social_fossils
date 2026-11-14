@@ -124,7 +124,8 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
     description=(
         "Returns a page of chats, including chats with no messages. The optional "
         "chat_scope filter selects 'dm' (chat_type='personal_chat'), 'group' "
-        "(any other chat type), or 'all'. The response "
+        "(any other chat type), or 'all'; the optional platform filter limits "
+        "results and pagination to that platform. The response "
         "also includes the total row count and lightweight options for searching "
         "the selected scope. Counts include "
         "all stored message types; ordinary and service counts use the exact "
@@ -145,6 +146,7 @@ def get_chat_statistics(
     ] = "total_messages",
     sort_direction: Literal["asc", "desc"] = "desc",
     chat_scope: Literal["dm", "group", "all"] = "all",
+    platform: str | None = None,
 ) -> PaginatedItems[ChatStatistics]:
     chat_scope_filter = (
         Chat.chat_type == "personal_chat"
@@ -158,6 +160,11 @@ def get_chat_statistics(
     ]
     if chat_scope_filter is not None:
         chat_filters.append(chat_scope_filter)
+    if platform:
+        chat_filters.append(Chat.platform == platform)
+    option_filters = [Chat.platform == Account.platform]
+    if chat_scope_filter is not None:
+        option_filters.append(chat_scope_filter)
     statement = (
         select(
             Chat.id.label("chat_id"),
@@ -263,7 +270,7 @@ def get_chat_statistics(
                 Message.platform == Chat.platform,
             ),
         )
-        .where(*chat_filters)
+        .where(*option_filters)
         .group_by(
             Chat.id,
             Chat.platform,
@@ -311,13 +318,15 @@ def get_chat_statistics(
         "incoming direction; ordinary and service counts are reported "
         "separately. Total sender-attributed messages are also split between "
         "personal_chat and non-one-to-one chats. Results can be sorted by total, "
-        "DM, or group messages."
+        "DM, or group messages. An optional platform filter limits contacts and "
+        "pagination to identities associated with that platform."
     ),
 )
 def get_contact_statistics(
     db: Session = Depends(get_db),
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = DEFAULT_PAGE_SIZE,
+    platform: str | None = None,
     sort_by: Literal[
         "total_messages_sent",
         "personal_chat_messages_sent",
@@ -510,13 +519,13 @@ def get_contact_statistics(
         group["service_events_attributed"] += int(row.service_events_attributed)
 
     owner_ids_by_platform: dict[str, set[str]] = {}
-    for platform, user_id in db.execute(
+    for owner_platform, user_id in db.execute(
         select(Account.platform, Account.platform_user_id).where(
             Account.platform_user_id.is_not(None)
         )
     ):
         if user_id is not None:
-            owner_ids_by_platform.setdefault(platform, set()).add(user_id)
+            owner_ids_by_platform.setdefault(owner_platform, set()).add(user_id)
 
     for contact, account, identity_group_id in db.execute(
         select(Contact, Account, CanonicalIdentity.identity_group_id)
@@ -604,6 +613,17 @@ def get_contact_statistics(
         key=contact_sort_value,
         reverse=sort_direction == "desc",
     )
+    options_contacts = contacts
+    if platform:
+        contacts = [
+            contact
+            for contact in contacts
+            if platform in contact.platforms
+            and (
+                (contact.display_name and contact.display_name.strip())
+                or contact.platform_user_ids
+            )
+        ]
     offset = (page - 1) * page_size
     return PaginatedItems(
         items=contacts[offset : offset + page_size],
@@ -622,7 +642,7 @@ def get_contact_statistics(
                     *contact.source_account_labels,
                 ],
             )
-            for index, contact in enumerate(contacts)
+            for index, contact in enumerate(options_contacts)
             if (contact.display_name and contact.display_name.strip())
             or contact.platform_user_ids
         ],

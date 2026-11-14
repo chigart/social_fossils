@@ -26,15 +26,21 @@ import {
   SectionError,
   SortButton,
 } from "./Feedback";
-import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+  type SearchPickerOption,
+} from "./SearchPicker";
 
 export function ChatsView({
   chats,
   chatScope,
   visibleChats,
   search,
+  platformFilter,
   searchOptions,
   onSearchChange,
+  onPlatformFilterChange,
   sort,
   onSort,
   hasImportedAccounts,
@@ -46,8 +52,10 @@ export function ChatsView({
   chatScope: "dm" | "group";
   visibleChats: ChatStatistics[];
   search: string;
+  platformFilter: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
+  onPlatformFilterChange: (value: string) => void;
   sort: { key: ChatSortBy; direction: SortDirection };
   onSort: (key: ChatSortBy) => void;
   hasImportedAccounts: boolean;
@@ -74,17 +82,29 @@ export function ChatsView({
             {title}
           </h2>
         </div>
-        {chats.data && chats.data.items.length > 0 && (
-          <SearchPicker
-            label="Choose a chat"
-            value={search}
-            options={searchOptions}
-            onChange={onSearchChange}
-            placeholder={allLabel}
-            searchPlaceholder={`Search ${chatScope === "dm" ? "DM" : "chat"} title or ID`}
-            allLabel={allLabel}
-            emptyMessage="No chats match these filters."
-          />
+        {chats.data &&
+          (chats.data.items.length > 0 ||
+            searchOptions.length > 0 ||
+            platformFilter !== "") && (
+          <div className="flex flex-wrap gap-2">
+            <PlatformFilterSelect
+              label="Filter chats by platform"
+              value={platformFilter}
+              options={searchOptions}
+              onChange={onPlatformFilterChange}
+            />
+            <SearchPicker
+              label="Choose a chat"
+              value={search}
+              platformFilter={platformFilter}
+              options={searchOptions}
+              onChange={onSearchChange}
+              placeholder={allLabel}
+              searchPlaceholder={`Search ${chatScope === "dm" ? "DM" : "chat"} title or ID`}
+              allLabel={allLabel}
+              emptyMessage="No chats match these filters."
+            />
+          </div>
         )}
       </div>
       {chats.loading && chats.data === null && <LoadingMessage />}
@@ -109,7 +129,9 @@ export function ChatsView({
       {chats.data && visibleChats.length > 0 && (
         <>
           <PaginationControls
-            pagination={chats.data.pagination}
+            pagination={search
+              ? { ...chats.data.pagination, page: 1, total: 1 }
+              : chats.data.pagination}
             onPageChange={onPageChange}
             label="Chats pagination above table"
           />
@@ -209,7 +231,9 @@ export function ChatsView({
       )}
       {chats.data && (
         <PaginationControls
-          pagination={chats.data.pagination}
+          pagination={search
+            ? { ...chats.data.pagination, page: 1, total: 1 }
+            : chats.data.pagination}
           onPageChange={onPageChange}
           label="Chats pagination below table"
         />

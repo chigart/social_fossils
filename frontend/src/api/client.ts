@@ -242,12 +242,14 @@ export const getChats = (
   sortBy: ChatSortBy = "total_messages",
   sortDirection: "asc" | "desc" = "desc",
   chatScope: ChatScope = "all",
+  platform?: string,
 ) =>
   getJson<PaginatedItems<ChatStatistics>>(
     `/api/analytics/chats${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
       ...(chatScope === "all" ? {} : { chat_scope: chatScope }),
+      ...(platform ? { platform } : {}),
     })}`,
   );
 
@@ -256,11 +258,13 @@ export const getContacts = (
   pageSize = DEFAULT_PAGE_SIZE,
   sortBy: ContactSortBy = "total_messages_sent",
   sortDirection: "asc" | "desc" = "desc",
+  platform?: string,
 ) =>
   getJson<PaginatedItems<ContactStatistics>>(
     `/api/analytics/contacts${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
+      ...(platform ? { platform } : {}),
     })}`,
   );
 
@@ -288,6 +292,7 @@ export const getCommunicationBalance = (
   sortBy: "text_volume" | "owner_share" | "recent_activity" = "text_volume",
   sortDirection: "asc" | "desc" = "desc",
   classification?: CommunicationBalanceClassification | "all",
+  platform?: string,
 ) =>
   getJson<CommunicationBalanceStatistics>(
     `/api/analytics/communication-balance${pageQuery(page, pageSize, {
@@ -296,6 +301,7 @@ export const getCommunicationBalance = (
       ...(classification && classification !== "all"
         ? { classification }
         : {}),
+      ...(platform ? { platform } : {}),
     })}`,
   );
 
@@ -308,12 +314,14 @@ export const getForgottenContacts = (
     | "days_since_last_communication" = "ranking_score",
   sortDirection: "asc" | "desc" = "desc",
   scope: "private" | "group" = "private",
+  platform?: string,
 ) =>
   getJson<ForgottenContactsStatistics>(
     `/api/analytics/forgotten-contacts${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
       scope,
+      ...(platform ? { platform } : {}),
     })}`,
   );
 

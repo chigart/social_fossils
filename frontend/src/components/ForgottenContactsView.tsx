@@ -33,7 +33,11 @@ import {
   ForgottenSummaryCards,
   ForgottenTrend,
 } from "./ForgottenContactsParts";
-import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+  type SearchPickerOption,
+} from "./SearchPicker";
 
 export function ForgottenContactsView({
   forgotten,
@@ -41,8 +45,10 @@ export function ForgottenContactsView({
   noImportedData,
   visibleContacts,
   search,
+  platformFilter,
   searchOptions,
   onSearchChange,
+  onPlatformFilterChange,
   sortKey,
   sortDirection,
   onSortByRank,
@@ -56,8 +62,10 @@ export function ForgottenContactsView({
   noImportedData: boolean;
   visibleContacts: ForgottenContact[];
   search: string;
+  platformFilter: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
+  onPlatformFilterChange: (value: string) => void;
   sortKey: "ranking_score" | "display_name" | "days_since_last_communication";
   sortDirection: SortDirection;
   onSortByRank: () => void;
@@ -87,11 +95,21 @@ export function ForgottenContactsView({
             {title}
           </h2>
         </div>
-        {forgotten.data && forgotten.data.contacts.length > 0 && (
+        {forgotten.data &&
+          (forgotten.data.contacts.length > 0 ||
+            searchOptions.length > 0 ||
+            platformFilter !== "") && (
           <div className="flex flex-wrap items-center gap-3 max-sm:w-full">
+            <PlatformFilterSelect
+              label={`Filter ${entityName} by platform`}
+              value={platformFilter}
+              options={searchOptions}
+              onChange={onPlatformFilterChange}
+            />
             <SearchPicker
               label={`Choose a ${isGroupScope ? "participant" : "forgotten contact"}`}
               value={search}
+              platformFilter={platformFilter}
               options={searchOptions}
               onChange={onSearchChange}
               placeholder={`All ${entityName}`}
@@ -181,7 +199,9 @@ export function ForgottenContactsView({
                 </p>
               )}
               <PaginationControls
-                pagination={forgotten.data.pagination}
+                pagination={search
+                  ? { ...forgotten.data.pagination, page: 1, total: 1 }
+                  : forgotten.data.pagination}
                 onPageChange={onPageChange}
                 label={`${isGroupScope ? "Interactions" : "Forgotten contacts"} pagination above table`}
               />
@@ -258,7 +278,9 @@ export function ForgottenContactsView({
             </>
           )}
           <PaginationControls
-            pagination={forgotten.data.pagination}
+            pagination={search
+              ? { ...forgotten.data.pagination, page: 1, total: 1 }
+              : forgotten.data.pagination}
             onPageChange={onPageChange}
             label={`${isGroupScope ? "Interactions" : "Forgotten contacts"} pagination below table`}
           />

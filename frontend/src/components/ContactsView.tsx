@@ -29,14 +29,20 @@ import {
   SectionError,
   SortButton,
 } from "./Feedback";
-import { SearchPicker, type SearchPickerOption } from "./SearchPicker";
+import {
+  PlatformFilterSelect,
+  SearchPicker,
+  type SearchPickerOption,
+} from "./SearchPicker";
 
 export function ContactsView({
   contacts,
   visibleContacts,
   search,
+  platformFilter,
   searchOptions,
   onSearchChange,
+  onPlatformFilterChange,
   sort,
   onSort,
   hasMessages,
@@ -46,8 +52,10 @@ export function ContactsView({
   contacts: Resource<PaginatedItems<ContactStatistics>>;
   visibleContacts: ContactStatistics[];
   search: string;
+  platformFilter: string;
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
+  onPlatformFilterChange: (value: string) => void;
   sort: { key: ContactSortBy; direction: SortDirection };
   onSort: (key: ContactSortBy) => void;
   hasMessages: boolean;
@@ -67,17 +75,29 @@ export function ContactsView({
             Contacts &amp; senders
           </h2>
         </div>
-        {contacts.data && contacts.data.items.length > 0 && (
-          <SearchPicker
-            label="Choose a contact"
-            value={search}
-            options={searchOptions}
-            onChange={onSearchChange}
-            placeholder="All contacts"
-            searchPlaceholder="Search contact name or ID"
-            allLabel="All contacts"
-            emptyMessage="No contacts match these filters."
-          />
+        {contacts.data &&
+          (contacts.data.items.length > 0 ||
+            searchOptions.length > 0 ||
+            platformFilter !== "") && (
+          <div className="flex flex-wrap gap-2">
+            <PlatformFilterSelect
+              label="Filter contacts by platform"
+              value={platformFilter}
+              options={searchOptions}
+              onChange={onPlatformFilterChange}
+            />
+            <SearchPicker
+              label="Choose a contact"
+              value={search}
+              platformFilter={platformFilter}
+              options={searchOptions}
+              onChange={onSearchChange}
+              placeholder="All contacts"
+              searchPlaceholder="Search contact name or ID"
+              allLabel="All contacts"
+              emptyMessage="No contacts match these filters."
+            />
+          </div>
         )}
       </div>
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
@@ -111,7 +131,9 @@ export function ContactsView({
       {contacts.data && visibleContacts.length > 0 && (
         <>
           <PaginationControls
-            pagination={contacts.data.pagination}
+            pagination={search
+              ? { ...contacts.data.pagination, page: 1, total: 1 }
+              : contacts.data.pagination}
             onPageChange={onPageChange}
             label="Contacts pagination above table"
           />
@@ -193,7 +215,9 @@ export function ContactsView({
       )}
       {contacts.data && (
         <PaginationControls
-          pagination={contacts.data.pagination}
+          pagination={search
+            ? { ...contacts.data.pagination, page: 1, total: 1 }
+            : contacts.data.pagination}
           onPageChange={onPageChange}
           label="Contacts pagination below table"
         />

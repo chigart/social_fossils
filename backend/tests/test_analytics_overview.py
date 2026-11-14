@@ -101,6 +101,60 @@ def test_chat_scope_filters_pages_and_options(db_session):
     assert [option.label for option in group_page.options] == ["Group", "Other"]
 
 
+def test_chat_platform_filters_pages_but_keeps_all_platform_picker_options(db_session):
+    add_account(db_session, 1, "telegram-owner")
+    add_account(db_session, 2, "instagram-owner")
+    add_chat(db_session, 10, 1, "telegram-chat", "Telegram chat")
+    add_chat(db_session, 20, 2, "instagram-chat", "Instagram chat")
+    db_session.execute(
+        text("UPDATE account SET platform = 'instagram' WHERE id = 2")
+    )
+    db_session.execute(
+        text("UPDATE chats SET platform = 'instagram' WHERE id = 20")
+    )
+
+    telegram_page = get_chat_statistics(db_session, platform="telegram")
+
+    assert [chat.title for chat in telegram_page.items] == ["Telegram chat"]
+    assert telegram_page.pagination.total == 1
+    assert [option.label for option in telegram_page.options] == [
+        "Telegram chat",
+        "Instagram chat",
+    ]
+
+
+def test_contact_platform_filters_pages_but_keeps_all_platform_picker_options(
+    db_session,
+):
+    add_account(db_session, 1, "telegram-owner")
+    add_account(db_session, 2, "instagram-owner")
+    add_contact(db_session, 40, 1, "telegram-peer", "Telegram peer")
+    add_contact(db_session, 50, 2, "instagram-peer", "Instagram peer")
+    db_session.execute(
+        text("UPDATE account SET platform = 'instagram' WHERE id = 2")
+    )
+    db_session.execute(
+        text(
+            "UPDATE canonical_identities SET platform = 'instagram' "
+            "WHERE platform_user_id = 'instagram-peer'"
+        )
+    )
+    db_session.execute(
+        text("UPDATE contacts SET platform = 'instagram' WHERE id = 50")
+    )
+
+    telegram_page = get_contact_statistics(db_session, platform="telegram")
+
+    assert [contact.display_name for contact in telegram_page.items] == [
+        "Telegram peer",
+    ]
+    assert telegram_page.pagination.total == 1
+    assert {option.label for option in telegram_page.options} == {
+        "Telegram peer",
+        "Instagram peer",
+    }
+
+
 def test_chat_and_contact_statistics_support_message_based_sorting(db_session):
     add_account(db_session, 1, "user-owner")
     add_contact(db_session, 40, 1, "peer-a", "Peer A")

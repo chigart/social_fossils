@@ -44,12 +44,16 @@ export default function App() {
   });
   const {
     chatSort,
+    chatPlatformFilter,
     contactSort,
+    contactPlatformFilter,
     balanceClassification,
+    balancePlatformFilter,
     balanceSortKey,
     balanceSortDirection,
     forgottenSortKey,
     forgottenSortDirection,
+    forgottenPlatformFilter,
   } = filters;
   const changeTab = useCallback((tab: DashboardTab) => {
     const switchingChatScope =
@@ -58,10 +62,22 @@ export default function App() {
     const switchingForgottenScope =
       (selectedTab === "forgotten-contacts" && tab === "interactions") ||
       (selectedTab === "interactions" && tab === "forgotten-contacts");
-    if (switchingChatScope) filters.setChatSearch("");
-    if (switchingForgottenScope) filters.setForgottenSearch("");
+    if (switchingChatScope) {
+      filters.setChatSearch("");
+      filters.setChatPlatformFilter("");
+    }
+    if (switchingForgottenScope) {
+      filters.setForgottenSearch("");
+      filters.setForgottenPlatformFilter("");
+    }
     setSelectedTab(tab);
-  }, [filters.setChatSearch, filters.setForgottenSearch, selectedTab]);
+  }, [
+    filters.setChatSearch,
+    filters.setChatPlatformFilter,
+    filters.setForgottenSearch,
+    filters.setForgottenPlatformFilter,
+    selectedTab,
+  ]);
   const sortedInsightChats = useMemo(
     () => sortChatInsightsChats(chatInsights.data?.chats ?? []),
     [chatInsights.data],
@@ -107,6 +123,7 @@ export default function App() {
           chatSort.key,
           chatSort.direction,
           scope,
+          chatPlatformFilter,
         );
         }
         break;
@@ -117,6 +134,7 @@ export default function App() {
           contacts.data?.pagination.page ?? 1,
           contactSort.key,
           contactSort.direction,
+          contactPlatformFilter,
         );
         break;
       case "identity-links":
@@ -129,6 +147,7 @@ export default function App() {
           balanceSortKey,
           balanceSortDirection,
           balanceClassification,
+          balancePlatformFilter,
         );
         break;
       case "forgotten-contacts":
@@ -147,6 +166,7 @@ export default function App() {
           forgottenSortKey,
           forgottenSortDirection,
           scope,
+          forgottenPlatformFilter,
         );
         }
         break;

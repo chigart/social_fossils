@@ -20,6 +20,22 @@ type ForgottenSortKey =
   | "display_name"
   | "days_since_last_communication";
 
+function searchOptionIndex(
+  options: { value: string; platforms: string[] }[] | undefined,
+  value: string,
+  platform: string,
+): number {
+  if (!value) return -1;
+  if (platform && options) {
+    return options
+      .filter((option) => option.platforms.includes(platform))
+      .findIndex((option) => option.value === value);
+  }
+  const numericValue = Number(value);
+  if (Number.isInteger(numericValue)) return numericValue;
+  return options?.findIndex((option) => option.value === value) ?? -1;
+}
+
 export function useDashboardFilters({
   chatScope,
   chats,
@@ -34,9 +50,13 @@ export function useDashboardFilters({
   forgottenContacts: Resource<ForgottenContactsStatistics>;
 }) {
   const [chatSearch, setChatSearch] = useState("");
+  const [chatPlatformFilter, setChatPlatformFilter] = useState("");
   const [contactSearch, setContactSearch] = useState("");
+  const [contactPlatformFilter, setContactPlatformFilter] = useState("");
   const [balanceSearch, setBalanceSearch] = useState("");
+  const [balancePlatformFilter, setBalancePlatformFilter] = useState("");
   const [forgottenSearch, setForgottenSearch] = useState("");
+  const [forgottenPlatformFilter, setForgottenPlatformFilter] = useState("");
   const [balanceClassification, setBalanceClassification] = useState<
     CommunicationBalanceClassification | "all"
   >("all");
@@ -88,7 +108,10 @@ export function useDashboardFilters({
   const visibleChats = useMemo(
     () =>
       (chats.data?.items ?? [])
-        .filter((chat) => chatSearch === "" || String(chat.chat_id) === chatSearch)
+        .filter((chat) =>
+          (!chatPlatformFilter || chat.platform === chatPlatformFilter) &&
+          (chatSearch === "" || String(chat.chat_id) === chatSearch),
+        )
         .sort((left, right) => {
           let comparison: number;
           if (chatSort.key === "title") {
@@ -117,7 +140,7 @@ export function useDashboardFilters({
           }
           return chatSort.direction === "asc" ? comparison : -comparison;
         }),
-    [chats.data?.items, chatSearch, chatSort],
+    [chats.data?.items, chatSearch, chatPlatformFilter, chatSort],
   );
 
   const visibleContacts = useMemo(
@@ -125,14 +148,23 @@ export function useDashboardFilters({
       const offset =
         ((contacts.data?.pagination.page ?? 1) - 1) *
         (contacts.data?.pagination.page_size ?? 0);
+      const selectedIndex = searchOptionIndex(
+        contacts.data?.options,
+        contactSearch,
+        contactPlatformFilter,
+      );
       return (contacts.data?.items ?? [])
         .map((contact, index) => ({ contact, index: offset + index }))
         .filter(
           ({ contact }) =>
             contact.display_name?.trim() || contact.platform_user_ids.length > 0,
         )
+        .filter(({ contact }) =>
+          !contactPlatformFilter ||
+          contact.platforms.includes(contactPlatformFilter),
+        )
         .filter(({ index }) =>
-          contactSearch === "" || String(index) === contactSearch,
+          selectedIndex < 0 || index === selectedIndex,
         )
         .map(({ contact }) => contact)
         .sort((left, right) => {
@@ -140,7 +172,7 @@ export function useDashboardFilters({
           return contactSort.direction === "asc" ? comparison : -comparison;
         });
     },
-    [contacts.data?.items, contactSearch, contactSort],
+    [contacts.data, contactSearch, contactPlatformFilter, contactSort],
   );
 
   const visibleBalanceContacts = useMemo(
@@ -148,15 +180,22 @@ export function useDashboardFilters({
       const offset =
         ((balance.data?.pagination.page ?? 1) - 1) *
         (balance.data?.pagination.page_size ?? 0);
+      const selectedIndex = searchOptionIndex(
+        balance.data?.options,
+        balanceSearch,
+        balancePlatformFilter,
+      );
       return sortCommunicationBalanceContacts(
         (balance.data?.contacts ?? [])
           .filter((_, index) =>
-            balanceSearch === "" || String(offset + index) === balanceSearch,
+            selectedIndex < 0 || offset + index === selectedIndex,
           )
           .filter(
             (contact) =>
-              balanceClassification === "all" ||
-              contact.classification === balanceClassification,
+              (!balancePlatformFilter ||
+                contact.platforms.includes(balancePlatformFilter)) &&
+              (balanceClassification === "all" ||
+                contact.classification === balanceClassification),
           ),
         balanceSortKey,
         balanceSortDirection,
@@ -165,6 +204,7 @@ export function useDashboardFilters({
     [
       balance.data,
       balanceSearch,
+      balancePlatformFilter,
       balanceClassification,
       balanceSortKey,
       balanceSortDirection,
@@ -176,9 +216,18 @@ export function useDashboardFilters({
       const offset =
         ((forgottenContacts.data?.pagination.page ?? 1) - 1) *
         (forgottenContacts.data?.pagination.page_size ?? 0);
+      const selectedIndex = searchOptionIndex(
+        forgottenContacts.data?.options,
+        forgottenSearch,
+        forgottenPlatformFilter,
+      );
       return (forgottenContacts.data?.contacts ?? [])
+        .filter((contact) =>
+          !forgottenPlatformFilter ||
+          contact.platforms.includes(forgottenPlatformFilter),
+        )
         .filter((_, index) =>
-          forgottenSearch === "" || String(offset + index) === forgottenSearch,
+          selectedIndex < 0 || offset + index === selectedIndex,
         )
         .sort((left, right) => {
           const direction = forgottenSortDirection === "asc" ? 1 : -1;
@@ -206,6 +255,7 @@ export function useDashboardFilters({
     [
       forgottenContacts.data,
       forgottenSearch,
+      forgottenPlatformFilter,
       forgottenSortDirection,
       forgottenSortKey,
     ],
@@ -214,12 +264,20 @@ export function useDashboardFilters({
   return {
     chatSearch,
     setChatSearch,
+    chatPlatformFilter,
+    setChatPlatformFilter,
     contactSearch,
     setContactSearch,
+    contactPlatformFilter,
+    setContactPlatformFilter,
     balanceSearch,
     setBalanceSearch,
+    balancePlatformFilter,
+    setBalancePlatformFilter,
     forgottenSearch,
     setForgottenSearch,
+    forgottenPlatformFilter,
+    setForgottenPlatformFilter,
     balanceClassification,
     setBalanceClassification,
     forgottenSortKey,

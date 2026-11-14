@@ -232,6 +232,46 @@ describe("analytics API helpers", () => {
     );
   });
 
+  it("requests platform-filtered pages for every analytics list", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getChats(1, DEFAULT_PAGE_SIZE, "total_messages", "desc", "group", "telegram");
+    await getContacts(
+      1,
+      DEFAULT_PAGE_SIZE,
+      "total_messages_sent",
+      "desc",
+      "telegram",
+    );
+    await getCommunicationBalance(
+      1,
+      DEFAULT_PAGE_SIZE,
+      "text_volume",
+      "desc",
+      "all",
+      "telegram",
+    );
+    await getForgottenContacts(
+      1,
+      DEFAULT_PAGE_SIZE,
+      "ranking_score",
+      "desc",
+      "private",
+      "telegram",
+    );
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `/api/analytics/chats?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages&sort_direction=desc&chat_scope=group&platform=telegram`,
+      `/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages_sent&sort_direction=desc&platform=telegram`,
+      `/api/analytics/communication-balance?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=text_volume&sort_direction=desc&platform=telegram`,
+      `/api/analytics/forgotten-contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=ranking_score&sort_direction=desc&scope=private&platform=telegram`,
+    ]);
+  });
+
   it("requests a chat-specific timeline when selected", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

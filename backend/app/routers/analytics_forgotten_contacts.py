@@ -61,6 +61,7 @@ def build_forgotten_contacts_statistics(
     limit: int = DEFAULT_PAGE_SIZE,
     offset: int = 0,
     as_of: datetime | None = None,
+    platform: str | None = None,
 ) -> ForgottenContactsStatistics:
     if not 1 <= limit <= FORGOTTEN_MAX_LIMIT:
         raise ValueError(f"limit must be between 1 and {FORGOTTEN_MAX_LIMIT}.")
@@ -462,6 +463,12 @@ def build_forgotten_contacts_statistics(
         )
         contacts = sortable + unsortable
 
+    options_contacts = contacts
+    if platform:
+        contacts = [
+            contact for contact in contacts if platform in contact.platforms
+        ]
+
     summary = ForgottenContactsSummary(
         source_account_count=source_account_count,
         eligible_contacts=len(contacts),
@@ -506,7 +513,7 @@ def build_forgotten_contacts_statistics(
                     *contact.source_account_labels,
                 ],
             )
-            for index, contact in enumerate(contacts)
+            for index, contact in enumerate(options_contacts)
         ],
     )
 
@@ -536,7 +543,9 @@ def build_forgotten_contacts_statistics(
         "100%; 50% is the decline threshold. Score is 100 times min(historical "
         "messages / 100, 1) times (0.60 * min(days inactive / 180, 1) + "
         "0.40 * decline fraction). These descriptive thresholds are "
-        "heuristics, not judgments about relationships."
+        "heuristics, not judgments about relationships. The optional platform "
+        "filter limits result contacts and pagination to identities associated "
+        "with that platform."
     ),
 )
 def get_forgotten_contacts(
@@ -553,6 +562,7 @@ def get_forgotten_contacts(
     page_size: Annotated[int, Query(ge=1, le=FORGOTTEN_MAX_LIMIT)] = (
         DEFAULT_PAGE_SIZE
     ),
+    platform: str | None = None,
 ) -> ForgottenContactsStatistics:
     return build_forgotten_contacts_statistics(
         db,
@@ -561,4 +571,5 @@ def get_forgotten_contacts(
         sort_direction=sort_direction,
         limit=page_size,
         offset=(page - 1) * page_size,
+        platform=platform,
     )
