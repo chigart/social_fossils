@@ -87,5 +87,3 @@ class CommunicationTimelineSummary(BaseModel):
 class CommunicationTimelineStatistics(BaseModel):
     summary: CommunicationTimelineSummary
     months: list[CommunicationTimelineMonth]
-
-

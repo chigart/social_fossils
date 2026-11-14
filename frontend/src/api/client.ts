@@ -334,12 +334,14 @@ export const getGroupInteraction = (contactId: number) =>
 export const getCommunicationTimeline = (
   canonicalIdentityId?: number,
   chatId?: number,
+  senderId?: string | null,
 ) => {
   const parameters = [
     canonicalIdentityId === undefined
       ? null
       : `canonical_identity_id=${canonicalIdentityId}`,
     chatId === undefined ? null : `chat_id=${chatId}`,
+    senderId == null ? null : `sender_id=${encodeURIComponent(senderId)}`,
   ].filter((parameter): parameter is string => parameter !== null);
   const query = parameters.length > 0 ? `?${parameters.join("&")}` : "";
   return getJson<CommunicationTimelineStatistics>(

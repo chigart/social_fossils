@@ -16,6 +16,10 @@ function renderTimeline(
     <CommunicationTimelineView
       timeline={resource}
       onRetry={onRetry}
+      senders={[]}
+      selectedSenderId={null}
+      onSenderChange={vi.fn()}
+      showSenderSelector={false}
     />,
   );
   return { onRetry };

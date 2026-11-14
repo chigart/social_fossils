@@ -329,6 +329,7 @@ export function useDashboardData() {
   const loadCommunicationTimeline = useCallback(async (
     canonicalIdentityId?: number,
     chatId?: number,
+    senderId?: string | null,
   ) => {
     const requestId = ++timelineRequestId.current;
     setCommunicationTimeline(emptyResource);
@@ -336,6 +337,7 @@ export function useDashboardData() {
       const data = await getCommunicationTimeline(
         canonicalIdentityId ?? undefined,
         chatId,
+        senderId,
       );
       if (requestId === timelineRequestId.current) {
         setCommunicationTimeline({ data, error: null, loading: false });

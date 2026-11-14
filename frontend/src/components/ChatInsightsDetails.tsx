@@ -47,14 +47,18 @@ export function ChatInsightsDetails({
           label="Active days"
           value={activeDays === undefined ? "—" : formatNumber(activeDays)}
         />
-        <MetricCard
-          label="Average time to reply"
-          value={formatResponseTime(chat.reply_tempo.average_response_seconds)}
-        />
-        <MetricCard
-          label="Longest time to reply"
-          value={formatResponseTime(chat.reply_tempo.longest_response_seconds)}
-        />
+        {chat.chat_type === "personal_chat" && (
+          <>
+            <MetricCard
+              label="Average time to reply"
+              value={formatResponseTime(chat.reply_tempo.average_response_seconds)}
+            />
+            <MetricCard
+              label="Longest time to reply"
+              value={formatResponseTime(chat.reply_tempo.longest_response_seconds)}
+            />
+          </>
+        )}
         <MetricCard
           label="Owner messages"
           value={

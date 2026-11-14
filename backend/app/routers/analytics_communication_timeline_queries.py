@@ -36,6 +36,7 @@ def build_communication_timeline_statistics(
     *,
     canonical_identity_id: int | None = None,
     chat_id: int | None = None,
+    sender_id: str | None = None,
 ) -> CommunicationTimelineStatistics:
     identity_group_id = (
         db.scalar(
@@ -102,6 +103,7 @@ def build_communication_timeline_statistics(
             Message.platform.label("platform"),
             Message.is_outgoing.label("is_outgoing"),
             Message.message_date.label("message_date"),
+            Message.text_content.label("text_content"),
             Chat.account_id.label("account_id"),
         )
         .join(Chat, Chat.id == Message.chat_id)
@@ -120,21 +122,25 @@ def build_communication_timeline_statistics(
         scoped_messages_statement = scoped_messages_statement.where(
             Chat.id == chat_id
         )
+    if sender_id is not None:
+        scoped_messages_statement = scoped_messages_statement.where(
+            Message.sender_id == sender_id
+        )
     scoped_messages = scoped_messages_statement.cte("timeline_messages")
 
-    sender_id = scoped_messages.c.sender_telegram_id
+    sender_telegram_id = scoped_messages.c.sender_telegram_id
     owner_account = aliased(Account)
     owner_direction = (
         select(owner_account.id)
         .where(
             owner_account.platform == scoped_messages.c.platform,
-            owner_account.platform_user_id == sender_id,
+            owner_account.platform_user_id == sender_telegram_id,
         )
         .exists()
     )
     if canonical_identity_id is None:
         contact_direction = and_(
-            sender_id.is_not(None),
+            sender_telegram_id.is_not(None),
             ~owner_direction,
             scoped_messages.c.is_outgoing.is_(False),
         )
@@ -147,12 +153,12 @@ def build_communication_timeline_statistics(
             Contact.canonical_identity_id.in_(identity_ids),
         )
         matching_contact = or_(
-            sender_id.in_(contact_platform_ids),
+            sender_telegram_id.in_(contact_platform_ids),
             scoped_messages.c.sender_contact_id.in_(contact_ids),
         )
         consistent_sender = or_(
-            sender_id.is_(None),
-            sender_id.in_(contact_platform_ids),
+            sender_telegram_id.is_(None),
+            sender_telegram_id.in_(contact_platform_ids),
         )
         contact_direction = and_(
             matching_contact,

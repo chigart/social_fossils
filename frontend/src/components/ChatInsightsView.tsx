@@ -43,9 +43,13 @@ export function ChatInsightsView({
   onChatChange: (chatId: number | null) => void;
   noImportedData: boolean | undefined;
   onRetryInsights: () => void;
-  onRetryTimeline: () => void;
+  onRetryTimeline: (chatId: number, senderId: string | null) => void;
 }) {
   const [platformFilter, setPlatformFilter] = useState("");
+  const [timelineUser, setTimelineUser] = useState<{
+    chatId: number | null;
+    senderId: string | null;
+  }>({ chatId: null, senderId: null });
   const searchOptions = insights.data?.options?.length
     ? insights.data.options.map((option) => ({
         value: option.value,
@@ -69,6 +73,10 @@ export function ChatInsightsView({
     ),
   );
   const selectedChat = getSelectedChatInsights(sortedChats, selectedChatId);
+  const selectedSenderId =
+    timelineUser.chatId === selectedChat?.chat_id
+      ? timelineUser.senderId
+      : null;
   const timelineMatchesSelectedChat =
     selectedChat !== undefined &&
     timeline.data?.summary.chat_id === selectedChat.chat_id;
@@ -80,6 +88,7 @@ export function ChatInsightsView({
           error: timeline.data === null ? timeline.error : null,
           loading: timeline.loading || timeline.data !== null,
         };
+  const isGroupChat = selectedChat?.chat_type !== "personal_chat";
 
   return (
     <section
@@ -145,7 +154,16 @@ export function ChatInsightsView({
         <>
           <CommunicationTimelineView
             timeline={selectedTimeline}
-            onRetry={onRetryTimeline}
+            onRetry={() =>
+              onRetryTimeline(selectedChat.chat_id, selectedSenderId)
+            }
+            senders={selectedChat.senders}
+            selectedSenderId={isGroupChat ? selectedSenderId : null}
+            onSenderChange={(senderId) => {
+              setTimelineUser({ chatId: selectedChat.chat_id, senderId });
+              onRetryTimeline(selectedChat.chat_id, senderId);
+            }}
+            showSenderSelector={isGroupChat}
           />
           <ChatInsightsDetails
             chat={selectedChat}

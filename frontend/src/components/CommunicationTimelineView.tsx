@@ -1,4 +1,5 @@
 import type {
+  ChatInsightSender,
   CommunicationTimelineMonth,
   CommunicationTimelineStatistics,
 } from "../api";
@@ -49,7 +50,8 @@ function TimelineChart({
   const plotHeight = plotBottom - plotTop;
   const gridLineStartX = 42;
   const yAxisLabelX = 36;
-  const slotWidth = width / months.length;
+  const plotWidth = width - 36;
+  const slotWidth = plotWidth / months.length;
   const barWidth = Math.min(30, slotWidth * 0.66);
   const maximum = Math.max(
     1,
@@ -83,7 +85,7 @@ function TimelineChart({
             <g key={fraction}>
               <line
                 x1={gridLineStartX}
-                x2={width - 8}
+                x2={plotWidth}
                 y1={y}
                 y2={y}
                 stroke="var(--color-border)"
@@ -181,9 +183,17 @@ function TimelineChart({
 export function CommunicationTimelineView({
   timeline,
   onRetry,
+  senders,
+  selectedSenderId,
+  onSenderChange,
+  showSenderSelector,
 }: {
   timeline: Resource<CommunicationTimelineStatistics>;
   onRetry: () => void;
+  senders: ChatInsightSender[];
+  selectedSenderId: string | null;
+  onSenderChange: (senderId: string | null) => void;
+  showSenderSelector: boolean;
 }) {
   const data = timeline.data;
   const months = data?.months ?? [];
@@ -209,6 +219,33 @@ export function CommunicationTimelineView({
             Communication timeline
           </h2>
         </div>
+        {showSenderSelector &&
+          senders.some((sender) => sender.sender_id !== null) && (
+            <label className="flex items-center gap-2 text-small text-ink-muted">
+              Timeline user
+              <select
+                aria-label="Timeline user"
+                className="rounded-md border border-border-subtle bg-surface px-3 py-2 text-ink"
+                value={selectedSenderId ?? ""}
+                onChange={(event) =>
+                  onSenderChange(event.target.value || null)
+                }
+              >
+                <option value="">All users</option>
+                {senders
+                  .filter(
+                    (sender): sender is ChatInsightSender & {
+                      sender_id: string;
+                    } => sender.sender_id !== null,
+                  )
+                  .map((sender) => (
+                    <option key={sender.sender_id} value={sender.sender_id}>
+                      {sender.display_name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
       </div>
 
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
@@ -272,7 +309,10 @@ export function CommunicationTimelineView({
                   No messages
                 </span>
               </div>
-              <TimelineChart months={months} showDirection={showDirection} />
+              <TimelineChart
+                months={months}
+                showDirection={showDirection}
+              />
               <ul
                 className={screenReaderOnlyClassName}
                 aria-label="Monthly communication activity details"

@@ -49,6 +49,7 @@ describe("dashboard", () => {
       ...chatInsights.chats[0],
       chat_id: 11,
       title: "One-to-one chat",
+      chat_type: "personal_chat",
       ordinary_message_count: 5,
     };
     const insightOptions = [
@@ -144,7 +145,12 @@ describe("dashboard", () => {
 
     expect(api.getChatInsights).toHaveBeenNthCalledWith(1, undefined);
     expect(api.getChatInsights).toHaveBeenNthCalledWith(2, 11);
-    expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(2, undefined, 11);
+    expect(api.getCommunicationTimeline).toHaveBeenNthCalledWith(
+      2,
+      undefined,
+      11,
+      undefined,
+    );
     expect(
       await within(region).findByRole("img", {
         name: "Monthly ordinary message activity",
@@ -153,6 +159,50 @@ describe("dashboard", () => {
     expect(
       await screen.findByText("Active days"),
     ).toBeInTheDocument();
+    expect(
+      within(region).queryByRole("combobox", { name: "Timeline user" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(region).queryByText("Average message size (characters)"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Average time to reply" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Longest time to reply" }),
+    ).toBeInTheDocument();
+  });
+
+  it("filters a group timeline by sender", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    await selectDashboardTab("Insights");
+
+    const region = screen.getByRole("region", {
+      name: "Communication timeline",
+    });
+    await within(region).findByRole("img", {
+      name: "Monthly ordinary message activity",
+    });
+    expect(screen.queryByText("Average time to reply")).not.toBeInTheDocument();
+    expect(screen.queryByText("Longest time to reply")).not.toBeInTheDocument();
+    expect(
+      within(region).queryByText("Average message size (characters)"),
+    ).not.toBeInTheDocument();
+
+    await user.selectOptions(
+      within(region).getByRole("combobox", { name: "Timeline user" }),
+      "user-lena",
+    );
+
+    expect(api.getCommunicationTimeline).toHaveBeenLastCalledWith(
+      undefined,
+      10,
+      "user-lena",
+    );
+    expect(
+      within(region).getByRole("combobox", { name: "Timeline user" }),
+    ).toHaveValue("user-lena");
   });
 
   it("shows timeline retry errors and undated-only empty states", async () => {

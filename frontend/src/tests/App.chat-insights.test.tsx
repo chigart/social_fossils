@@ -67,6 +67,7 @@ describe("dashboard", () => {
     const user = userEvent.setup();
     const chatWithSingleUseItems = {
       ...chatInsights.chats[0],
+      chat_type: "personal_chat",
       popular_words: [
         ...chatInsights.chats[0].popular_words,
         { word: "single-chat-word", count: 1 },

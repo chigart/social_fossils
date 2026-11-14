@@ -24,8 +24,9 @@ router = APIRouter()
         "combined imported owner history. Pass canonical_identity_id to limit "
         "the timeline to that identity in one-to-one personal chats; explicitly "
         "linked platform identities share one timeline. Pass chat_id to limit "
-        "the timeline to one chat. Owner aliases are "
-        "identified by platform-scoped stored user IDs. Contact "
+        "the timeline to one chat. Pass sender_id with chat_id to filter the "
+        "timeline to one sender. Owner aliases are identified by "
+        "platform-scoped stored user IDs. Contact "
         "direction requires a non-owner sender with is_outgoing=false; when "
         "a selected canonical identity is requested, the sender must also "
         "match that identity's account-local contact mapping. Other direction "
@@ -40,11 +41,17 @@ def get_communication_timeline(
     db: Session = Depends(get_db),
     canonical_identity_id: Annotated[int | None, Query(gt=0)] = None,
     chat_id: Annotated[int | None, Query(gt=0)] = None,
+    sender_id: Annotated[str | None, Query(min_length=1)] = None,
 ) -> CommunicationTimelineStatistics:
     if canonical_identity_id is not None and chat_id is not None:
         raise HTTPException(
             status_code=400,
             detail="Select either a canonical identity or a chat, not both.",
+        )
+    if sender_id is not None and chat_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Select a chat when filtering the timeline by sender.",
         )
     if canonical_identity_id is not None:
         identity_id = db.scalar(
@@ -65,4 +72,5 @@ def get_communication_timeline(
         db,
         canonical_identity_id=canonical_identity_id,
         chat_id=chat_id,
+        sender_id=sender_id,
     )

@@ -153,8 +153,8 @@ export function DashboardConversationPanels({
                 selectedInsightsChatId ?? undefined,
               )
             }
-            onRetryTimeline={() =>
-              void loadCommunicationTimeline(undefined, selectedChat?.chat_id)
+            onRetryTimeline={(chatId, senderId) =>
+              void loadCommunicationTimeline(undefined, chatId, senderId)
             }
           />
         )}

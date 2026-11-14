@@ -257,6 +257,7 @@ def test_chat_timeline_includes_only_the_selected_chat(db_session):
         "user-owner",
         datetime(2025, 1, 1, tzinfo=timezone.utc),
         is_outgoing=True,
+        text_content="owner",
     )
     add_message(
         db_session,
@@ -266,6 +267,7 @@ def test_chat_timeline_includes_only_the_selected_chat(db_session):
         "user-peer",
         datetime(2025, 1, 2, tzinfo=timezone.utc),
         is_outgoing=False,
+        text_content="hello!",
     )
     add_message(
         db_session,
@@ -288,6 +290,20 @@ def test_chat_timeline_includes_only_the_selected_chat(db_session):
     assert result.summary.contact_message_count == 1
     assert [month.month for month in result.months] == ["2025-01"]
     assert result.summary.source_account_ids == [1]
+
+    sender_result = get_communication_timeline(
+        db_session,
+        chat_id=10,
+        sender_id="user-peer",
+    )
+    assert sender_result.summary.ordinary_message_count == 1
+    assert sender_result.summary.owner_message_count == 0
+    assert sender_result.summary.contact_message_count == 1
+    assert sender_result.months[0].ordinary_message_count == 1
+
+    with pytest.raises(HTTPException) as error:
+        get_communication_timeline(db_session, sender_id="user-peer")
+    assert error.value.status_code == 400
 
     with pytest.raises(HTTPException) as error:
         get_communication_timeline(db_session, chat_id=9999)

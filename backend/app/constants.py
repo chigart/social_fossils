@@ -185,11 +185,11 @@ ENGLISH_STOP_WORDS = frozenset(
     may meanwhile message mill mine moreover mostly move much must name neither never
     nevertheless next nine ninety nobody none noone nothing nowhere now
     nowhere often other others otherwise our ours outside part per perhaps
-    please put rather re reacted same see seem seemed seeming seems sent serious several
+    please put rather re reacted ru same see seem seemed seeming seems sent serious several
     seventeen seventy six sixty somehow someone something sometime sometimes
     somewhere still thence thereafter thereby therefore therein thereof
     thereupon thirty three throughout thru thus top toward towards twelve
-    twenty two un under unless unlike unlikely upon used using us various v via vk
+    twenty two un under unless unlike unlikely upon used using us utm various v via vk
     watch well whatever whenever wherever whether whoever whole whose within without
     wont www youtube
     ain't aren't couldn't didn't doesn't don't hadn't hasn't haven't isn't
