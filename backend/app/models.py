@@ -98,6 +98,14 @@ class IdentityLinkEvent(Base):
     )
 
 
+class AnalyticsCacheEntry(Base):
+    __tablename__ = "analytics_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    revision: Mapped[str] = mapped_column(Text, nullable=False)
+    response_body: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class Contact(Base):
     __tablename__ = "contacts"
 

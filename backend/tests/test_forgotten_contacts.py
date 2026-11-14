@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
 
 from analytics_test_helpers import (
@@ -15,6 +17,7 @@ from analytics_test_helpers import (
 
 from app.routers.analytics_forgotten_contacts import (
     build_forgotten_contacts_statistics,
+    get_group_interaction,
 )
 
 
@@ -433,6 +436,58 @@ def test_group_interactions_aggregate_participant_across_group_chats(db_session)
     assert interaction.evidence_status == "reliable_baseline"
 
 
+def test_group_interaction_target_matches_full_result_for_linked_participants(db_session):
+    add_account(db_session, 1, "user-owner")
+    add_chat(db_session, 100, 1, "group", chat_type="private_group")
+    for contact_id in (20, 21, 22):
+        add_contact(db_session, contact_id, 1, f"peer-{contact_id}", f"Peer {contact_id}")
+    db_session.execute(text(
+        "UPDATE canonical_identities SET identity_group_id = 90 "
+        "WHERE platform_user_id IN ('peer-20', 'peer-21')"
+    ))
+    cutoff = FORGOTTEN_AS_OF - timedelta(days=90)
+    for message_id, sender, when, outgoing in (
+        (1, "user-owner", cutoff - timedelta(seconds=1), True),
+        (2, "peer-20", cutoff - timedelta(seconds=1), False),
+        (3, "peer-21", cutoff + timedelta(seconds=1), False),
+        (4, "peer-20", None, True),
+        (5, "peer-22", cutoff, False),
+        (6, "user-owner", FORGOTTEN_AS_OF + timedelta(days=1), False),
+    ):
+        add_message(
+            db_session, message_id, 100, "message", sender,
+            message_date=when, is_outgoing=outgoing, text_content="synthetic",
+        )
+    add_message(db_session, 7, 100, "service", "peer-20", message_date=cutoff)
+
+    full = build_forgotten_contacts_statistics(
+        db_session, scope="group", as_of=FORGOTTEN_AS_OF,
+    )
+    linked = next(contact for contact in full.contacts if contact.identity_group_id == 90)
+    assert linked.source_contact_ids == [20, 21]
+    assert linked.owner_message_count == 4
+    assert linked.contact_message_count == 2
+    assert linked.excluded_ambiguous_message_count == 1
+    assert linked.historical_message_count == 3
+    assert linked.recent_message_count == 1
+    assert linked.distinct_active_days == 1
+    assert {option.contact_id for option in full.options} == {20, 22}
+    for contact_id in (20, 21):
+        selected = build_forgotten_contacts_statistics(
+            db_session, scope="group", as_of=FORGOTTEN_AS_OF,
+            target_contact_id=contact_id,
+        )
+        assert selected.contacts == [linked]
+    assert build_forgotten_contacts_statistics(
+        db_session, scope="group", as_of=FORGOTTEN_AS_OF,
+        target_contact_id=999,
+    ).contacts == []
+    with pytest.raises(HTTPException) as exc_info:
+        get_group_interaction(999, db_session)
+    assert exc_info.value.status_code == 404
+    assert get_group_interaction(20, db_session).identity_group_id == 90
+
+
 def test_forgotten_contacts_combines_owner_aliases_and_canonical_contacts(db_session):
     add_account(db_session, 1, "user-owner-one", username="anton")
     add_account(db_session, 2, "user-owner-two", username="anton_old")
@@ -561,6 +616,18 @@ def test_forgotten_contacts_combine_explicitly_linked_platform_identities(
     assert contact.historical_message_count == 50
     assert contact.total_message_count == 52
     assert contact.recent_message_count == 2
+    db_session.execute(text(
+        "UPDATE chats SET chat_type = 'private_group' WHERE id IN (:telegram, 200)"
+    ), {"telegram": telegram_chat_id})
+    group = build_forgotten_contacts_statistics(
+        db_session, scope="group", as_of=FORGOTTEN_AS_OF,
+    ).contacts[0]
+    for contact_id in (40, 200):
+        selected = build_forgotten_contacts_statistics(
+            db_session, scope="group", as_of=FORGOTTEN_AS_OF,
+            target_contact_id=contact_id,
+        )
+        assert selected.contacts == [group]
 
 
 def test_forgotten_contacts_empty_database_and_account_without_private_chats(

@@ -176,10 +176,6 @@ export default function App() {
   }, [
     selectedTab,
     selectedInsightsChatId,
-    chats.data?.pagination.page,
-    contacts.data?.pagination.page,
-    balance.data?.pagination.page,
-    forgottenContacts.data?.pagination.page,
     loadOverview,
     loadChats,
     loadChatInsights,

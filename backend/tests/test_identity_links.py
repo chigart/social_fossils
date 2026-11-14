@@ -2,8 +2,9 @@ from fastapi.testclient import TestClient
 from typing import cast
 
 from sqlalchemy import Table, create_engine, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import analytics_cache_middleware
 from app.db import Base, get_db
 from app.main import app
 from app.models import (
@@ -12,6 +13,8 @@ from app.models import (
     CanonicalIdentityGroup,
     Contact,
     IdentityLinkEvent,
+    ImportSession,
+    AnalyticsCacheEntry,
 )
 
 
@@ -26,17 +29,20 @@ def _create_identity_tables(engine) -> None:
                 CanonicalIdentity.__table__,
                 Contact.__table__,
                 IdentityLinkEvent.__table__,
+                ImportSession.__table__,
+                AnalyticsCacheEntry.__table__,
             ],
         ),
     )
 
 
-def test_identity_links_merge_groups_and_preserve_link_history(tmp_path):
+def test_identity_links_merge_groups_and_preserve_link_history(tmp_path, monkeypatch):
     engine = create_engine(
         f"sqlite+pysqlite:///{tmp_path / 'identity-links.db'}",
         connect_args={"check_same_thread": False},
     )
     _create_identity_tables(engine)
+    monkeypatch.setattr(analytics_cache_middleware, "SessionLocal", sessionmaker(bind=engine))
     session = Session(engine)
     account = Account(
         platform="telegram",
@@ -142,12 +148,13 @@ def test_identity_links_merge_groups_and_preserve_link_history(tmp_path):
             engine.dispose()
 
 
-def test_identity_links_mark_and_reject_owner_accounts(tmp_path):
+def test_identity_links_mark_and_reject_owner_accounts(tmp_path, monkeypatch):
     engine = create_engine(
         f"sqlite+pysqlite:///{tmp_path / 'owner-identity-links.db'}",
         connect_args={"check_same_thread": False},
     )
     _create_identity_tables(engine)
+    monkeypatch.setattr(analytics_cache_middleware, "SessionLocal", sessionmaker(bind=engine))
     session = Session(engine)
     owner_account = Account(
         platform="telegram",
@@ -195,12 +202,13 @@ def test_identity_links_mark_and_reject_owner_accounts(tmp_path):
             engine.dispose()
 
 
-def test_identity_links_allow_any_number_of_same_platform_accounts(tmp_path):
+def test_identity_links_allow_any_number_of_same_platform_accounts(tmp_path, monkeypatch):
     engine = create_engine(
         f"sqlite+pysqlite:///{tmp_path / 'multi-account-identity-links.db'}",
         connect_args={"check_same_thread": False},
     )
     _create_identity_tables(engine)
+    monkeypatch.setattr(analytics_cache_middleware, "SessionLocal", sessionmaker(bind=engine))
     session = Session(engine)
     identities = [
         CanonicalIdentity(platform="telegram", platform_user_id="telegram-1"),

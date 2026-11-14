@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,8 +15,8 @@ from app.schemas.analytics import (
     ForgottenContactsStatistics,
     ForgottenContactsSummary,
     PaginationMetadata,
-    SearchOption,
 )
+from app.schemas.analytics_engagement import ForgottenSearchOption
 
 from .analytics_forgotten_queries import (
     build_forgotten_contact_queries,
@@ -62,6 +62,7 @@ def build_forgotten_contacts_statistics(
     offset: int = 0,
     as_of: datetime | None = None,
     platform: str | None = None,
+    target_contact_id: int | None = None,
 ) -> ForgottenContactsStatistics:
     if not 1 <= limit <= FORGOTTEN_MAX_LIMIT:
         raise ValueError(f"limit must be between 1 and {FORGOTTEN_MAX_LIMIT}.")
@@ -100,6 +101,7 @@ def build_forgotten_contacts_statistics(
             recent_start,
             current_time,
             scope,
+            target_contact_id,
         )
     )
 
@@ -504,8 +506,9 @@ def build_forgotten_contacts_statistics(
             total=len(contacts),
         ),
         options=[
-            SearchOption(
+            ForgottenSearchOption(
                 value=str(index),
+                contact_id=contact.contact_id,
                 label=contact.display_name or "Unnamed contact",
                 platforms=contact.platforms,
                 search_terms=[
@@ -516,6 +519,22 @@ def build_forgotten_contacts_statistics(
             for index, contact in enumerate(options_contacts)
         ],
     )
+
+
+@router.get(
+    "/group-interactions/{contact_id}",
+    response_model=ForgottenContact,
+    summary="Get group interaction statistics for one participant",
+)
+def get_group_interaction(
+    contact_id: int, db: Session = Depends(get_db)
+) -> ForgottenContact:
+    result = build_forgotten_contacts_statistics(
+        db, scope="group", target_contact_id=contact_id
+    )
+    if not result.contacts:
+        raise HTTPException(status_code=404, detail="Group participant not found.")
+    return result.contacts[0]
 
 
 @router.get(

@@ -1,4 +1,9 @@
-import type { ChatInsightsStatistics } from "../api";
+import { useRef, useState } from "react";
+import {
+  getGroupInteraction,
+  type ChatInsightsStatistics,
+  type ForgottenContact,
+} from "../api";
 import type { useDashboardData } from "../hooks/useDashboardData";
 import type { useDashboardFilters } from "../hooks/useDashboardFilters";
 import { useViewSearchOptions } from "../hooks/useViewSearchOptions";
@@ -13,6 +18,7 @@ import { ForgottenContactsView } from "./ForgottenContactsView";
 import { IdentityLinksView } from "./IdentityLinksView";
 import { OverviewView } from "./OverviewView";
 import { UploadView } from "./UploadView";
+import type { Resource } from "../types";
 
 export function DashboardContent({
   dashboard,
@@ -35,6 +41,42 @@ export function DashboardContent({
   onOpenChatInsights: (chatId: number) => void;
   noImportedData: boolean;
 }) {
+  const [selectedInteraction, setSelectedInteraction] = useState<{
+    id: number;
+    resource: Resource<ForgottenContact>;
+  } | null>(null);
+  const interactionRequestId = useRef(0);
+  const clearSelectedInteraction = () => {
+    interactionRequestId.current += 1;
+    setSelectedInteraction(null);
+  };
+  const loadSelectedInteraction = async (id: number) => {
+    const requestId = ++interactionRequestId.current;
+    setSelectedInteraction({
+      id,
+      resource: { data: null, error: null, loading: true },
+    });
+    try {
+      const data = await getGroupInteraction(id);
+      if (requestId === interactionRequestId.current) {
+        setSelectedInteraction({ id, resource: { data, error: null, loading: false } });
+      }
+    } catch (error) {
+      if (requestId === interactionRequestId.current) {
+        setSelectedInteraction({
+          id,
+          resource: {
+            data: null,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to load group interaction.",
+            loading: false,
+          },
+        });
+      }
+    }
+  };
   const {
     overview,
     chats,
@@ -101,6 +143,7 @@ export function DashboardContent({
           : "asc"
         : defaultDirection;
     setForgottenSearch("");
+    clearSelectedInteraction();
     setForgottenSortKey(sortKey);
     setForgottenSortDirection(direction);
     void loadForgottenContacts(
@@ -112,17 +155,53 @@ export function DashboardContent({
       forgottenPlatformFilter,
     );
   };
+  const selectedInteractionId = forgottenContacts.data?.options.find(
+    (option) => option.value === forgottenSearch,
+  )?.contact_id;
+  const interactionSelection =
+    selectedTab === "interactions" &&
+    forgottenSearch &&
+    selectedInteraction !== null &&
+    selectedInteractionId === selectedInteraction.id
+      ? selectedInteraction.resource
+      : null;
   const renderForgottenView = (scope: "private" | "group") => (
     <ForgottenContactsView
       forgotten={forgottenContacts}
       scope={scope}
       noImportedData={noImportedData}
-      visibleContacts={visibleForgottenContacts}
+      visibleContacts={
+        interactionSelection
+          ? interactionSelection.data
+            ? [interactionSelection.data]
+            : []
+          : visibleForgottenContacts
+      }
+      selection={scope === "group" ? interactionSelection : null}
+      onRetrySelection={() => {
+        if (selectedInteractionId !== undefined) {
+          void loadSelectedInteraction(selectedInteractionId);
+        }
+      }}
       search={forgottenSearch}
       platformFilter={forgottenPlatformFilter}
       searchOptions={forgottenOptions}
       onSearchChange={(value) => {
         setForgottenSearch(value);
+        clearSelectedInteraction();
+        const option = forgottenContacts.data?.options.find(
+          (item) => item.value === value,
+        );
+        if (scope === "group" && value && option?.contact_id !== undefined) {
+          if (
+            !forgottenContacts.data?.contacts.some(
+              (contact) => contact.contact_id === option.contact_id,
+            )
+          ) {
+            void loadSelectedInteraction(option.contact_id);
+          }
+          return;
+        }
         void loadForgottenContacts(
           false,
           pageForSearchOption(
@@ -141,6 +220,7 @@ export function DashboardContent({
       onPlatformFilterChange={(platform) => {
         setForgottenPlatformFilter(platform);
         setForgottenSearch("");
+        clearSelectedInteraction();
         void loadForgottenContacts(
           false,
           1,
@@ -177,6 +257,7 @@ export function DashboardContent({
       }
       onPageChange={(page) => {
         setForgottenSearch("");
+        clearSelectedInteraction();
         void loadForgottenContacts(
           false,
           page,

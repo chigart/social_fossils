@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   unlinkPlatformIdentity: vi.fn(),
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
+  getGroupInteraction: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
@@ -36,6 +37,89 @@ beforeEach(() => {
 });
 
 describe("Forgotten contacts and interactions", () => {
+  it("rechecks group data when returning to the tab", async () => {
+    await renderLoadedDashboard();
+    await selectDashboardTab("Interactions");
+    const region = screen.getByRole("region", { name: "Group interactions" });
+    await within(region).findByText("Mika");
+    await selectDashboardTab("Forgotten");
+    await selectDashboardTab("Interactions");
+    expect(api.getForgottenContacts.mock.calls.filter(
+      (call) => call[4] === "group",
+    )).toHaveLength(2);
+  });
+
+  it("loads an off-page participant without requesting another full page", async () => {
+    const user = userEvent.setup();
+    const target = { ...forgotten.contacts[1], display_name: "Other participant" };
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      options: [
+        { value: "0", label: "Mika", platforms: ["telegram"], search_terms: [], contact_id: 41 },
+        { value: "50", label: "Other participant", platforms: ["telegram"], search_terms: [], contact_id: 42 },
+      ],
+      pagination: { page: 1, page_size: 50, total: 51 },
+      contacts: [forgotten.contacts[0]],
+    });
+    api.getGroupInteraction.mockResolvedValue(target);
+    await renderLoadedDashboard();
+    await selectDashboardTab("Interactions");
+    const region = screen.getByRole("region", { name: "Group interactions" });
+    await within(region).findByText("Mika");
+    await user.click(within(region).getByRole("button", { name: "Choose a participant" }));
+    await user.click(within(region).getByRole("option", { name: /Other participant/ }));
+    expect(await within(region).findByRole("row", { name: /Other participant/ })).toBeInTheDocument();
+    expect(api.getGroupInteraction).toHaveBeenCalledWith(42);
+    expect(api.getForgottenContacts).toHaveBeenCalledTimes(1);
+    await user.click(within(region).getByRole("button", { name: "Choose a participant" }));
+    await user.click(within(region).getByRole("button", { name: "All participants" }));
+    expect(await within(region).findByRole("row", { name: /Mika/ })).toBeInTheDocument();
+  });
+
+  it("uses the current page for an on-page participant", async () => {
+    const user = userEvent.setup();
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      options: [
+        { value: "0", label: "Mika", platforms: ["telegram"], search_terms: [], contact_id: 41 },
+        { value: "1", label: "Zoe", platforms: ["telegram"], search_terms: [], contact_id: 42 },
+      ],
+    });
+    await renderLoadedDashboard();
+    await selectDashboardTab("Interactions");
+    const region = screen.getByRole("region", { name: "Group interactions" });
+    await within(region).findByText("Mika");
+    await user.click(within(region).getByRole("button", { name: "Choose a participant" }));
+    await user.click(within(region).getByRole("option", { name: /Zoe/ }));
+    expect(rowTitles(within(region).getByRole("table"))).toEqual(["Zoe"]);
+    expect(api.getGroupInteraction).not.toHaveBeenCalled();
+    expect(api.getForgottenContacts).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports and retries an individual participant request", async () => {
+    const user = userEvent.setup();
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      options: [
+        { value: "50", label: "Zoe", platforms: ["telegram"], search_terms: [], contact_id: 42 },
+      ],
+      pagination: { page: 1, page_size: 50, total: 51 },
+      contacts: [forgotten.contacts[0]],
+    });
+    api.getGroupInteraction.mockRejectedValueOnce(new Error("Participant unavailable."));
+    api.getGroupInteraction.mockResolvedValueOnce(forgotten.contacts[1]);
+    await renderLoadedDashboard();
+    await selectDashboardTab("Interactions");
+    const region = screen.getByRole("region", { name: "Group interactions" });
+    await within(region).findByText("Mika");
+    await user.click(within(region).getByRole("button", { name: "Choose a participant" }));
+    await user.click(within(region).getByRole("option", { name: /Zoe/ }));
+    expect(await within(region).findByRole("alert")).toHaveTextContent("Participant unavailable.");
+    await user.click(within(region).getByRole("button", { name: "Retry" }));
+    expect(await within(region).findByRole("row", { name: /Zoe/ })).toBeInTheDocument();
+    expect(api.getForgottenContacts).toHaveBeenCalledTimes(1);
+  });
+
   it("loads private Forgotten and group Interactions scopes separately", async () => {
     api.getForgottenContacts.mockImplementation(
       async (_page, _pageSize, _sortBy, _sortDirection, scope) =>

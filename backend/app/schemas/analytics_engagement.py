@@ -125,11 +125,15 @@ class ForgottenContactsSummary(BaseModel):
     insufficient_data_contacts: int
 
 
+class ForgottenSearchOption(SearchOption):
+    contact_id: int
+
+
 class ForgottenContactsStatistics(BaseModel):
     summary: ForgottenContactsSummary
     contacts: list[ForgottenContact]
     pagination: PaginationMetadata
-    options: list[SearchOption] = Field(default_factory=list)
+    options: list[ForgottenSearchOption] = Field(default_factory=list)
 
 
 class CommunicationBalanceContact(BaseModel):

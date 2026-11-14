@@ -22,6 +22,7 @@ export type SearchOption = {
   label: string;
   platforms: string[];
   search_terms: string[];
+  contact_id?: number;
 };
 
 export type PaginatedItems<T> = {

@@ -44,6 +44,8 @@ export function ForgottenContactsView({
   scope,
   noImportedData,
   visibleContacts,
+  selection,
+  onRetrySelection,
   search,
   platformFilter,
   searchOptions,
@@ -61,6 +63,8 @@ export function ForgottenContactsView({
   scope: "private" | "group";
   noImportedData: boolean;
   visibleContacts: ForgottenContact[];
+  selection: Resource<ForgottenContact> | null;
+  onRetrySelection: () => void;
   search: string;
   platformFilter: string;
   searchOptions: SearchPickerOption[];
@@ -180,6 +184,10 @@ export function ForgottenContactsView({
                   : "No identifiable one-to-one contacts are available for comparison."}
               </p>
             </div>
+          ) : selection?.loading ? (
+            <LoadingMessage />
+          ) : selection?.error ? (
+            <SectionError message={selection.error} onRetry={onRetrySelection} />
           ) : visibleContacts.length === 0 ? (
             <div className={`${emptyStateClassName} p-4`}>
               <p className={emptyStateTextClassName}>

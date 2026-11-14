@@ -6,6 +6,7 @@ import {
   getCommunicationTimeline,
   getContacts,
   getForgottenContacts,
+  getGroupInteraction,
   getIdentityLinks,
   getOverview,
   getUploadJobStatus,
@@ -42,6 +43,16 @@ function mockUploadRequest(body: unknown, status = 200) {
 }
 
 describe("analytics API helpers", () => {
+  it("requests one group participant", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ contact_id: 42 }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(getGroupInteraction(42)).resolves.toEqual({ contact_id: 42 });
+    expect(fetchMock).toHaveBeenCalledWith("/api/analytics/group-interactions/42");
+  });
+
   it("requests each analytics endpoint and returns its JSON data", async () => {
     const overview = { total_messages: 17 };
     const chats = {

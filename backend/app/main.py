@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.analytics_cache_middleware import AnalyticsCacheMiddleware
 from app.routers.analytics import router as analytics_router
 from app.routers.identity_links import router as identity_links_router
 from app.routers.upload import router as upload_router
@@ -11,6 +12,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
+app.add_middleware(AnalyticsCacheMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],

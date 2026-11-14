@@ -9,6 +9,11 @@ from app.models import Account, CanonicalIdentity, Chat, Contact, Message
 
 from app.constants import ORDINARY_MESSAGE_TYPE
 
+from .analytics_group_interaction_queries import (
+    build_group_interaction_statements,
+    build_group_message_days,
+)
+
 
 def _utc_month_expression(db: Session):
     if db.get_bind().dialect.name == "postgresql":
@@ -24,13 +29,29 @@ def build_forgotten_contact_queries(
     recent_start: datetime,
     current_time: datetime,
     scope: Literal["private", "group"] = "private",
+    target_contact_id: int | None = None,
 ) -> tuple[CTE, Select, Select]:
+    group_days = (
+        build_group_message_days(db, recent_start, current_time, target_contact_id)
+        if scope == "group"
+        else None
+    )
     owner_account = aliased(Account)
+    peer_messages = group_days if group_days is not None else Message
+    peer_platform = (
+        group_days.c.platform if group_days is not None else Message.platform
+    )
+    peer_sender = (
+        group_days.c.sender_id if group_days is not None else Message.sender_id
+    )
+    peer_chat_id = (
+        group_days.c.chat_id if group_days is not None else Message.chat_id
+    )
     owner_sender = (
         select(owner_account.id)
         .where(
-            owner_account.platform == Message.platform,
-            owner_account.platform_user_id == Message.sender_id,
+            owner_account.platform == peer_platform,
+            owner_account.platform_user_id == peer_sender,
         )
         .exists()
     )
@@ -38,21 +59,25 @@ def build_forgotten_contact_queries(
         select(
             Chat.id.label("chat_id"),
             Chat.account_id.label("account_id"),
-            Message.sender_id.label("peer_platform_user_id"),
+            peer_sender.label("peer_platform_user_id"),
         )
-        .join(Message, Message.chat_id == Chat.id)
+        .join(peer_messages, peer_chat_id == Chat.id)
         .join(Account, Account.id == Chat.account_id)
         .where(
             Chat.platform == Account.platform,
-            Message.platform == Chat.platform,
+            peer_platform == Chat.platform,
             (
                 Chat.chat_type == "personal_chat"
                 if scope == "private"
                 else Chat.chat_type != "personal_chat"
             ),
             Account.platform_user_id.is_not(None),
-            Message.message_type == ORDINARY_MESSAGE_TYPE,
-            Message.sender_id.is_not(None),
+            *(
+                [Message.message_type == ORDINARY_MESSAGE_TYPE]
+                if group_days is None
+                else []
+            ),
+            peer_sender.is_not(None),
             ~owner_sender,
         )
         .distinct()
@@ -125,6 +150,44 @@ def build_forgotten_contact_queries(
             single_peer_chats.c.chat_id == Chat.id,
         )
     eligible_pairs = eligible_pairs_statement.cte("forgotten_eligible_pairs")
+    if group_days is not None:
+        if target_contact_id is not None:
+            target_keys = (
+                select(
+                    eligible_pairs.c.identity_group_id,
+                    eligible_pairs.c.canonical_identity_id,
+                    eligible_pairs.c.identity_contact_id,
+                    eligible_pairs.c.identity_source_account_id,
+                )
+                .where(eligible_pairs.c.contact_id == target_contact_id)
+                .distinct()
+                .cte("target_identity")
+            )
+            eligible_pairs = (
+                select(eligible_pairs)
+                .join(
+                    target_keys,
+                    and_(
+                        eligible_pairs.c.identity_group_id.is_not_distinct_from(
+                            target_keys.c.identity_group_id
+                        ),
+                        eligible_pairs.c.canonical_identity_id.is_not_distinct_from(
+                            target_keys.c.canonical_identity_id
+                        ),
+                        eligible_pairs.c.identity_contact_id.is_not_distinct_from(
+                            target_keys.c.identity_contact_id
+                        ),
+                        eligible_pairs.c.identity_source_account_id.is_not_distinct_from(
+                            target_keys.c.identity_source_account_id
+                        ),
+                    ),
+                )
+                .cte("target_eligible_pairs")
+            )
+        aggregate_statement, monthly_statement = build_group_interaction_statements(
+            eligible_pairs, group_days
+        )
+        return eligible_pairs, aggregate_statement, monthly_statement
 
     ordinary_message = Message.message_type == ORDINARY_MESSAGE_TYPE
     owner_direction = (
@@ -141,13 +204,6 @@ def build_forgotten_contact_queries(
         Message.is_outgoing.is_(False),
     )
     known_direction = or_(owner_direction, contact_direction)
-    relevant_sender = or_(
-        owner_direction,
-        and_(
-            Message.platform == eligible_pairs.c.platform,
-            Message.sender_id == eligible_pairs.c.contact_platform_user_id,
-        ),
-    )
     historical_message = and_(
         Message.message_date < recent_start,
         Message.message_date <= current_time,
@@ -209,17 +265,8 @@ def build_forgotten_contact_queries(
                 case((and_(ordinary_message, known_direction), Message.id))
             ).label("known_message_count"),
             func.count(
-                case(
-                    (
-                        and_(ordinary_message, relevant_sender)
-                        if scope == "group"
-                        else ordinary_message,
-                        Message.id,
-                    )
-                )
-            ).label(
-                "ordinary_message_count"
-            ),
+                case((ordinary_message, Message.id))
+            ).label("ordinary_message_count"),
             func.min(
                 case(
                     (and_(ordinary_message, known_direction, dated_message), Message.message_date)
@@ -281,8 +328,14 @@ def build_forgotten_contact_queries(
             ).label("recent_contact_message_count"),
         )
         .select_from(eligible_pairs)
-        .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
-        .where(Message.platform == eligible_pairs.c.platform)
+        .join(
+            Message,
+            and_(
+                Message.chat_id == eligible_pairs.c.chat_id,
+                Message.platform == eligible_pairs.c.platform,
+                ordinary_message,
+            ),
+        )
         .group_by(
             eligible_pairs.c.identity_group_id,
             eligible_pairs.c.canonical_identity_id,
@@ -323,11 +376,16 @@ def build_forgotten_contact_queries(
             ),
         )
         .select_from(eligible_pairs)
-        .join(Message, Message.chat_id == eligible_pairs.c.chat_id)
-        .where(
-            Message.platform == eligible_pairs.c.platform,
-            Message.message_date.is_not(None),
-            dated_message,
+        .join(
+            Message,
+            and_(
+                Message.chat_id == eligible_pairs.c.chat_id,
+                Message.platform == eligible_pairs.c.platform,
+                ordinary_message,
+                known_direction,
+                Message.message_date.is_not(None),
+                dated_message,
+            ),
         )
         .group_by(
             eligible_pairs.c.identity_group_id,

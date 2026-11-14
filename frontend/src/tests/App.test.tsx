@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 describe("dashboard", () => {
-  it("loads analytics on first tab visit and reuses results on revisits", async () => {
+  it("rechecks backend analytics on tab revisits", async () => {
     render(<App />);
 
     await screen.findByText("All messages");
@@ -50,12 +50,12 @@ describe("dashboard", () => {
 
     await selectDashboardTab("Chats");
     await waitFor(() => expect(api.getChats).toHaveBeenCalledTimes(1));
-    expect(api.getOverview).toHaveBeenCalledTimes(1);
+    expect(api.getOverview).toHaveBeenCalledTimes(2);
     expect(document.querySelector("#chats")).not.toBeNull();
 
     await selectDashboardTab("Overview");
     await selectDashboardTab("Chats");
-    expect(api.getChats).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(api.getChats).toHaveBeenCalledTimes(2));
   });
 
   it("loads only the analytics needed by a directly linked tab", async () => {

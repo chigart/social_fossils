@@ -9,6 +9,7 @@ import type {
   CommunicationTimelineStatistics,
   ContactStatistics,
   ContactSortBy,
+  ForgottenContact,
   ForgottenContactsStatistics,
   IdentityLinkActionResponse,
   IdentityLinksResponse,
@@ -323,6 +324,11 @@ export const getForgottenContacts = (
       scope,
       ...(platform ? { platform } : {}),
     })}`,
+  );
+
+export const getGroupInteraction = (contactId: number) =>
+  getJson<ForgottenContact>(
+    `/api/analytics/group-interactions/${encodeURIComponent(contactId)}`,
   );
 
 export const getCommunicationTimeline = (

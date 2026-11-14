@@ -56,6 +56,15 @@ logic live in backend services so they remain separate from the DAG.
 5. Analytics routers query that data; the frontend API client and dashboard
    hooks load it into the views under `frontend/src/components/`.
 
+Group interactions preaggregate ordinary messages by sender and UTC day before
+computing participant statistics. The picker reuses the current page when
+possible and requests one participant through
+`/api/analytics/group-interactions/{contact_id}` otherwise.
+Analytics and identity-link responses are cached in the existing PostgreSQL
+database, including across backend restarts. Completed imports and identity-link
+events make cached entries stale; live upload status is never cached. Results
+that depend on the current time remain unchanged until the data changes.
+
 ## Working conventions
 
 - Treat `backend/app/models.py` and the existing migrations as the schema
