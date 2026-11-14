@@ -111,7 +111,8 @@ def _ensure_chat(
 def _contact_identity(name: str, chat_id: str) -> str:
     normalized_name = " ".join(name.casefold().split())
     scoped_name = f"{chat_id}:{normalized_name}"
-    return f"name:{hashlib.sha256(scoped_name.encode('utf-8')).hexdigest()}"
+    digest = hashlib.sha256(scoped_name.encode("utf-8")).digest()
+    return f"{int.from_bytes(digest[:8], 'big') % 1_000_000:06d}"
 
 
 def _get_or_create_contact(

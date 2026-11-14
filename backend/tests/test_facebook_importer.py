@@ -166,6 +166,58 @@ def test_facebook_import_is_idempotent_and_classifies_outgoing_messages(tmp_path
         ] == [("completed", 2, 2, 0), ("completed", 2, 0, 2)]
 
 
+def test_facebook_name_only_contacts_use_six_digit_numeric_ids(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-name-id.db'}")
+    _create_import_tables(engine)
+    archive_path = tmp_path / "facebook-name-id.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile_information/profile_information.json",
+            json.dumps(
+                {
+                    "profile_v2": {
+                        "name": {"full_name": "Synthetic Owner"},
+                        "user_id": {"value": "owner-123"},
+                    }
+                }
+            ),
+        )
+        archive.writestr(
+            "messages/inbox/friend_without_numeric_id/message_1.json",
+            json.dumps(
+                {
+                    "title": "Synthetic conversation",
+                    "participants": [
+                        {"name": "Synthetic Owner", "user_id": "owner-123"},
+                        {"name": "Synthetic Friend"},
+                    ],
+                    "messages": [
+                        {
+                            "sender_name": "Synthetic Friend",
+                            "content": "synthetic incoming",
+                        }
+                    ],
+                }
+            ),
+        )
+
+    with Session(engine) as session:
+        facebook_importer.import_facebook_export(archive_path, session=session)
+
+        message = session.scalar(select(Message))
+        contact = session.scalar(
+            select(Contact).where(Contact.display_name == "Synthetic Friend")
+        )
+        assert message is not None
+        assert contact is not None
+        assert message.sender_id == contact.platform_user_id
+        assert message.sender_id is not None
+        assert len(message.sender_id) == 6
+        assert message.sender_id.isdecimal()
+
+    engine.dispose()
+
+
 def test_facebook_import_rolls_back_after_database_failure(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-rollback.db'}")
     _create_import_tables(engine)
