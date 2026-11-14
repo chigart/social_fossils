@@ -130,7 +130,6 @@ export const senderColors = [
 export const numberFormat = new Intl.NumberFormat();
 export const dateFormat = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
-  timeStyle: "short",
 });
 
 export const airflowPollIntervalMs = 3000;

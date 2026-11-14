@@ -216,6 +216,14 @@ describe("dashboard", () => {
     expect(
       await within(identityPanel).findByText("Linked person group 3"),
     ).toBeInTheDocument();
+    const linkedDate = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+    }).format(new Date("2026-10-24T08:00:00Z"));
+    expect(
+      await within(identityPanel).findByText(
+        `Linked telegram-user-1 and instagram-user-1 · dashboard · ${linkedDate}`,
+      ),
+    ).toBeInTheDocument();
     expect(
       within(identityPanel).queryByText("Unidentified message participant"),
     ).not.toBeInTheDocument();
@@ -263,6 +271,14 @@ describe("dashboard", () => {
       }),
     );
     expect(api.unlinkPlatformIdentity).toHaveBeenCalledWith(1);
+    const unlinkedDate = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+    }).format(new Date("2026-10-24T08:01:00Z"));
+    expect(
+      await within(identityPanel).findByText(
+        `Unlinked telegram-user-1 and instagram-user-1 · dashboard · ${unlinkedDate}`,
+      ),
+    ).toBeInTheDocument();
     expect(
       await within(identityPanel).findByRole("heading", {
         name: "No cross-platform links yet",

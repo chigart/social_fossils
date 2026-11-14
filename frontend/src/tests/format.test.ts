@@ -12,7 +12,6 @@ describe("formatDate", () => {
     const timestamp = "2024-03-15T12:30:00.000Z";
     const expected = new Intl.DateTimeFormat(undefined, {
       dateStyle: "medium",
-      timeStyle: "short",
     }).format(new Date(timestamp));
 
     expect(formatDate(timestamp)).toBe(expected);

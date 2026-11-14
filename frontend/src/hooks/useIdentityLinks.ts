@@ -5,6 +5,7 @@ import type {
   PlatformIdentity,
 } from "../api";
 import { DEFAULT_PAGE_SIZE } from "../constants";
+import { formatDate } from "../utils/format";
 import { platformAccountPrefix } from "../utils/platforms";
 import type { Resource } from "../types";
 import type { SearchPickerOption } from "../components/SearchPicker";
@@ -255,7 +256,7 @@ export function useIdentityLinks(
         : ` and ${identityLabel(identityById.get(event.peer_identity_id))}`;
       return {
         id: event.id,
-        description: `${event.action === "linked" ? "Linked" : "Unlinked"} ${identityName}${peerName} · ${event.source} · ${new Date(event.occurred_at).toLocaleString()}`,
+        description: `${event.action === "linked" ? "Linked" : "Unlinked"} ${identityName}${peerName} · ${event.source} · ${formatDate(event.occurred_at)}`,
       };
     }),
     [identityLinks.data?.events, identityById],
