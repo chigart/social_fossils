@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CanonicalIdentity, Chat
+from app.models import Account, CanonicalIdentity, Chat
 from app.schemas.analytics import CommunicationTimelineStatistics
 
 from .analytics_communication_timeline_queries import (
@@ -22,7 +22,8 @@ router = APIRouter()
     description=(
         "Returns ordinary-message counts and text character totals in UTC "
         "calendar months across the "
-        "combined imported owner history. Pass canonical_identity_id to limit "
+        "combined imported owner history. Pass account_id to limit the "
+        "timeline to one imported owner account. Pass canonical_identity_id to limit "
         "the timeline to that identity in one-to-one personal chats; explicitly "
         "linked platform identities share one timeline. Pass chat_id to limit "
         "the timeline to one chat. Pass sender_id with chat_id to filter the "
@@ -44,11 +45,18 @@ def get_communication_timeline(
     canonical_identity_id: Annotated[int | None, Query(gt=0)] = None,
     chat_id: Annotated[int | None, Query(gt=0)] = None,
     sender_id: Annotated[str | None, Query(min_length=1)] = None,
+    account_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> CommunicationTimelineStatistics:
-    if canonical_identity_id is not None and chat_id is not None:
+    if sum(
+        scope is not None
+        for scope in (canonical_identity_id, chat_id, account_id)
+    ) > 1:
         raise HTTPException(
             status_code=400,
-            detail="Select either a canonical identity or a chat, not both.",
+            detail=(
+                "Select only one of a canonical identity, chat, or imported "
+                "account."
+            ),
         )
     if sender_id is not None and chat_id is None:
         raise HTTPException(
@@ -70,9 +78,16 @@ def get_communication_timeline(
         selected_chat_id = db.scalar(select(Chat.id).where(Chat.id == chat_id))
         if selected_chat_id is None:
             raise HTTPException(status_code=404, detail="Chat not found.")
+    if account_id is not None:
+        selected_account_id = db.scalar(
+            select(Account.id).where(Account.id == account_id)
+        )
+        if selected_account_id is None:
+            raise HTTPException(status_code=404, detail="Imported account not found.")
     return build_communication_timeline_statistics(
         db,
         canonical_identity_id=canonical_identity_id,
         chat_id=chat_id,
         sender_id=sender_id,
+        account_id=account_id,
     )

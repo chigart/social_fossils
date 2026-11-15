@@ -1,6 +1,7 @@
 import type {
   ChatInsightSender,
   CommunicationTimelineStatistics,
+  ImportedAccountStatistics,
 } from "../api";
 import {
   emptyStateClassName,
@@ -24,6 +25,9 @@ export function CommunicationTimelineView({
   selectedSenderId,
   onSenderChange,
   showSenderSelector,
+  accounts = [],
+  selectedAccountId = null,
+  onAccountChange,
   period = "month",
 }: {
   timeline: Resource<CommunicationTimelineStatistics>;
@@ -32,6 +36,9 @@ export function CommunicationTimelineView({
   selectedSenderId: string | null;
   onSenderChange: (senderId: string | null) => void;
   showSenderSelector: boolean;
+  accounts?: ImportedAccountStatistics[];
+  selectedAccountId?: number | null;
+  onAccountChange?: (accountId: number | null) => void;
   period?: "month" | "year";
 }) {
   const data = timeline.data;
@@ -81,11 +88,34 @@ export function CommunicationTimelineView({
               </select>
             </label>
           )}
+        {onAccountChange && accounts.length > 0 && (
+          <label className="flex items-center gap-2 text-small text-ink-muted">
+            Timeline account
+            <select
+              aria-label="Timeline account"
+              className="rounded-md border border-border-subtle bg-surface px-3 py-2 text-ink"
+              value={selectedAccountId ?? ""}
+              onChange={(event) =>
+                onAccountChange(
+                  event.target.value ? Number(event.target.value) : null,
+                )
+              }
+            >
+              <option value="">All accounts</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.platform} — {account.name}
+                  {account.username ? ` (@${account.username})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <p className="-mt-[9px] mb-4 text-small leading-[1.5] text-ink-muted">
         {yearly
-          ? "Total ordinary messages and the owner-sent subset are grouped by UTC calendar year across all owner accounts. Owner average message size includes only dated ordinary messages sent by the owner; service events are excluded."
+          ? `Total ordinary messages and the owner-sent subset are grouped by UTC calendar year across ${selectedAccountId === null ? "all owner accounts" : "the selected imported account"}. Owner average message size includes only dated ordinary messages sent by the owner; service events are excluded.`
           : "Ordinary messages are grouped by UTC month. Gaps, quieter periods, and renewed activity are shown as data patterns, not relationship judgments. Service events are excluded."}
       </p>
 

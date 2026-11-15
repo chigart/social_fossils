@@ -330,15 +330,23 @@ export function useDashboardData() {
     canonicalIdentityId?: number,
     chatId?: number,
     senderId?: string | null,
+    accountId?: number,
   ) => {
     const requestId = ++timelineRequestId.current;
     setCommunicationTimeline(emptyResource);
     try {
-      const data = await getCommunicationTimeline(
-        canonicalIdentityId ?? undefined,
-        chatId,
-        senderId,
-      );
+      const data = accountId === undefined
+        ? await getCommunicationTimeline(
+            canonicalIdentityId ?? undefined,
+            chatId,
+            senderId,
+          )
+        : await getCommunicationTimeline(
+            canonicalIdentityId ?? undefined,
+            chatId,
+            senderId,
+            accountId,
+          );
       if (requestId === timelineRequestId.current) {
         setCommunicationTimeline({ data, error: null, loading: false });
       }

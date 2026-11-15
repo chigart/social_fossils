@@ -315,6 +315,47 @@ def test_chat_timeline_includes_only_the_selected_chat(db_session):
     assert error.value.status_code == 404
 
 
+def test_owner_timeline_can_be_limited_to_one_imported_account(db_session):
+    add_account(db_session, 1, "user-owner-one", username="owner")
+    add_account(db_session, 2, "user-owner-two", username="owner_old")
+    add_chat(db_session, 10, 1, "chat-10", chat_type="personal_chat")
+    add_chat(db_session, 20, 2, "chat-20", chat_type="personal_chat")
+    add_message(
+        db_session,
+        1,
+        10,
+        "message",
+        "user-owner-one",
+        datetime(2025, 1, 1, tzinfo=timezone.utc),
+        is_outgoing=True,
+    )
+    add_message(
+        db_session,
+        2,
+        20,
+        "message",
+        "user-owner-two",
+        datetime(2025, 3, 1, tzinfo=timezone.utc),
+        is_outgoing=True,
+    )
+
+    result = get_communication_timeline(db_session, account_id=1)
+
+    assert result.summary.scope == "owner"
+    assert result.summary.source_account_ids == [1]
+    assert result.summary.source_account_labels == ["@owner"]
+    assert result.summary.ordinary_message_count == 1
+    assert [month.month for month in result.months] == ["2025-01"]
+
+    with pytest.raises(HTTPException) as error:
+        get_communication_timeline(db_session, account_id=9999)
+    assert error.value.status_code == 404
+
+    with pytest.raises(HTTPException) as error:
+        get_communication_timeline(db_session, account_id=1, chat_id=10)
+    assert error.value.status_code == 400
+
+
 def test_utc_sql_expressions_compile_for_postgresql():
     month_sql = str(
         select(_utc_month_expression("postgresql", Message.message_date)).compile(

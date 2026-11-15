@@ -297,6 +297,20 @@ describe("analytics API helpers", () => {
     );
   });
 
+  it("requests an imported-account timeline when selected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ summary: {}, months: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getCommunicationTimeline(undefined, undefined, undefined, 23);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/analytics/communication-timeline?account_id=23",
+    );
+  });
+
   it("requests a chat timeline filtered by sender", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

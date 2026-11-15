@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDashboardApi } from "./dashboardTestHelpers";
 import {
   chatInsights,
+  overview,
   timeline,
 } from "./App.testFixtures";
 import {
@@ -51,6 +52,38 @@ describe("dashboard", () => {
       undefined,
       undefined,
     );
+  });
+
+  it("filters the Overview timeline by imported account", async () => {
+    const user = userEvent.setup();
+    const secondAccount = {
+      ...overview.imported_accounts[0],
+      id: 2,
+      platform: "telegram",
+      name: "Older account",
+      username: "older",
+    };
+    api.getOverview.mockResolvedValue({
+      ...overview,
+      total_imported_accounts: 2,
+      imported_accounts: [...overview.imported_accounts, secondAccount],
+    });
+
+    await renderLoadedDashboard();
+
+    const accountSelector = screen.getByRole("combobox", {
+      name: "Timeline account",
+    });
+    expect(accountSelector).toHaveValue("");
+    await user.selectOptions(accountSelector, "2");
+
+    expect(api.getCommunicationTimeline).toHaveBeenLastCalledWith(
+      undefined,
+      undefined,
+      undefined,
+      2,
+    );
+    expect(accountSelector).toHaveValue("2");
   });
 
   it("uses one chat selection for the timeline and insight details", async () => {

@@ -37,6 +37,7 @@ def build_communication_timeline_statistics(
     canonical_identity_id: int | None = None,
     chat_id: int | None = None,
     sender_id: str | None = None,
+    account_id: int | None = None,
 ) -> CommunicationTimelineStatistics:
     identity_group_id = (
         db.scalar(
@@ -121,6 +122,10 @@ def build_communication_timeline_statistics(
     if chat_id is not None:
         scoped_messages_statement = scoped_messages_statement.where(
             Chat.id == chat_id
+        )
+    if account_id is not None:
+        scoped_messages_statement = scoped_messages_statement.where(
+            Chat.account_id == account_id
         )
     if sender_id is not None:
         scoped_messages_statement = scoped_messages_statement.where(
@@ -252,6 +257,15 @@ def build_communication_timeline_statistics(
                 select(Account.id, Account.username, Account.name)
                 .join(Chat, Chat.account_id == Account.id)
                 .where(Chat.id == chat_id)
+                .order_by(Account.id)
+            )
+        )
+        source_contact_ids: list[int] = []
+    elif canonical_identity_id is None and account_id is not None:
+        source_accounts = list(
+            db.execute(
+                select(Account.id, Account.username, Account.name)
+                .where(Account.id == account_id)
                 .order_by(Account.id)
             )
         )

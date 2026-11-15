@@ -335,6 +335,7 @@ export const getCommunicationTimeline = (
   canonicalIdentityId?: number,
   chatId?: number,
   senderId?: string | null,
+  accountId?: number,
 ) => {
   const parameters = [
     canonicalIdentityId === undefined
@@ -342,6 +343,7 @@ export const getCommunicationTimeline = (
       : `canonical_identity_id=${canonicalIdentityId}`,
     chatId === undefined ? null : `chat_id=${chatId}`,
     senderId == null ? null : `sender_id=${encodeURIComponent(senderId)}`,
+    accountId === undefined ? null : `account_id=${accountId}`,
   ].filter((parameter): parameter is string => parameter !== null);
   const query = parameters.length > 0 ? `?${parameters.join("&")}` : "";
   return getJson<CommunicationTimelineStatistics>(

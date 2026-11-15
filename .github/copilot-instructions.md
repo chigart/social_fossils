@@ -153,3 +153,4 @@ If a requirement conflicts with the existing schema or architecture, explain
 the conflict instead of silently redesigning the project.
 Never commit to git.
 Never edit README.md.
+Always properly fix Pylance errors.

@@ -31,6 +31,8 @@ export default function App() {
   } = dashboard;
   const [selectedInsightsChatId, setSelectedInsightsChatId] =
     useState<number | null>(null);
+  const [selectedTimelineAccountId, setSelectedTimelineAccountId] =
+    useState<number | null>(null);
   const [selectedTab, setSelectedTab] = useState<DashboardTab>(() =>
     dashboardTabFromHash(window.location.hash),
   );
@@ -103,7 +105,12 @@ export default function App() {
     switch (selectedTab) {
       case "overview":
         void loadOverview();
-        void loadCommunicationTimeline();
+        void loadCommunicationTimeline(
+          undefined,
+          undefined,
+          undefined,
+          selectedTimelineAccountId ?? undefined,
+        );
         break;
       case "conversation-insights":
         void loadOverview();
@@ -178,6 +185,7 @@ export default function App() {
   }, [
     selectedTab,
     selectedInsightsChatId,
+    selectedTimelineAccountId,
     loadOverview,
     loadCommunicationTimeline,
     loadChats,
@@ -212,6 +220,8 @@ export default function App() {
       selectedInsightsChatId={selectedInsightsChatId}
       onSelectedInsightsChatChange={setSelectedInsightsChatId}
       selectedChat={selectedChat}
+      selectedTimelineAccountId={selectedTimelineAccountId}
+      onTimelineAccountChange={setSelectedTimelineAccountId}
       onOpenChatInsights={openChatInsights}
       noImportedData={noImportedData}
     />

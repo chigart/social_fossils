@@ -23,14 +23,18 @@ export function OverviewView({
   overview,
   timeline,
   noImportedData,
+  selectedTimelineAccountId,
   onRetry,
   onRetryTimeline,
+  onTimelineAccountChange,
 }: {
   overview: Resource<OverviewStatistics>;
   timeline: Resource<CommunicationTimelineStatistics>;
   noImportedData: boolean | undefined;
+  selectedTimelineAccountId: number | null;
   onRetry: () => void;
-  onRetryTimeline: () => void;
+  onRetryTimeline: (accountId: number | null) => void;
+  onTimelineAccountChange: (accountId: number | null) => void;
 }) {
   return (
     <section
@@ -46,7 +50,9 @@ export function OverviewView({
           </h2>
         </div>
         <span className="pb-0.5 text-small text-ink-muted max-sm:text-caption">
-          Combined owner scope
+          {selectedTimelineAccountId === null
+            ? "Combined owner scope"
+            : "Single imported account scope"}
         </span>
       </div>
 
@@ -89,11 +95,14 @@ export function OverviewView({
           <div className="mt-6">
             <CommunicationTimelineView
               timeline={timeline}
-              onRetry={onRetryTimeline}
+              onRetry={() => onRetryTimeline(selectedTimelineAccountId)}
               senders={[]}
               selectedSenderId={null}
               onSenderChange={() => {}}
               showSenderSelector={false}
+              accounts={overview.data.imported_accounts}
+              selectedAccountId={selectedTimelineAccountId}
+              onAccountChange={onTimelineAccountChange}
               period="year"
             />
           </div>

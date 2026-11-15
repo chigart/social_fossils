@@ -28,6 +28,8 @@ export function DashboardContent({
   selectedInsightsChatId,
   onSelectedInsightsChatChange,
   selectedChat,
+  selectedTimelineAccountId,
+  onTimelineAccountChange,
   onOpenChatInsights,
   noImportedData,
 }: {
@@ -38,6 +40,8 @@ export function DashboardContent({
   selectedInsightsChatId: number | null;
   onSelectedInsightsChatChange: (chatId: number | null) => void;
   selectedChat: ChatInsightsStatistics | undefined;
+  selectedTimelineAccountId: number | null;
+  onTimelineAccountChange: (accountId: number | null) => void;
   onOpenChatInsights: (chatId: number) => void;
   noImportedData: boolean;
 }) {
@@ -290,8 +294,17 @@ export function DashboardContent({
               overview={overview}
               timeline={communicationTimeline}
               noImportedData={noImportedData}
+              selectedTimelineAccountId={selectedTimelineAccountId}
               onRetry={() => void loadOverview(true)}
-              onRetryTimeline={() => void loadCommunicationTimeline()}
+              onRetryTimeline={(accountId) =>
+                void loadCommunicationTimeline(
+                  undefined,
+                  undefined,
+                  undefined,
+                  accountId ?? undefined,
+                )
+              }
+              onTimelineAccountChange={onTimelineAccountChange}
             />
           )}
         </div>
