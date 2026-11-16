@@ -289,6 +289,33 @@ def test_parse_facebook_archive_repairs_thai_and_georgian_text(tmp_path):
     assert chat.messages[3]["text_content"] == "Olá"
 
 
+def test_parse_facebook_archive_repairs_japanese_names(tmp_path):
+    archive_path = tmp_path / "facebook-japanese-name.zip"
+    expected_name = "中川凌平"
+    mojibake_name = expected_name.encode("utf-8").decode("latin-1")
+
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile_information/profile_information.json",
+            json.dumps(
+                {"profile_v2": {"name": {"full_name": mojibake_name}}}
+            ),
+        )
+        _write_conversation(
+            archive,
+            "messages/inbox/friend_123/message_1.json",
+            [{"sender_name": mojibake_name}],
+            title=mojibake_name,
+        )
+
+    parsed = parse_facebook_archive(archive_path)
+
+    chat = parsed.chats[0]
+    assert parsed.account_name == expected_name
+    assert chat.title == expected_name
+    assert chat.messages[0]["sender_name"] == expected_name
+
+
 def test_parse_facebook_archive_preserves_cyrillic_name_ending_in_u0085(tmp_path):
     archive_path = tmp_path / "facebook-cyrillic-name.zip"
     expected_name = "Анастасия Липецких"

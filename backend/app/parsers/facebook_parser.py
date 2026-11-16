@@ -76,22 +76,25 @@ def _message_files(
 
 
 def _normalize_text(value: str) -> str:
-    if not any(
-        marker in value
-        for marker in (
-            "Ã",
-            "Ð",
-            "Ñ",
-            "ð",
-            "à",
-            "á",
-            "Â",
-            "\x80",
-            "\x81",
-            "\x83",
-            "\x8d",
-            "\x9f",
+    if not (
+        any(
+            marker in value
+            for marker in (
+                "Ã",
+                "Ð",
+                "Ñ",
+                "ð",
+                "à",
+                "á",
+                "Â",
+                "\x80",
+                "\x81",
+                "\x83",
+                "\x8d",
+                "\x9f",
+            )
         )
+        or any("\u00e3" <= character <= "\u00ef" for character in value)
     ):
         return value
     try:
