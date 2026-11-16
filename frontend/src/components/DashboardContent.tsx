@@ -10,6 +10,7 @@ import { useViewSearchOptions } from "../hooks/useViewSearchOptions";
 import type { DashboardTab } from "../utils/dashboardTabs";
 import { pageForSearchOption } from "../utils/dashboard";
 import { DashboardConversationPanels } from "./DashboardConversationPanels";
+import { AIChatPanel } from "./AIChatPanel";
 import { CommunicationBalanceView } from "./CommunicationBalanceView";
 import { ContactsView } from "./ContactsView";
 import { DashboardHeader } from "./DashboardHeader";
@@ -327,6 +328,16 @@ export function DashboardContent({
           noImportedData={noImportedData}
           chatOptions={chatOptions}
         />
+        <div
+          id="ai-panel"
+          role="tabpanel"
+          aria-labelledby="ai-tab"
+          aria-label="AI"
+          tabIndex={0}
+          hidden={selectedTab !== "ai"}
+        >
+          <AIChatPanel active={selectedTab === "ai"} />
+        </div>
         <div
           id="uploads-panel"
           role="tabpanel"

@@ -471,3 +471,26 @@ export type UploadJobStatus = UploadJob & {
   airflow_tasks?: AirflowTaskStatus[];
   airflow_error?: string;
 };
+
+export type AIMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type AIProvider = "ollama" | "openai-compatible";
+
+export type AIChatRequest = {
+  provider: AIProvider;
+  model: string;
+  messages: AIMessage[];
+  api_key?: string;
+  base_url?: string;
+};
+
+export type AIChatResponse = {
+  answer: string;
+};
+
+export type AIModelsResponse = {
+  models: string[];
+};

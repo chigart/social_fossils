@@ -111,6 +111,7 @@ export const dashboardTabs = [
   { id: "forgotten-contacts", label: "Forgotten" },
   { id: "interactions", label: "Interactions" },
   { id: "uploads", label: "Import" },
+  { id: "ai", label: "AI" },
 ] as const;
 
 export const forgottenClassificationLabels = {

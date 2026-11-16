@@ -9,6 +9,7 @@ import {
   getGroupInteraction,
   getIdentityLinks,
   getOverview,
+  getOllamaModels,
   getUploadJobStatus,
   linkPlatformIdentities,
   retryUploadJob,
@@ -43,6 +44,24 @@ function mockUploadRequest(body: unknown, status = 200) {
 }
 
 describe("analytics API helpers", () => {
+  it("shows Ollama connectivity details when model discovery fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: async () => ({
+          detail:
+            "Cannot connect to Ollama from the backend. Confirm it listens on a Docker-reachable address.",
+        }),
+      }),
+    );
+
+    await expect(getOllamaModels()).rejects.toThrow(
+      "Cannot connect to Ollama from the backend. Confirm it listens on a Docker-reachable address.",
+    );
+  });
+
   it("requests one group participant", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

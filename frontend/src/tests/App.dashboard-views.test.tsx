@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   getCloseFriendsTimeline: vi.fn(),
+  getOllamaModels: vi.fn(),
+  sendAIChat: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -38,6 +40,7 @@ vi.mock("../api", () => api);
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
   resetDashboardApi(api);
+  api.getOllamaModels.mockResolvedValue({ models: [] });
 });
 
 it("requests DM and group-chat lists separately", async () => {

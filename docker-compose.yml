@@ -19,12 +19,15 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
       AIRFLOW_BASE_URL: http://airflow-api:8080
       UPLOAD_STAGING_DIR: /uploads
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
     command:
       - sh
       - -c
       - alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
       - uploads:/uploads

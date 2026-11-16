@@ -52,7 +52,7 @@ describe("dashboard", () => {
       screen.queryByText(/All imported Telegram exports are included/),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Dashboard sections" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(10);
+    expect(screen.getAllByRole("tab")).toHaveLength(11);
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
