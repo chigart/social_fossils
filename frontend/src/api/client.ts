@@ -1,5 +1,8 @@
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import type {
+  AIChatRequest,
+  AIChatResponse,
+  AIModelsResponse,
   ChatInsightsResponse,
   ChatSortBy,
   ChatScope,
@@ -22,23 +25,43 @@ import type {
   UploadPlatform,
 } from "./types";
 
-async function getJson<T>(path: string): Promise<T> {
+async function getJson<T>(
+  path: string,
+  apiName = "analytics API",
+  includeErrorDetail = false,
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(path);
   } catch {
-    throw new Error("Unable to connect to the analytics API. Check that the backend is running.");
+    throw new Error(`Unable to connect to the ${apiName}. Check that the backend is running.`);
   }
 
   if (!response.ok) {
-    throw new Error(`The analytics API returned an error (HTTP ${response.status}).`);
+    if (includeErrorDetail) {
+      let result: unknown;
+      try {
+        result = await response.json();
+      } catch {
+        result = null;
+      }
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "detail" in result &&
+        typeof result.detail === "string"
+      ) {
+        throw new Error(result.detail);
+      }
+    }
+    throw new Error(`The ${apiName} returned an error (HTTP ${response.status}).`);
   }
 
   try {
     return (await response.json()) as T;
   } catch {
-    throw new Error("The analytics API returned an invalid response.");
+    throw new Error(`The ${apiName} returned an invalid response.`);
   }
 }
 
@@ -46,6 +69,7 @@ async function sendJson<T>(
   path: string,
   method: "POST" | "DELETE",
   body?: unknown,
+  apiName = "identity links",
 ): Promise<T> {
   let response: Response;
   try {
@@ -60,7 +84,7 @@ async function sendJson<T>(
     });
   } catch {
     throw new Error(
-      "Unable to connect to identity links. Check that the backend is running.",
+      `Unable to connect to the ${apiName}. Check that the backend is running.`,
     );
   }
 
@@ -68,7 +92,7 @@ async function sendJson<T>(
   try {
     result = await response.json();
   } catch {
-    throw new Error("The identity links API returned an invalid response.");
+    throw new Error(`The ${apiName} API returned an invalid response.`);
   }
 
   if (!response.ok) {
@@ -78,7 +102,7 @@ async function sendJson<T>(
       "detail" in result &&
       typeof result.detail === "string"
         ? result.detail
-        : `The identity links API returned an error (HTTP ${response.status}).`;
+        : `The ${apiName} API returned an error (HTTP ${response.status}).`;
     throw new Error(detail);
   }
   return result as T;
@@ -217,6 +241,16 @@ export async function getUploadJobStatus(
 
 export const getOverview = () =>
   getJson<OverviewStatistics>("/api/analytics/overview");
+
+export const getOllamaModels = () =>
+  getJson<AIModelsResponse>(
+    "/api/ai/models",
+    "AI model discovery API",
+    true,
+  );
+
+export const sendAIChat = (body: AIChatRequest) =>
+  sendJson<AIChatResponse>("/api/ai/chat", "POST", body, "AI");
 
 export const getChatInsights = (chatId?: number) => {
   const query =

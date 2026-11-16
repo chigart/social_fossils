@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.analytics_cache_middleware import AnalyticsCacheMiddleware
 from app.routers.analytics import router as analytics_router
+from app.routers.ai import router as ai_router
 from app.routers.identity_links import router as identity_links_router
 from app.routers.upload import router as upload_router
 
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(analytics_router)
+app.include_router(ai_router)
 app.include_router(identity_links_router)
 app.include_router(upload_router)
 
