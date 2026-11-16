@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ChangeEventHandler,
+  KeyboardEvent,
+  KeyboardEventHandler,
   SubmitEvent,
   SubmitEventHandler,
 } from "react";
@@ -24,6 +26,8 @@ export function useAIChat(active: boolean) {
   const [prompt, setPrompt] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const conversationRef = useRef<HTMLDivElement>(null);
+  const latestAssistantMessageRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!active || provider !== "ollama") return;
@@ -58,6 +62,16 @@ export function useAIChat(active: boolean) {
     Boolean(model) &&
     (provider === "ollama" || Boolean(apiKey.trim()));
 
+  useEffect(() => {
+    const conversation = conversationRef.current;
+    const message = latestAssistantMessageRef.current;
+    if (!conversation || !message) return;
+
+    const conversationTop = conversation.getBoundingClientRect().top;
+    const messageTop = message.getBoundingClientRect().top;
+    conversation.scrollTop += messageTop - conversationTop;
+  }, [messages]);
+
   const handleProviderChange: ChangeEventHandler<HTMLSelectElement> = (
     event,
   ) => {
@@ -80,10 +94,7 @@ export function useAIChat(active: boolean) {
   const handlePromptChange: ChangeEventHandler<HTMLTextAreaElement> = (event) =>
     setPrompt(event.currentTarget.value);
 
-  const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (
-    event: SubmitEvent<HTMLFormElement>,
-  ) => {
-    event.preventDefault();
+  const submitPrompt = async () => {
     const userPrompt = prompt.trim();
     if (!userPrompt || !canSend) return;
 
@@ -117,6 +128,24 @@ export function useAIChat(active: boolean) {
     }
   };
 
+  const handleSubmit: SubmitEventHandler<HTMLFormElement> = async (
+    event: SubmitEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    await submitPrompt();
+  };
+
+  const handlePromptKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (
+    event: KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+    void submitPrompt();
+  };
+
   const handleClear = () => {
     setMessages([]);
     setChatError(null);
@@ -136,12 +165,15 @@ export function useAIChat(active: boolean) {
     chatLoading,
     chatError,
     canSend,
+    conversationRef,
+    latestAssistantMessageRef,
     handleProviderChange,
     handleOllamaModelChange,
     handleOpenAIModelChange,
     handleApiBaseUrlChange,
     handleApiKeyChange,
     handlePromptChange,
+    handlePromptKeyDown,
     handleSubmit,
     handleClear,
   };

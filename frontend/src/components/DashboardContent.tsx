@@ -282,9 +282,17 @@ export function DashboardContent({
   );
 
   return (
-    <main className="min-h-screen bg-canvas text-ink">
-      <DashboardHeader selectedTab={selectedTab} onTabSelect={onTabSelect} />
-      <div className="mx-auto w-full max-w-[1200px] px-7 pt-[46px] pb-[30px] max-[820px]:pt-[34px] max-sm:px-[14px] max-sm:py-[25px]">
+    <main
+      className={`${selectedTab === "ai" ? "flex h-dvh flex-col overflow-hidden" : "min-h-screen"} bg-canvas text-ink`}
+    >
+      <div className={selectedTab === "ai" ? "shrink-0" : ""}>
+        <DashboardHeader selectedTab={selectedTab} onTabSelect={onTabSelect} />
+      </div>
+      <div
+        className={`mx-auto w-full max-w-[1200px] px-7 pt-[46px] pb-[30px] max-[820px]:pt-[34px] max-sm:px-[14px] max-sm:py-[25px] ${
+          selectedTab === "ai" ? "flex min-h-0 flex-1 flex-col" : ""
+        }`}
+      >
         <DashboardIntro />
         <div
           id="overview-panel"
@@ -334,6 +342,7 @@ export function DashboardContent({
           aria-labelledby="ai-tab"
           aria-label="AI"
           tabIndex={0}
+          className={selectedTab === "ai" ? "flex min-h-0 flex-1 flex-col" : ""}
           hidden={selectedTab !== "ai"}
         >
           <AIChatPanel active={selectedTab === "ai"} />

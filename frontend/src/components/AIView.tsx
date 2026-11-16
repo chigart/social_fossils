@@ -16,22 +16,25 @@ export function AIView({
   chatLoading,
   chatError,
   canSend,
+  conversationRef,
+  latestAssistantMessageRef,
   handleProviderChange,
   handleOllamaModelChange,
   handleOpenAIModelChange,
   handleApiBaseUrlChange,
   handleApiKeyChange,
   handlePromptChange,
+  handlePromptKeyDown,
   handleSubmit,
   handleClear,
 }: AIViewProps) {
 
   return (
     <section
-      className="mx-auto max-w-[900px] rounded-2xl border border-border bg-surface p-6 shadow-sm max-sm:p-4"
+      className="mx-auto flex min-h-0 w-full max-w-[900px] flex-1 flex-col rounded-2xl border border-border bg-surface p-6 shadow-sm max-sm:p-4"
       aria-labelledby="ai-title"
     >
-      <header className="mb-5">
+      <header className="mb-5 shrink-0">
         <p className="text-caption font-semibold uppercase tracking-wide text-ink-muted">
           ANALYSIS ASSISTANT
         </p>
@@ -42,13 +45,14 @@ export function AIView({
           Ask about your communication patterns
         </h2>
         <p className="mt-2 text-small text-ink-muted">
-          The assistant chooses from read-only aggregate analytics tools to
-          answer your questions. It cannot access raw message text, and does
-          not use the selected dashboard view or filters.
+          The assistant can search imported account names, contact names, and
+          usernames, and use aggregate analytics. With Local Ollama, it can
+          also read raw message text. OpenAI-compatible models cannot access
+          message text. Dashboard selections and filters are not used.
         </p>
       </header>
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2">
+      <div className="mb-5 grid shrink-0 grid-cols-2 gap-4">
         <label className="grid gap-1.5 text-small font-medium text-ink">
           Provider
           <select
@@ -76,21 +80,6 @@ export function AIView({
                 </option>
               ))}
             </select>
-            <span className="font-normal text-ink-muted">
-              {modelLoading
-                ? "Finding models on Ollama…"
-                : ollamaModels.length === 0
-                  ? "No local models found. Check Ollama and its Docker-accessible URL."
-                  : "Models are discovered from your local Ollama instance."}
-            </span>
-            {modelError && (
-              <span
-                role="alert"
-                className="font-normal text-ink-warning"
-              >
-                {modelError}
-              </span>
-            )}
           </label>
         ) : (
           <label className="grid gap-1.5 text-small font-medium text-ink">
@@ -103,6 +92,23 @@ export function AIView({
               required
             />
           </label>
+        )}
+
+        {provider === "ollama" && (
+          <div className="col-span-2 -mt-2 grid gap-1.5 text-small font-normal text-ink-muted">
+            <p>
+              {modelLoading
+                ? "Finding models on Ollama…"
+                : ollamaModels.length === 0
+                  ? "No local models found. Check Ollama and its Docker-accessible URL."
+                  : "Models are discovered from your local Ollama instance."}
+            </p>
+            {modelError && (
+              <p role="alert" className="text-ink-warning">
+                {modelError}
+              </p>
+            )}
+          </div>
         )}
 
         {provider === "openai-compatible" && (
@@ -128,9 +134,6 @@ export function AIView({
                 autoComplete="off"
                 required
               />
-              <p className="font-normal text-ink-muted">
-                Used only for chat requests and kept in this page session.
-              </p>
             </div>
           </>
         )}
@@ -138,13 +141,27 @@ export function AIView({
 
       {provider === "openai-compatible" && (
         <p className="mb-4 rounded-lg bg-surface-muted px-3 py-2 text-caption text-ink-muted">
-          Your question and aggregate analytics may be sent to the configured
-          API provider. Raw message text is never included.
+          Your question, account names, contact names, usernames, and aggregate
+          analytics may be sent to the configured API provider. Raw message
+          text is not included or available to this provider.
+        </p>
+      )}
+
+      {provider === "openai-compatible" && (
+        <p className="col-span-2 -mt-2 text-small text-ink-muted">
+          Used only for chat requests and kept in this page session.
+        </p>
+      )}
+      {provider === "ollama" && (
+        <p className="mb-4 rounded-lg bg-surface-muted px-3 py-2 text-caption text-ink-muted">
+          The selected Ollama model can read raw message text from your database.
+          This text is sent to the configured Ollama endpoint.
         </p>
       )}
 
       <div
-        className="mb-4 max-h-[440px] min-h-[150px] space-y-3 overflow-y-auto rounded-xl border border-border bg-canvas p-4"
+        ref={conversationRef}
+        className="mb-4 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-xl border border-border bg-canvas p-4"
         role="log"
         aria-label="AI conversation"
         aria-live="polite"
@@ -156,6 +173,12 @@ export function AIView({
         ) : (
           messages.map((message, index) => (
             <article
+              ref={
+                message.role === "assistant" &&
+                index === messages.length - 1
+                  ? latestAssistantMessageRef
+                  : undefined
+              }
               className={`max-w-[90%] whitespace-pre-wrap rounded-xl px-3 py-2 text-small ${
                 message.role === "user"
                   ? "ml-auto bg-surface-brand text-ink"
@@ -186,7 +209,7 @@ export function AIView({
         </p>
       )}
 
-      <form className="grid gap-3" onSubmit={handleSubmit}>
+      <form className="grid shrink-0 gap-3" onSubmit={handleSubmit}>
         <label className="sr-only" htmlFor="ai-prompt">
           Your question
         </label>
@@ -195,6 +218,7 @@ export function AIView({
           className="min-h-24 resize-y rounded-xl border border-border bg-canvas p-3 text-small text-ink"
           value={prompt}
           onChange={handlePromptChange}
+          onKeyDown={handlePromptKeyDown}
           maxLength={4000}
           placeholder="For example: How has my communication volume changed?"
         />
