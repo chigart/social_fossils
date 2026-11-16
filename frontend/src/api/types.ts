@@ -180,7 +180,10 @@ export type ChatSortBy =
   | "earliest_message_timestamp"
   | "latest_message_timestamp";
 
+export type FriendStatus = "Active" | "Close" | "exClose";
+
 export type ContactStatistics = {
+  friend_statuses: FriendStatus[];
   platforms: string[];
   account_id: number | null;
   identity_group_id: number | null;
@@ -424,6 +427,15 @@ export type CommunicationTimelineSummary = {
 export type CommunicationTimelineStatistics = {
   summary: CommunicationTimelineSummary;
   months: CommunicationTimelineMonth[];
+};
+
+export type CloseFriendsTimelineYear = {
+  year: number;
+  close_friend_count: number;
+};
+
+export type CloseFriendsTimelineStatistics = {
+  years: CloseFriendsTimelineYear[];
 };
 
 export type { UploadPlatform } from "../utils/platforms";

@@ -56,6 +56,13 @@ logic live in backend services so they remain separate from the DAG.
 5. Analytics routers query that data; the frontend API client and dashboard
    hooks load it into the views under `frontend/src/components/`.
 
+The contacts analytics also classifies direct-message contacts as Active,
+Close, or exClose using exchanged text-bearing messages and owner contact
+continuity. Active requires 20 exchanged messages within six months; Close
+requires 200 in a complete UTC year and ongoing owner contact. The overview's
+Close friends timeline counts qualified contacts by UTC calendar year across
+all imported owner accounts.
+
 Group interactions preaggregate ordinary messages by sender and UTC day before
 computing participant statistics. The picker reuses the current page when
 possible and requests one participant through

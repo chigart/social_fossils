@@ -4,11 +4,13 @@ import type {
   ChatSortBy,
   ChatScope,
   ChatStatistics,
+  CloseFriendsTimelineStatistics,
   CommunicationBalanceClassification,
   CommunicationBalanceStatistics,
   CommunicationTimelineStatistics,
   ContactStatistics,
   ContactSortBy,
+  FriendStatus,
   ForgottenContact,
   ForgottenContactsStatistics,
   IdentityLinkActionResponse,
@@ -260,12 +262,14 @@ export const getContacts = (
   sortBy: ContactSortBy = "total_messages_sent",
   sortDirection: "asc" | "desc" = "desc",
   platform?: string,
+  friendStatus?: FriendStatus,
 ) =>
   getJson<PaginatedItems<ContactStatistics>>(
     `/api/analytics/contacts${pageQuery(page, pageSize, {
       sort_by: sortBy,
       sort_direction: sortDirection,
       ...(platform ? { platform } : {}),
+      ...(friendStatus ? { friend_status: friendStatus } : {}),
     })}`,
   );
 
@@ -350,3 +354,8 @@ export const getCommunicationTimeline = (
     `/api/analytics/communication-timeline${query}`,
   );
 };
+
+export const getCloseFriendsTimeline = () =>
+  getJson<CloseFriendsTimelineStatistics>(
+    "/api/analytics/close-friends-timeline",
+  );

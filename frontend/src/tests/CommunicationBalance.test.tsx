@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
 }));
 
 vi.mock("../api", () => api);

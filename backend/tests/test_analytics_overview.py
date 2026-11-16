@@ -14,9 +14,9 @@ from app.routers.analytics_communication_balance import get_communication_balanc
 from app.routers.analytics_chat_insights import get_chat_insights
 from app.routers.analytics_overview import (
     get_chat_statistics,
-    get_contact_statistics,
     get_overview,
 )
+from app.routers.analytics_contacts import get_contact_statistics
 from app.routers.analytics_communication_timeline_queries import (
     build_communication_timeline_statistics,
 )
@@ -57,6 +57,7 @@ def test_empty_database_returns_zeroes_and_empty_lists(db_session):
         "/api/analytics/contacts",
         "/api/analytics/communication-balance",
         "/api/analytics/forgotten-contacts",
+        "/api/analytics/close-friends-timeline",
     }
     forgotten_parameters = app.openapi()["paths"][
         "/api/analytics/forgotten-contacts"

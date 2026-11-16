@@ -4,6 +4,7 @@ import {
   chatInsights,
   chats,
   contacts,
+  closeFriendsTimeline,
   forgotten,
   overview,
   timeline,
@@ -48,4 +49,5 @@ export function resetDashboardApi(api: Record<string, MockFunction>) {
   api.getCommunicationBalance.mockResolvedValue(balance);
   api.getForgottenContacts.mockResolvedValue(forgotten);
   api.getCommunicationTimeline.mockResolvedValue(timeline);
+  api.getCloseFriendsTimeline.mockResolvedValue(closeFriendsTimeline);
 }

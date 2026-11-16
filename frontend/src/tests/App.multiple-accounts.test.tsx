@@ -25,6 +25,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -163,7 +164,7 @@ describe("multiple accounts", () => {
       ),
     ).toHaveLength(2);
     expect(within(combinedContactRows[0]).getAllByRole("cell").map((cell) => cell.textContent))
-      .toEqual(["12345", "TG@antonTG: Anton Malkov", "18", "6"]);
+      .toEqual(["12345", "ActiveClose", "TG@antonTG: Anton Malkov", "18", "6"]);
     await selectDashboardTab("Overview");
     const overviewRegion = screen.getByRole("region", { name: "Overview" });
     expect(within(overviewRegion).queryByText("Source accounts")).not.toBeInTheDocument();

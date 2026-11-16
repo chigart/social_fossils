@@ -21,6 +21,23 @@
   --color-platform-telegram-foreground: #176184;
   --color-platform-vk-background: #e7f4e8;
   --color-platform-vk-foreground: #28633d;
+  --color-close-friends-heatmap-empty: #f0f2f2;
+  --color-close-friends-heatmap-pink: color-mix(
+    in srgb,
+    var(--color-chart-7) 60%,
+    transparent
+  );
+  --color-close-friends-heatmap-green: color-mix(
+    in srgb,
+    var(--color-chart-3) 60%,
+    transparent
+  );
+  --color-friend-active-background: #e2f3fb;
+  --color-friend-active-foreground: #176184;
+  --color-friend-close-background: #e4f3ec;
+  --color-friend-close-foreground: #1b5f4c;
+  --color-friend-exclose-background: #fff1ef;
+  --color-friend-exclose-foreground: #8a3329;
 
   --color-ink: #1e2933;
   --color-ink-muted: #68757c;
@@ -72,6 +89,23 @@
   --text-logo: 1rem;
   --text-section-heading: 1.3125rem;
   --text-metric: clamp(20px, 2vw, 25px);
+}
+
+@layer components {
+  .friend-status-badge--active {
+    background-color: var(--color-friend-active-background);
+    color: var(--color-friend-active-foreground);
+  }
+
+  .friend-status-badge--close {
+    background-color: var(--color-friend-close-background);
+    color: var(--color-friend-close-foreground);
+  }
+
+  .friend-status-badge--exclose {
+    background-color: var(--color-friend-exclose-background);
+    color: var(--color-friend-exclose-foreground);
+  }
 }
 
 :where(

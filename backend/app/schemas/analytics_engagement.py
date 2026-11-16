@@ -30,6 +30,17 @@ ForgottenContactEvidenceStatus = Literal[
 ]
 
 
+class CloseFriendsTimelineYear(BaseModel):
+    year: int
+    close_friend_count: int = Field(
+        description="Close-qualified contacts in the UTC calendar year."
+    )
+
+
+class CloseFriendsTimelineStatistics(BaseModel):
+    years: list[CloseFriendsTimelineYear]
+
+
 class ForgottenContactMonthlyActivity(BaseModel):
     month: str = Field(description="UTC calendar month in YYYY-MM format.")
     owner_message_count: int

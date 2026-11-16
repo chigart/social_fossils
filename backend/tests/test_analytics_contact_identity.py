@@ -7,7 +7,7 @@ from app.routers.analytics_communication_balance import get_communication_balanc
 from app.routers.analytics_communication_timeline_queries import (
     build_communication_timeline_statistics,
 )
-from app.routers.analytics_overview import get_contact_statistics
+from app.routers.analytics_contacts import get_contact_statistics
 from app.schemas.analytics import CommunicationBalanceStatistics
 
 

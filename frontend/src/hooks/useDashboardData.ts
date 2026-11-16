@@ -4,6 +4,7 @@ import {
   getChats,
   getCommunicationBalance,
   getCommunicationTimeline,
+  getCloseFriendsTimeline,
   getContacts,
   getForgottenContacts,
   getIdentityLinks,
@@ -17,8 +18,10 @@ import {
   type CommunicationBalanceClassification,
   type CommunicationBalanceStatistics,
   type CommunicationTimelineStatistics,
+  type CloseFriendsTimelineStatistics,
   type ContactStatistics,
   type ContactSortBy,
+  type FriendStatus,
   type ForgottenContactsStatistics,
   type IdentityLinksResponse,
   type OverviewStatistics,
@@ -48,6 +51,8 @@ export function useDashboardData() {
     useState<Resource<IdentityLinksResponse>>(emptyResource);
   const [communicationTimeline, setCommunicationTimeline] =
     useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
+  const [closeFriendsTimeline, setCloseFriendsTimeline] =
+    useState<Resource<CloseFriendsTimelineStatistics>>(emptyResource);
   const chatInsightsRequestId = useRef(0);
   const chatRequestId = useRef(0);
   const activeChatScope = useRef<ChatScope | null>(null);
@@ -56,6 +61,7 @@ export function useDashboardData() {
   const forgottenContactRequestId = useRef(0);
   const activeForgottenScope = useRef<"private" | "group" | null>(null);
   const timelineRequestId = useRef(0);
+  const closeFriendsTimelineRequestId = useRef(0);
 
   const loadOverview = useCallback(async (_force = false) => {
     setOverview((current) => ({ ...current, error: null, loading: true }));
@@ -159,19 +165,44 @@ export function useDashboardData() {
     sortBy: ContactSortBy = "total_messages_sent",
     sortDirection: "asc" | "desc" = "desc",
     platform = "",
+    friendStatus: FriendStatus | "" = "",
   ) => {
     const requestId = ++contactRequestId.current;
     setContacts((current) => ({ ...current, error: null, loading: true }));
     try {
-      const data = platform
-        ? await getContacts(
+      const data =
+        platform && friendStatus
+          ? await getContacts(
+            page,
+            DEFAULT_PAGE_SIZE,
+            sortBy,
+            sortDirection,
+            platform,
+            friendStatus,
+          )
+          : platform
+            ? await getContacts(
             page,
             DEFAULT_PAGE_SIZE,
             sortBy,
             sortDirection,
             platform,
           )
-        : await getContacts(page, DEFAULT_PAGE_SIZE, sortBy, sortDirection);
+            : friendStatus
+              ? await getContacts(
+                  page,
+                  DEFAULT_PAGE_SIZE,
+                  sortBy,
+                  sortDirection,
+                  undefined,
+                  friendStatus,
+                )
+              : await getContacts(
+                  page,
+                  DEFAULT_PAGE_SIZE,
+                  sortBy,
+                  sortDirection,
+                );
       if (requestId !== contactRequestId.current) return;
       setContacts({
         data,
@@ -364,6 +395,32 @@ export function useDashboardData() {
     }
   }, []);
 
+  const loadCloseFriendsTimeline = useCallback(async () => {
+    const requestId = ++closeFriendsTimelineRequestId.current;
+    setCloseFriendsTimeline((current) => ({
+      ...current,
+      error: null,
+      loading: true,
+    }));
+    try {
+      const data = await getCloseFriendsTimeline();
+      if (requestId === closeFriendsTimelineRequestId.current) {
+        setCloseFriendsTimeline({ data, error: null, loading: false });
+      }
+    } catch (error) {
+      if (requestId === closeFriendsTimelineRequestId.current) {
+        setCloseFriendsTimeline((current) => ({
+          ...current,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to load close-friends timeline.",
+          loading: false,
+        }));
+      }
+    }
+  }, []);
+
   return {
     overview,
     chats,
@@ -373,6 +430,7 @@ export function useDashboardData() {
     forgottenContacts,
     identityLinks,
     communicationTimeline,
+    closeFriendsTimeline,
     loadOverview,
     loadChats,
     loadChatInsights,
@@ -381,6 +439,7 @@ export function useDashboardData() {
     loadForgottenContacts,
     loadIdentityLinks,
     loadCommunicationTimeline,
+    loadCloseFriendsTimeline,
     createIdentityLink,
     removeIdentityLink,
   };

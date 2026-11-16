@@ -1,6 +1,7 @@
 import type {
   ChatStatistics,
   CommunicationTimelineStatistics,
+  CloseFriendsTimelineStatistics,
   OverviewStatistics,
 } from "../api";
 
@@ -101,6 +102,13 @@ export const timeline: CommunicationTimelineStatistics = {
       contact_active_days: 2,
       unknown_direction_active_days: 1,
     },
+  ],
+};
+
+export const closeFriendsTimeline: CloseFriendsTimelineStatistics = {
+  years: [
+    { year: 2020, close_friend_count: 2 },
+    { year: 2021, close_friend_count: 1 },
   ],
 };
 

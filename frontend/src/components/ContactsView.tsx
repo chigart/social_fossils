@@ -1,6 +1,7 @@
 import type {
   ContactSortBy,
   ContactStatistics,
+  FriendStatus,
   PaginatedItems,
 } from "../api";
 import { formatNumber } from "../utils/format";
@@ -8,6 +9,8 @@ import {
   emptyStateClassName,
   emptyStateTextClassName,
   emptyStateTitleClassName,
+  FRIEND_STATUS_BADGE_BASE_CLASS_NAME,
+  FRIEND_STATUS_BADGE_CLASS_NAMES,
   numericTableCellClassName,
   sectionClassName,
   sectionEyebrowClassName,
@@ -40,9 +43,11 @@ export function ContactsView({
   visibleContacts,
   search,
   platformFilter,
+  friendStatusFilter,
   searchOptions,
   onSearchChange,
   onPlatformFilterChange,
+  onFriendStatusFilterChange,
   sort,
   onSort,
   hasMessages,
@@ -53,9 +58,11 @@ export function ContactsView({
   visibleContacts: ContactStatistics[];
   search: string;
   platformFilter: string;
+  friendStatusFilter: FriendStatus | "";
   searchOptions: SearchPickerOption[];
   onSearchChange: (value: string) => void;
   onPlatformFilterChange: (value: string) => void;
+  onFriendStatusFilterChange: (value: FriendStatus | "") => void;
   sort: { key: ContactSortBy; direction: SortDirection };
   onSort: (key: ContactSortBy) => void;
   hasMessages: boolean;
@@ -78,7 +85,8 @@ export function ContactsView({
         {contacts.data &&
           (contacts.data.items.length > 0 ||
             searchOptions.length > 0 ||
-            platformFilter !== "") && (
+            platformFilter !== "" ||
+            friendStatusFilter !== "") && (
           <div className="flex flex-wrap gap-2">
             <PlatformFilterSelect
               label="Filter contacts by platform"
@@ -86,6 +94,29 @@ export function ContactsView({
               options={searchOptions}
               onChange={onPlatformFilterChange}
             />
+            <label className="flex min-w-[170px] flex-1 flex-col gap-1 text-caption font-semibold text-ink-subtle">
+              <span className="sr-only">Filter contacts by friend status</span>
+              <select
+                aria-label="Filter contacts by friend status"
+                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-small font-normal text-ink"
+                value={friendStatusFilter}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onFriendStatusFilterChange(
+                    value === "Active" ||
+                      value === "Close" ||
+                      value === "exClose"
+                      ? value
+                      : "",
+                  );
+                }}
+              >
+                <option value="">All friend statuses</option>
+                <option value="Active">Active</option>
+                <option value="Close">Close</option>
+                <option value="exClose">exClose</option>
+              </select>
+            </label>
             <SearchPicker
               label="Choose a contact"
               value={search}
@@ -143,6 +174,7 @@ export function ContactsView({
                 <tr>
                   <th className={tableHeaderClassName} scope="col">Contact / sender</th>
                   <th className={tableHeaderClassName} scope="col">User ID</th>
+                  <th className={tableHeaderClassName} scope="col">Friend Status</th>
                   <th className={tableHeaderClassName} scope="col">Accounts</th>
                   <th className={tableHeaderClassName} scope="col">
                     <SortButton
@@ -173,6 +205,22 @@ export function ContactsView({
                     </th>
                     <td className={tableCellClassName}>
                       {contact.platform_user_ids.join(", ") || "—"}
+                    </td>
+                    <td className={tableCellClassName}>
+                      {contact.friend_statuses.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {contact.friend_statuses.map((status) => (
+                            <span
+                              className={`${FRIEND_STATUS_BADGE_BASE_CLASS_NAME} ${FRIEND_STATUS_BADGE_CLASS_NAMES[status]}`}
+                              key={status}
+                            >
+                              {status}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className={tableCellClassName}>
                       {contact.source_accounts.length > 0 ? (

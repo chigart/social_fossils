@@ -22,6 +22,7 @@ export default function App() {
     forgottenContacts,
     loadOverview,
     loadCommunicationTimeline,
+    loadCloseFriendsTimeline,
     loadChats,
     loadChatInsights,
     loadContacts,
@@ -50,6 +51,7 @@ export default function App() {
     chatPlatformFilter,
     contactSort,
     contactPlatformFilter,
+    contactFriendStatusFilter,
     balanceClassification,
     balancePlatformFilter,
     balanceSortKey,
@@ -144,6 +146,7 @@ export default function App() {
           contactSort.key,
           contactSort.direction,
           contactPlatformFilter,
+          contactFriendStatusFilter,
         );
         break;
       case "identity-links":
@@ -195,6 +198,12 @@ export default function App() {
     loadBalance,
     loadForgottenContacts,
   ]);
+
+  useEffect(() => {
+    if (selectedTab === "overview") {
+      void loadCloseFriendsTimeline();
+    }
+  }, [selectedTab, loadCloseFriendsTimeline]);
 
   useEffect(() => {
     if (selectedChat) {

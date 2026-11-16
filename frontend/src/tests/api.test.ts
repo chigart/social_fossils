@@ -243,7 +243,7 @@ describe("analytics API helpers", () => {
     );
   });
 
-  it("requests platform-filtered pages for every analytics list", async () => {
+  it("requests platform- and friend-status-filtered analytics pages", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({}),
@@ -257,6 +257,7 @@ describe("analytics API helpers", () => {
       "total_messages_sent",
       "desc",
       "telegram",
+      "Active",
     );
     await getCommunicationBalance(
       1,
@@ -277,7 +278,7 @@ describe("analytics API helpers", () => {
 
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       `/api/analytics/chats?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages&sort_direction=desc&chat_scope=group&platform=telegram`,
-      `/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages_sent&sort_direction=desc&platform=telegram`,
+      `/api/analytics/contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=total_messages_sent&sort_direction=desc&platform=telegram&friend_status=Active`,
       `/api/analytics/communication-balance?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=text_volume&sort_direction=desc&platform=telegram`,
       `/api/analytics/forgotten-contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=ranking_score&sort_direction=desc&scope=private&platform=telegram`,
     ]);

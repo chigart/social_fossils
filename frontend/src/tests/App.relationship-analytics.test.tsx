@@ -4,6 +4,10 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  FRIEND_STATUS_BADGE_BASE_CLASS_NAME,
+  FRIEND_STATUS_BADGE_CLASS_NAMES,
+} from "../constants";
 import { paginated, resetDashboardApi } from "./dashboardTestHelpers";
 import {
   chatInsights,
@@ -26,6 +30,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -108,6 +113,9 @@ describe("dashboard", () => {
       within(contactsRegion).getByRole("columnheader", { name: "User ID" }),
     ).toBeInTheDocument();
     expect(
+      within(contactsRegion).getByRole("columnheader", { name: "Friend Status" }),
+    ).toBeInTheDocument();
+    expect(
       within(contactsRegion).queryByRole("columnheader", {
         name: "Link status",
       }),
@@ -126,6 +134,33 @@ describe("dashboard", () => {
       within(contactsRegion).getByRole("row", { name: /Avery/ }),
     ).toHaveTextContent("12345");
     expect(
+      within(contactsRegion).getByRole("row", { name: /Avery/ }),
+    ).toHaveTextContent("Active");
+    expect(
+      within(contactsRegion).getByRole("row", { name: /Avery/ }),
+    ).toHaveTextContent("Close");
+    const activeChip = within(
+      within(contactsRegion).getByRole("row", { name: /Avery/ }),
+    ).getByText("Active");
+    const closeChip = within(
+      within(contactsRegion).getByRole("row", { name: /Avery/ }),
+    ).getByText("Close");
+    expect(activeChip).toHaveClass(
+      ...FRIEND_STATUS_BADGE_BASE_CLASS_NAME.split(" "),
+      FRIEND_STATUS_BADGE_CLASS_NAMES.Active,
+    );
+    expect(closeChip).toHaveClass(
+      ...FRIEND_STATUS_BADGE_BASE_CLASS_NAME.split(" "),
+      FRIEND_STATUS_BADGE_CLASS_NAMES.Close,
+    );
+    const formerCloseRow = within(contactsRegion).getByRole("row", {
+      name: /Morgan/,
+    });
+    expect(within(formerCloseRow).getByText("exClose")).toHaveClass(
+      ...FRIEND_STATUS_BADGE_BASE_CLASS_NAME.split(" "),
+      FRIEND_STATUS_BADGE_CLASS_NAMES.exClose,
+    );
+    expect(
       within(contactsRegion).queryByText(/Unknown sender|Unidentified contact/),
     ).not.toBeInTheDocument();
     await selectDashboardTab("Balance");
@@ -141,6 +176,39 @@ describe("dashboard", () => {
         "Statistics are aggregated from imported data. Message contents are not shown.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("filters contacts by friend status across the Contacts results", async () => {
+    const user = userEvent.setup();
+    await renderLoadedDashboard();
+    await selectDashboardTab("Contacts");
+    const contactsRegion = screen.getByRole("region", {
+      name: "Contacts & senders",
+    });
+    const contactsTable = within(contactsRegion).getByRole("table");
+
+    api.getContacts.mockResolvedValueOnce(paginated([contacts[0]]));
+    await user.selectOptions(
+      within(contactsRegion).getByRole("combobox", {
+        name: "Filter contacts by friend status",
+      }),
+      "Active",
+    );
+
+    expect(api.getContacts).toHaveBeenLastCalledWith(
+      1,
+      50,
+      "total_messages_sent",
+      "desc",
+      undefined,
+      "Active",
+    );
+    expect(
+      await within(contactsTable).findByRole("row", { name: /Avery/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(contactsTable).queryByRole("row", { name: /Morgan/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows one combined contact row for explicitly linked platform identities", async () => {

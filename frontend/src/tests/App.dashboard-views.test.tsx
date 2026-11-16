@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -80,6 +81,13 @@ describe("dashboard", () => {
 
     const overviewTab = screen.getByRole("tab", { name: "Overview" });
     await user.click(overviewTab);
+    await user.keyboard("{ArrowRight}");
+
+    expect(screen.getByRole("tab", { name: "Contacts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(window.location.hash).toBe("#contacts");
     await user.keyboard("{ArrowRight}");
 
     expect(screen.getByRole("tab", { name: "DMs" })).toHaveAttribute(
@@ -194,7 +202,7 @@ describe("dashboard", () => {
       .not.toBeInTheDocument();
     const averyRow = within(contactsTable).getByRole("row", { name: /Avery/ });
     expect(within(averyRow).getAllByRole("cell").map((cell) => cell.textContent))
-      .toEqual(["12345", "TG@anton", "8", "4"]);
+      .toEqual(["12345", "ActiveClose", "TG@anton", "8", "4"]);
     const rowCount = within(contactsTable).getAllByRole("row").length;
     await user.click(within(contactsRegion).getByRole("button", { name: "Choose a contact" }));
     await user.type(

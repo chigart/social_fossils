@@ -6,6 +6,7 @@ import { DEFAULT_PAGE_SIZE } from "../constants";
 
 export const contacts: ContactStatistics[] = [
   {
+    friend_statuses: ["Active", "Close"],
     platforms: ["telegram"],
     account_id: 1,
     identity_group_id: null,
@@ -23,6 +24,7 @@ export const contacts: ContactStatistics[] = [
     service_events_attributed: 1,
   },
   {
+    friend_statuses: ["exClose"],
     platforms: ["telegram"],
     account_id: 1,
     identity_group_id: null,
@@ -40,6 +42,7 @@ export const contacts: ContactStatistics[] = [
     service_events_attributed: 1,
   },
   {
+    friend_statuses: [],
     platforms: ["telegram"],
     account_id: 1,
     identity_group_id: null,

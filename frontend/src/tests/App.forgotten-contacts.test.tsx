@@ -26,6 +26,7 @@ const api = vi.hoisted(() => ({
   getForgottenContacts: vi.fn(),
   getGroupInteraction: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
