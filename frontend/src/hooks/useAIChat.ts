@@ -28,6 +28,7 @@ export function useAIChat(active: boolean) {
   const [chatError, setChatError] = useState<string | null>(null);
   const conversationRef = useRef<HTMLDivElement>(null);
   const latestAssistantMessageRef = useRef<HTMLElement>(null);
+  const requestGenerationRef = useRef(0);
 
   useEffect(() => {
     if (!active || provider !== "ollama") return;
@@ -77,6 +78,12 @@ export function useAIChat(active: boolean) {
   ) => {
     const value = event.currentTarget.value;
     if (value === "ollama" || value === "openai-compatible") {
+      if (value !== provider) {
+        requestGenerationRef.current += 1;
+        setMessages([]);
+        setChatError(null);
+        setChatLoading(false);
+      }
       setProvider(value);
     }
   };
@@ -106,6 +113,7 @@ export function useAIChat(active: boolean) {
     setPrompt("");
     setChatError(null);
     setChatLoading(true);
+    const requestGeneration = requestGenerationRef.current;
     try {
       const response = await sendAIChat({
         provider,
@@ -115,16 +123,22 @@ export function useAIChat(active: boolean) {
           ? { api_key: apiKey, base_url: apiBaseUrl.trim() || undefined }
           : {}),
       });
-      setMessages([
-        ...nextMessages,
-        { role: "assistant", content: response.answer },
-      ]);
+      if (requestGeneration === requestGenerationRef.current) {
+        setMessages([
+          ...nextMessages,
+          { role: "assistant", content: response.answer },
+        ]);
+      }
     } catch (error) {
-      setChatError(
-        error instanceof Error ? error.message : "The AI request failed.",
-      );
+      if (requestGeneration === requestGenerationRef.current) {
+        setChatError(
+          error instanceof Error ? error.message : "The AI request failed.",
+        );
+      }
     } finally {
-      setChatLoading(false);
+      if (requestGeneration === requestGenerationRef.current) {
+        setChatLoading(false);
+      }
     }
   };
 

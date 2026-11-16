@@ -305,7 +305,7 @@ def test_chat_uses_mcp_tool_results_without_raw_message_text(
     observed_messages = []
     observed_tools = []
 
-    def fake_provider_response(request, messages, tools):
+    def fake_provider_response(request, messages, tools, *, timeout):
         observed_messages.append(messages)
         observed_tools.append(tools)
         if len(observed_messages) == 1:
@@ -381,7 +381,7 @@ def test_local_ollama_can_use_raw_message_text_tool(
     observed_messages = []
     observed_tools = []
 
-    def fake_provider_response(request, messages, tools):
+    def fake_provider_response(request, messages, tools, *, timeout):
         observed_messages.append(messages)
         observed_tools.append(tools)
         if len(observed_messages) == 1:
@@ -428,7 +428,7 @@ def test_cloud_provider_cannot_call_local_message_tool(monkeypatch):
     monkeypatch.setattr(
         providers,
         "_provider_response",
-        lambda request, messages, tools: {
+        lambda request, messages, tools, *, timeout: {
             "content": None,
             "tool_calls": [
                 {

@@ -140,4 +140,47 @@ describe("AIView", () => {
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
   });
+
+  it("starts a separate conversation when changing provider and ignores old replies", async () => {
+    const user = userEvent.setup();
+    let resolveLocalRequest: ((value: { answer: string }) => void) | undefined;
+    api.sendAIChat
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLocalRequest = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ answer: "Cloud response." });
+
+    render(<AIChatPanel active />);
+    await screen.findByRole("option", { name: "qwen2.5:7b" });
+    const prompt = screen.getByRole("textbox", { name: "Your question" });
+    await user.type(prompt, "Read my private messages");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(api.sendAIChat).toHaveBeenCalledOnce());
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Provider" }),
+      "openai-compatible",
+    );
+    await user.type(screen.getByLabelText("API key"), "temporary-key");
+    await user.type(prompt, "Analyze aggregate trends");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(api.sendAIChat).toHaveBeenCalledTimes(2));
+    expect(api.sendAIChat.mock.calls[1][0]).toEqual(
+      expect.objectContaining({
+        provider: "openai-compatible",
+        messages: [
+          { role: "user", content: "Analyze aggregate trends" },
+        ],
+      }),
+    );
+
+    resolveLocalRequest?.({ answer: "Private message contents." });
+    expect(await screen.findByText("Cloud response.")).toBeInTheDocument();
+    expect(screen.queryByText("Private message contents.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Read my private messages")).not.toBeInTheDocument();
+  });
 });

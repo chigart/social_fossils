@@ -45,6 +45,13 @@ def test_ollama_connection_error_explains_docker_bind_address(monkeypatch):
 
 def test_openai_compatible_provider_sends_key_and_parses_reply(monkeypatch):
     observed = {}
+    monkeypatch.setattr(
+        providers.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (2, 1, 6, "", ("93.184.216.34", 443))
+        ],
+    )
 
     class Response:
         ok = True
@@ -58,13 +65,14 @@ def test_openai_compatible_provider_sends_key_and_parses_reply(monkeypatch):
                 ]
             }
 
-    def fake_request(method, url, *, json, headers, timeout):
+    def fake_request(method, url, *, json, headers, timeout, allow_redirects):
         observed.update(
             method=method,
             url=url,
             payload=json,
             headers=headers,
             timeout=timeout,
+            allow_redirects=allow_redirects,
         )
         return Response()
 
@@ -84,6 +92,66 @@ def test_openai_compatible_provider_sends_key_and_parses_reply(monkeypatch):
     assert observed["url"] == "https://models.example/v1/chat/completions"
     assert observed["headers"]["Authorization"] == "Bearer temporary-key"
     assert observed["payload"]["model"] == "example-model"
+    assert observed["allow_redirects"] is False
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["127.0.0.1", "10.0.0.5", "169.254.169.254", "::1"],
+)
+def test_cloud_base_url_rejects_non_public_ip_addresses(address):
+    with pytest.raises(HTTPException) as error:
+        providers._validate_public_base_url(f"https://{address}/v1")
+
+    assert error.value.status_code == 422
+
+
+def test_cloud_base_url_rejects_private_dns_resolution(monkeypatch):
+    monkeypatch.setattr(
+        providers.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (2, 1, 6, "", ("93.184.216.34", 443)),
+            (2, 1, 6, "", ("192.168.1.10", 443)),
+        ],
+    )
+
+    with pytest.raises(HTTPException, match="only to public addresses"):
+        providers._validate_public_base_url("https://models.example/v1")
+
+
+def test_chat_timeout_is_bounded_by_remaining_request_deadline(monkeypatch):
+    monkeypatch.setattr(providers.time, "monotonic", lambda: 25.0)
+
+    assert providers._remaining_request_timeout(deadline=30.0) == 5.0
+
+    monkeypatch.setattr(providers.time, "monotonic", lambda: 30.0)
+    with pytest.raises(HTTPException) as error:
+        providers._remaining_request_timeout(deadline=30.0)
+    assert error.value.status_code == 504
+
+
+def test_chat_rejects_malformed_tool_call_items(monkeypatch):
+    monkeypatch.setattr(
+        providers,
+        "_provider_response",
+        lambda request, messages, tools, *, timeout: {
+            "content": None,
+            "tool_calls": [None],
+        },
+    )
+    request = AIChatRequest(
+        provider="openai-compatible",
+        model="example-model",
+        api_key="temporary-key",
+        messages=[AIMessage(role="user", content="Analyze my overview.")],
+    )
+
+    with pytest.raises(HTTPException) as error:
+        providers.run_chat(request)
+
+    assert error.value.status_code == 502
+    assert error.value.detail == "The AI provider returned malformed tool calls."
 
 
 def test_provider_errors_do_not_echo_api_key(monkeypatch):

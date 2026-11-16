@@ -1,5 +1,8 @@
 import asyncio
+import ipaddress
 import json
+import socket
+import time
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -14,7 +17,8 @@ from app.schemas.ai import AIChatRequest
 
 MAX_TOOL_CALLS = 8
 MAX_TOOL_ROUNDS = 6
-REQUEST_TIMEOUT_SECONDS = 120
+REQUEST_TIMEOUT_SECONDS = 30
+MAX_CHAT_DURATION_SECONDS = 90
 
 LOCAL_SYSTEM_PROMPT = (
     "You analyze Social Fossils communication analytics. Use the read-only "
@@ -67,6 +71,38 @@ def _validate_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def _validate_public_base_url(value: str) -> str:
+    base_url = _validate_base_url(value)
+    parsed = urlsplit(base_url)
+    if parsed.scheme != "https" or parsed.hostname is None:
+        raise HTTPException(
+            status_code=422,
+            detail="The model API base URL must use HTTPS and a public hostname.",
+        )
+
+    try:
+        addresses = {
+            ipaddress.ip_address(result[4][0])
+            for result in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or 443,
+                type=socket.SOCK_STREAM,
+            )
+        }
+    except (OSError, ValueError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="The model API base URL must resolve to a public address.",
+        ) from error
+
+    if not addresses or any(not address.is_global for address in addresses):
+        raise HTTPException(
+            status_code=422,
+            detail="The model API base URL must resolve only to public addresses.",
+        )
+    return base_url
+
+
 def _request_json(
     method: str,
     url: str,
@@ -74,6 +110,7 @@ def _request_json(
     payload: dict[str, Any] | None = None,
     api_key: str | None = None,
     connection_error: str = "Unable to connect to the selected AI provider.",
+    timeout: float = REQUEST_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     headers = {"Content-Type": "application/json"}
     if api_key:
@@ -84,7 +121,8 @@ def _request_json(
             url,
             json=payload,
             headers=headers,
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            timeout=timeout,
+            allow_redirects=False,
         )
     except requests.RequestException as error:
         raise HTTPException(
@@ -162,6 +200,8 @@ def _provider_response(
     request: AIChatRequest,
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
+    *,
+    timeout: float = REQUEST_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": request.model,
@@ -179,10 +219,11 @@ def _provider_response(
                 "running and listening on a Docker-reachable host address, not "
                 "only 127.0.0.1."
             ),
+            timeout=timeout,
         )
         message = response.get("message")
     else:
-        base_url = _validate_base_url(
+        base_url = _validate_public_base_url(
             request.base_url or "https://api.openai.com/v1"
         )
         response = _request_json(
@@ -190,6 +231,7 @@ def _provider_response(
             f"{base_url}/chat/completions",
             payload=payload,
             api_key=request.api_key,
+            timeout=timeout,
         )
         choices = response.get("choices")
         message = (
@@ -250,7 +292,18 @@ def _append_tool_result(
     messages.append(message)
 
 
+def _remaining_request_timeout(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise HTTPException(
+            status_code=504,
+            detail="The AI request exceeded its time limit.",
+        )
+    return min(REQUEST_TIMEOUT_SECONDS, remaining)
+
+
 async def _run_chat(request: AIChatRequest) -> str:
+    deadline = time.monotonic() + MAX_CHAT_DURATION_SECONDS
     messages: list[dict[str, Any]] = [
         {
             "role": "system",
@@ -276,19 +329,22 @@ async def _run_chat(request: AIChatRequest) -> str:
         tool_calls_used = 0
         tool_errors: list[str] = []
         unavailable_tool_requested = False
+        malformed_tool_calls = False
 
         for _ in range(MAX_TOOL_ROUNDS):
             assistant_message = _provider_response(
                 request,
                 messages,
                 tool_definitions,
+                timeout=_remaining_request_timeout(deadline),
             )
             tool_calls = assistant_message.get("tool_calls") or []
             if not isinstance(tool_calls, list):
-                raise HTTPException(
-                    status_code=502,
-                    detail="The AI provider returned malformed tool calls.",
-                )
+                malformed_tool_calls = True
+                break
+            if any(not isinstance(tool_call, dict) for tool_call in tool_calls):
+                malformed_tool_calls = True
+                break
             if not tool_calls:
                 answer = assistant_message.get("content")
                 if not isinstance(answer, str) or not answer.strip():
@@ -318,10 +374,8 @@ async def _run_chat(request: AIChatRequest) -> str:
             for index, tool_call in enumerate(tool_calls):
                 function = tool_call.get("function")
                 if not isinstance(function, dict):
-                    raise HTTPException(
-                        status_code=502,
-                        detail="The AI provider returned a malformed tool call.",
-                    )
+                    malformed_tool_calls = True
+                    break
                 tool_name = function.get("name")
                 if (
                     not isinstance(tool_name, str)
@@ -357,9 +411,14 @@ async def _run_chat(request: AIChatRequest) -> str:
                     result_text=tool_text,
                 )
                 tool_calls_used += 1
-            if unavailable_tool_requested:
+            if unavailable_tool_requested or malformed_tool_calls:
                 break
 
+    if malformed_tool_calls:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI provider returned malformed tool calls.",
+        )
     if unavailable_tool_requested:
         raise HTTPException(
             status_code=502,
