@@ -162,6 +162,31 @@ describe("communication balance dashboard", () => {
     expect(balanceRegion).toHaveTextContent("Last seen");
   });
 
+  it("shows colored platform abbreviations beside each contact name", async () => {
+    api.getCommunicationBalance.mockResolvedValue({
+      ...balance,
+      contacts: [
+        {
+          ...balance.contacts[0],
+          platforms: ["telegram", "facebook", "instagram", "vk"],
+        },
+      ],
+    });
+    await renderBalanceDashboard();
+
+    const alexRow = within(
+      screen.getByRole("region", { name: "Communication balance" }),
+    ).getByRole("row", { name: /Alex/ });
+    for (const [label, className] of [
+      ["TG", "bg-platform-telegram-background"],
+      ["FB", "bg-platform-facebook-background"],
+      ["IG", "bg-platform-instagram-background"],
+      ["VK", "bg-platform-vk-background"],
+    ]) {
+      expect(within(alexRow).getByText(label)).toHaveClass(className);
+    }
+  });
+
   it("filters contacts by classification and applies the selected name", async () => {
     const user = userEvent.setup();
     await renderBalanceDashboard();

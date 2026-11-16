@@ -17,5 +17,13 @@ export function rowTitles(table: HTMLElement) {
 
   return within(body)
     .getAllByRole("row")
-    .map((row) => within(row).getByRole("rowheader").textContent);
+    .map((row) => {
+      const title = within(row)
+        .getByRole("rowheader")
+        .cloneNode(true) as HTMLElement;
+      title
+        .querySelectorAll("[data-platform-badge]")
+        .forEach((badge) => badge.remove());
+      return title.textContent;
+    });
 }

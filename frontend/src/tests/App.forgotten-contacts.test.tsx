@@ -213,6 +213,35 @@ describe("Forgotten contacts and interactions", () => {
     expect(rowTitles(table)).toEqual(["Zoe"]);
   });
 
+  it("shows colored platform abbreviations in Forgotten and Interactions", async () => {
+    api.getForgottenContacts.mockResolvedValue({
+      ...forgotten,
+      contacts: [
+        {
+          ...forgotten.contacts[0],
+          platforms: ["telegram", "facebook", "instagram", "vk"],
+        },
+      ],
+    });
+    await renderLoadedDashboard();
+
+    for (const tab of ["Forgotten", "Interactions"]) {
+      await selectDashboardTab(tab);
+      const region = screen.getByRole("region", {
+        name: tab === "Forgotten" ? "Forgotten contacts" : "Group interactions",
+      });
+      const mikaRow = await within(region).findByRole("row", { name: /Mika/ });
+      for (const [label, className] of [
+        ["TG", "bg-platform-telegram-background"],
+        ["FB", "bg-platform-facebook-background"],
+        ["IG", "bg-platform-instagram-background"],
+        ["VK", "bg-platform-vk-background"],
+      ]) {
+        expect(within(mikaRow).getByText(label)).toHaveClass(className);
+      }
+    }
+  });
+
   it("shows insufficient-history evidence and a no-match state", async () => {
     const user = userEvent.setup();
     api.getForgottenContacts.mockResolvedValue({

@@ -33,6 +33,7 @@ import {
   ForgottenSummaryCards,
   ForgottenTrend,
 } from "./ForgottenContactsParts";
+import { PlatformBadge } from "./PlatformAccountBadge";
 import {
   PlatformFilterSelect,
   SearchPicker,
@@ -237,7 +238,12 @@ export function ForgottenContactsView({
                   {visibleContacts.map((contact) => (
                     <tr className={tableRowClassName} key={`${contact.account_id}-${contact.contact_id}`}>
                       <th className={tableRowTitleClassName} scope="row">
-                        {contact.display_name || "Unnamed contact"}
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <span>{contact.display_name || "Unnamed contact"}</span>
+                          {contact.platforms.map((platform) => (
+                            <PlatformBadge key={platform} platform={platform} />
+                          ))}
+                        </span>
                       </th>
                       {isGroupScope && (
                         <td className={numericTableCellClassName}>
