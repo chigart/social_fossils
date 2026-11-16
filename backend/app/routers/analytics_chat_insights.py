@@ -21,6 +21,7 @@ from app.routers.analytics_chat_insights_helpers import (
     _ReactorCounts,
     _SenderCounts,
     _build_chat_statistics,
+    _as_utc,
     _clean_display_name,
     _message_category,
     _positive_count,
@@ -47,8 +48,9 @@ router = APIRouter()
         "reactor-to-author statistics use only reaction records present in the "
         "source payload and may not represent complete totals. Reply tempo "
         "requires an in-chat reply reference, two identified senders, and "
-        "reliable non-negative timestamps. Conversation sessions use a 12-hour "
-        "gap between dated ordinary messages."
+        "reliable non-negative timestamps. Average activity times and weekday "
+        "and calendar-month counts use dated ordinary messages in UTC. "
+        "Conversation sessions use a 12-hour gap between dated ordinary messages."
     ),
 )
 def get_chat_insights(
@@ -290,6 +292,8 @@ def get_chat_insights(
         sender.text_length += len(text)
         sender.words.update(words)
         sender.emojis.update(emojis)
+        if row.message_date is not None:
+            sender.activity_times.append(_as_utc(row.message_date))
 
         if sender_id is not None:
             chat.sender_message_counts[sender_id] += 1

@@ -1,4 +1,5 @@
 from app.schemas.analytics_chat_insights import (
+    ActivityPeriodCount,
     ChatInsightSender,
     ChatInsightsResponse,
     ChatInsightsStatistics,
@@ -43,6 +44,7 @@ from app.schemas.analytics_timeline import (
 )
 
 __all__ = [
+    "ActivityPeriodCount",
     "ChatInsightSender",
     "ChatInsightsResponse",
     "ChatInsightsStatistics",

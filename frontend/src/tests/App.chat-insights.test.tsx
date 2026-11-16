@@ -113,6 +113,55 @@ describe("dashboard", () => {
       screen.getByRole("heading", { name: "Chat insights" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Average time to reply")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("heading", { name: "Average activity time" }),
+    ).toHaveLength(1);
+    expect(screen.getByText("18:43")).toBeInTheDocument();
+    const weekdayChart = screen.getByRole("region", {
+      name: "Activity by weekday (UTC)",
+    });
+    expect(weekdayChart.parentElement).toHaveClass("grid-cols-2");
+    expect(weekdayChart).toHaveTextContent("Monday");
+    const weekdayBar = weekdayChart.querySelector(
+      '[data-sender="Monday"]',
+    );
+    expect(Number(weekdayBar?.getAttribute("height"))).toBeGreaterThan(
+      Number(weekdayBar?.getAttribute("width")),
+    );
+    expect(weekdayBar).toHaveAttribute("data-heatmap");
+    const weekdayTimeline = within(weekdayChart).getByRole("img", {
+      name: "Activity by weekday (UTC)",
+    });
+    expect(
+      weekdayTimeline.querySelector('text[data-sender-name="Monday"]'),
+    ).toHaveAttribute("font-size", "13.5");
+    const monthChart = screen.getByRole("region", {
+      name: "Activity by month (UTC)",
+    });
+    expect(monthChart).toHaveTextContent("January");
+    const monthBar = monthChart.querySelector('[data-sender="January"]');
+    expect(Number(monthBar?.getAttribute("height"))).toBeGreaterThan(
+      Number(monthBar?.getAttribute("width")),
+    );
+    expect(monthBar).toHaveAttribute("data-heatmap");
+    const monthTimeline = within(monthChart).getByRole("img", {
+      name: "Activity by month (UTC)",
+    });
+    expect(
+      monthTimeline.querySelector('text[data-sender-name="August"]'),
+    ).toHaveTextContent("Aug");
+    expect(
+      monthTimeline.querySelector('text[data-sender-name="August"]'),
+    ).toHaveAttribute("font-size", "13.5");
+    expect(
+      screen.getByRole("region", { name: "Average activity time" }),
+    ).toHaveTextContent("Overall average: 18:43");
+    const activityTimes = screen.getByRole("list", {
+      name: "Average activity time by person",
+    });
+    expect(activityTimes.textContent?.indexOf("Lena")).toBeLessThan(
+      activityTimes.textContent?.indexOf("Anton") ?? -1,
+    );
     expect(screen.getByText("Longest time to reply")).toBeInTheDocument();
     expect(screen.getAllByText("30 min")).toHaveLength(2);
     expect(screen.getByText("2.0 hr")).toBeInTheDocument();
@@ -152,6 +201,14 @@ describe("dashboard", () => {
       name: "Average message length by person",
     });
     expect(averageLengthChart).toBeInTheDocument();
+    expect([
+      weekdayTimeline.getAttribute("height"),
+      monthTimeline.getAttribute("height"),
+      averageLengthChart.getAttribute("height"),
+    ]).toEqual(["240", "240", "240"]);
+    expect(
+      averageLengthChart.querySelector("[data-heatmap]"),
+    ).toBeInTheDocument();
     expect(averageLengthChart.parentElement).toHaveClass("overflow-x-auto");
     expect(averageLengthChart).toHaveAccessibleDescription(
       /scrolled horizontally/,
@@ -159,6 +216,7 @@ describe("dashboard", () => {
     const senderNameLabel = averageLengthChart.querySelector(
       'text[data-sender-name="Anton"]',
     );
+    expect(senderNameLabel).toHaveAttribute("font-size", "13.5");
     expect(
       Array.from(senderNameLabel?.querySelectorAll("tspan") ?? [])
         .map((line) => line.textContent)

@@ -1,13 +1,69 @@
 import { formatNumber } from "../utils/format";
+import { heatmapColor } from "../utils/heatmap";
+import {
+  CHART_HEIGHT,
+  CHART_RIGHT_PADDING,
+  CHART_TOP_PADDING,
+  MINIMUM_CHART_WIDTH,
+  PLOT_BOTTOM,
+  PLOT_HEIGHT,
+  TIMELINE_COMPARISON_BAR_GAP,
+  TIMELINE_COMPARISON_BAR_WIDTH,
+  TIMELINE_COMPARISON_BAR_WIDTH_RATIO,
+  TIMELINE_DEFAULT_BAR_WIDTH_RATIO,
+  TIMELINE_DEFAULT_MAX_BAR_WIDTH,
+  TIMELINE_DEFAULT_SLOT_WIDTH,
+  TIMELINE_FIXED_SLOT_WIDTH_PADDING,
+  TIMELINE_GRID_FRACTIONS,
+  TIMELINE_GRID_STROKE_WIDTH,
+  TIMELINE_LABEL_BASELINE_OFFSET,
+  TIMELINE_LABEL_FONT_SIZE,
+  TIMELINE_LABEL_LINE_HEIGHT,
+  TIMELINE_LABEL_WRAP_THRESHOLD,
+  TIMELINE_LINE_POINT_RADIUS,
+  TIMELINE_LINE_POINT_STROKE_WIDTH,
+  TIMELINE_LINE_STROKE_WIDTH,
+  TIMELINE_TICK_LABEL_FONT_SIZE,
+  TIMELINE_TICK_LABEL_X,
+  TIMELINE_TICK_LABEL_Y_OFFSET,
+  TIMELINE_ZERO_BAR_HEIGHT,
+  TIMELINE_ZERO_MARKER_DASH_PATTERN,
+  TIMELINE_ZERO_MARKER_STROKE_WIDTH,
+  Y_AXIS_WIDTH,
+} from "../constants";
 
 export type TimelinePoint = {
   label: string;
+  displayLabel?: string;
   count: number;
   ownerCount?: number;
   contactCount?: number;
   unknownCount?: number;
   lineValue?: number;
 };
+
+function splitLabel(label: string): string[] {
+  const midpoint = Math.ceil(label.length / 2);
+  const breakAt = [...label.matchAll(/\s+/g)].reduce(
+    (closestIndex, match) => {
+      const index = match.index;
+      return Math.abs(index - midpoint) <
+        Math.abs(closestIndex - midpoint)
+        ? index
+        : closestIndex;
+    },
+    -1,
+  );
+  if (breakAt < 0 && label.length <= TIMELINE_LABEL_WRAP_THRESHOLD) {
+    return [label];
+  }
+  const splitIndex = breakAt >= 0 ? breakAt : midpoint;
+
+  return [
+    label.slice(0, splitIndex).trim(),
+    label.slice(splitIndex).trim(),
+  ].filter(Boolean);
+}
 
 export function TimelineChart({
   points,
@@ -18,6 +74,12 @@ export function TimelineChart({
   compareOwnerCount = false,
   lineLegendLabel,
   heatmap = false,
+  fitContainer = false,
+  barWidthRatio = TIMELINE_DEFAULT_BAR_WIDTH_RATIO,
+  maxBarWidth = TIMELINE_DEFAULT_MAX_BAR_WIDTH,
+  fixedSlotWidth,
+  labelFontSize = TIMELINE_LABEL_FONT_SIZE,
+  formatTick = (value) => Math.round(value).toLocaleString(),
 }: {
   points: TimelinePoint[];
   showDirection: boolean;
@@ -27,35 +89,35 @@ export function TimelineChart({
   compareOwnerCount?: boolean;
   lineLegendLabel?: string;
   heatmap?: boolean;
+  fitContainer?: boolean;
+  barWidthRatio?: number;
+  maxBarWidth?: number;
+  fixedSlotWidth?: number;
+  labelFontSize?: number;
+  formatTick?: (value: number) => string;
 }) {
-  const width = Math.max(620, points.length * 50);
-  const height = 240;
-  const plotTop = 15;
-  const plotBottom = 180;
-  const plotHeight = plotBottom - plotTop;
-  const plotLeft = 48;
-  const plotRight = width - 8;
+  const width = fitContainer
+    ? MINIMUM_CHART_WIDTH
+    : Math.max(
+        MINIMUM_CHART_WIDTH,
+        fixedSlotWidth === undefined
+          ? points.length * TIMELINE_DEFAULT_SLOT_WIDTH
+          : TIMELINE_FIXED_SLOT_WIDTH_PADDING + points.length * fixedSlotWidth,
+      );
+  const height = CHART_HEIGHT;
+  const plotTop = CHART_TOP_PADDING;
+  const plotBottom = PLOT_BOTTOM;
+  const plotHeight = PLOT_HEIGHT;
+  const plotLeft = Y_AXIS_WIDTH;
+  const plotRight = width - CHART_RIGHT_PADDING;
   const plotWidth = plotRight - plotLeft;
-  const slotWidth = plotWidth / points.length;
-  const barWidth = Math.min(30, slotWidth * 0.66);
-  const comparisonBarWidth = Math.min(20, slotWidth * 0.28);
+  const slotWidth = fixedSlotWidth ?? plotWidth / Math.max(points.length, 1);
+  const barWidth = Math.min(maxBarWidth, slotWidth * barWidthRatio);
+  const comparisonBarWidth = Math.min(
+    TIMELINE_COMPARISON_BAR_WIDTH,
+    slotWidth * TIMELINE_COMPARISON_BAR_WIDTH_RATIO,
+  );
   const maximum = Math.max(1, ...points.map((point) => point.count));
-  const heatmapColor = (count: number) => {
-    if (count === 0) return "var(--color-close-friends-heatmap-empty)";
-    const intensity = Math.sqrt(count / maximum);
-    const stopPosition = intensity;
-    const lowerStopIndex = Math.floor(stopPosition);
-    const colorStops = [
-      "--color-close-friends-heatmap-pink",
-      "--color-close-friends-heatmap-green",
-    ];
-    const upperStopIndex = Math.min(lowerStopIndex + 1, colorStops.length - 1);
-    const stopFraction = Math.round((stopPosition - lowerStopIndex) * 100);
-    if (stopFraction === 0 || lowerStopIndex === upperStopIndex) {
-      return `var(${colorStops[lowerStopIndex]})`;
-    }
-    return `color-mix(in srgb, var(${colorStops[lowerStopIndex]}) ${100 - stopFraction}%, var(${colorStops[upperStopIndex]}))`;
-  };
   const maximumLineValue = Math.max(
     0,
     ...points.map((point) => point.lineValue ?? 0),
@@ -65,7 +127,9 @@ export function TimelineChart({
     .filter((point) => point.lineValue !== undefined)
     .map((point) => ({
       ...point,
-      x: plotLeft + (points.indexOf(point) + 0.5) * slotWidth,
+      x: plotLeft + (points.indexOf(point) + 0.5) * (
+        fixedSlotWidth ?? slotWidth
+      ),
       y: plotBottom - ((point.lineValue ?? 0) / lineMaximum) * plotHeight,
     }));
   const chartTitleId = `${chartId}-title`;
@@ -75,7 +139,7 @@ export function TimelineChart({
     <div className="w-full overflow-x-auto rounded-lg border border-border-subtle bg-surface-subtle p-3">
       <svg
         className="block h-auto"
-        style={{ minWidth: `${width}px` }}
+        style={{ minWidth: fitContainer ? "100%" : `${width}px` }}
         width="100%"
         height={height}
         viewBox={`0 0 ${width} ${height}`}
@@ -85,9 +149,8 @@ export function TimelineChart({
       >
         <title id={chartTitleId}>{title}</title>
         <desc id={chartDescriptionId}>{description}</desc>
-        {[0, 0.5, 1].map((fraction) => {
+        {TIMELINE_GRID_FRACTIONS.map((fraction) => {
           const y = plotBottom - plotHeight * fraction;
-          const count = Math.round(maximum * fraction);
           return (
             <g key={fraction}>
               <line
@@ -96,16 +159,16 @@ export function TimelineChart({
                 y1={y}
                 y2={y}
                 stroke="var(--color-border)"
-                strokeWidth="1"
+                strokeWidth={TIMELINE_GRID_STROKE_WIDTH}
               />
               <text
-                x={36}
-                y={y + 3}
+                x={TIMELINE_TICK_LABEL_X}
+                y={y + TIMELINE_TICK_LABEL_Y_OFFSET}
                 textAnchor="end"
                 fill="var(--color-ink-muted)"
-                fontSize="10"
+                fontSize={TIMELINE_TICK_LABEL_FONT_SIZE}
               >
-                {count}
+                {formatTick(maximum * fraction)}
               </text>
             </g>
           );
@@ -122,7 +185,8 @@ export function TimelineChart({
           const totalHeight = (point.count / maximum) * plotHeight;
           const ownerSeriesHeight =
             ((point.ownerCount ?? 0) / maximum) * plotHeight;
-          const zeroHeight = point.count === 0 ? 2 : 0;
+          const zeroHeight =
+            point.count === 0 ? TIMELINE_ZERO_BAR_HEIGHT : 0;
           return (
             <g key={point.label}>
               <rect
@@ -130,16 +194,28 @@ export function TimelineChart({
                 y={plotBottom - totalHeight - zeroHeight}
                 width={barWidth}
                 height={totalHeight + zeroHeight}
-                fill={heatmap ? heatmapColor(point.count) : "var(--color-clear)"}
+                fill={
+                  heatmap
+                    ? heatmapColor(point.count, maximum)
+                    : "var(--color-clear)"
+                }
                 data-month={point.label}
                 data-count={point.count}
-                data-heatmap={heatmap ? heatmapColor(point.count) : undefined}
+                data-heatmap={
+                  heatmap ? heatmapColor(point.count, maximum) : undefined
+                }
+                data-sender={point.label}
+                data-average-length={point.count}
                 aria-label={`${point.label}: ${formatNumber(point.count)}`}
               />
               {compareOwnerCount && point.ownerCount !== undefined ? (
                 <>
                   <rect
-                    x={centerX - comparisonBarWidth - 2}
+                    x={
+                      centerX -
+                      comparisonBarWidth -
+                      TIMELINE_COMPARISON_BAR_GAP
+                    }
                     y={plotBottom - totalHeight}
                     width={comparisonBarWidth}
                     height={totalHeight}
@@ -148,7 +224,7 @@ export function TimelineChart({
                     data-year-total-count={point.count}
                   />
                   <rect
-                    x={centerX + 2}
+                    x={centerX + TIMELINE_COMPARISON_BAR_GAP}
                     y={plotBottom - ownerSeriesHeight}
                     width={comparisonBarWidth}
                     height={ownerSeriesHeight}
@@ -195,18 +271,31 @@ export function TimelineChart({
                   y1={plotBottom}
                   y2={plotBottom}
                   stroke="var(--color-timeline-unknown)"
-                  strokeWidth="2"
-                  strokeDasharray="2 2"
+                  strokeWidth={TIMELINE_ZERO_MARKER_STROKE_WIDTH}
+                  strokeDasharray={TIMELINE_ZERO_MARKER_DASH_PATTERN}
                 />
               )}
               <text
                 x={centerX}
-                y={plotBottom + 17}
+                y={plotBottom + TIMELINE_LABEL_BASELINE_OFFSET}
                 textAnchor="middle"
                 fill="var(--color-ink-subtle)"
-                fontSize="9"
+                fontSize={labelFontSize}
+                data-sender-name={point.label}
               >
-                {point.label}
+                {splitLabel(point.displayLabel ?? point.label).map(
+                  (line, lineIndex) => (
+                    <tspan
+                      key={`${point.label}-${lineIndex}`}
+                      x={centerX}
+                      dy={
+                        lineIndex === 0 ? 0 : TIMELINE_LABEL_LINE_HEIGHT
+                      }
+                    >
+                      {line}
+                    </tspan>
+                  ),
+                )}
               </text>
             </g>
           );
@@ -218,7 +307,7 @@ export function TimelineChart({
                 points={linePoints.map(({ x, y }) => `${x},${y}`).join(" ")}
                 fill="none"
                 stroke="var(--color-timeline-contact)"
-                strokeWidth="2.5"
+                strokeWidth={TIMELINE_LINE_STROKE_WIDTH}
                 strokeLinejoin="round"
                 strokeLinecap="round"
                 data-series="average-message-size"
@@ -229,10 +318,10 @@ export function TimelineChart({
                 key={label}
                 cx={x}
                 cy={y}
-                r="4"
+                r={TIMELINE_LINE_POINT_RADIUS}
                 fill="var(--color-timeline-contact)"
                 stroke="var(--color-surface)"
-                strokeWidth="1.5"
+                strokeWidth={TIMELINE_LINE_POINT_STROKE_WIDTH}
                 data-year={label}
                 data-average-size={lineValue}
                 aria-label={`${label}: ${formatNumber(lineValue ?? 0)} characters per message`}

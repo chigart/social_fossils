@@ -16,6 +16,9 @@ class ChatInsightSender(BaseModel):
     sender_id: str | None
     display_name: str
     message_count: int
+    average_activity_time: str | None = Field(
+        description="Circular mean UTC time of dated ordinary messages, formatted HH:MM."
+    )
     text_length: int = Field(
         description="Unicode code points in normalized ordinary-message text."
     )
@@ -119,6 +122,11 @@ class ConversationActivityStatistics(BaseModel):
     handoffs: list[ConversationHandoffCount]
 
 
+class ActivityPeriodCount(BaseModel):
+    period: str
+    count: int
+
+
 class ChatInsightsStatistics(BaseModel):
     chat_id: int
     account_id: int
@@ -127,6 +135,15 @@ class ChatInsightsStatistics(BaseModel):
     title: str | None
     chat_type: str
     ordinary_message_count: int
+    average_activity_time: str | None = Field(
+        description="Circular mean UTC time of dated ordinary messages, formatted HH:MM."
+    )
+    weekday_activity: list[ActivityPeriodCount] = Field(
+        description="Dated ordinary-message counts by UTC weekday, Monday through Sunday."
+    )
+    month_activity: list[ActivityPeriodCount] = Field(
+        description="Dated ordinary-message counts by UTC calendar month, January through December."
+    )
     text_length: int = Field(
         description="Unicode code points in normalized ordinary-message text."
     )
@@ -146,7 +163,6 @@ class ChatInsightsStatistics(BaseModel):
     message_type_breakdown: list[MessageTypeCount]
     reply_tempo: ReplyTempoStatistics
     conversation_activity: ConversationActivityStatistics
-
 
 class ChatInsightsResponse(BaseModel):
     chats: list[ChatInsightsStatistics]

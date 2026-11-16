@@ -17,6 +17,7 @@ import { ReactionAnalytics } from "./ReactionAnalytics";
 import { RankingChips } from "./RankingChips";
 import { SenderAverageLengthChart } from "./SenderAverageLengthChart";
 import { SenderShareChart } from "./SenderShareChart";
+import { ActivityPatterns } from "./ActivityPatterns";
 import { filterRepeatedItems } from "../utils/chatInsights";
 import { formatResponseTime } from "../utils/formatResponseTime";
 
@@ -102,6 +103,12 @@ export function ChatInsightsDetails({
       <div className="mb-5">
         <SenderAverageLengthChart senders={chat.senders} />
       </div>
+      <ActivityPatterns
+        senders={chat.senders}
+        averageActivityTime={chat.average_activity_time}
+        weekdayActivity={chat.weekday_activity}
+        monthActivity={chat.month_activity}
+      />
       <ConversationFlow chat={chat} />
       {chat.platform !== "vk" && <MessageTypeBreakdown chat={chat} />}
       <div className={chatInsightsGridClassName}>

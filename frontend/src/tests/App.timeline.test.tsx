@@ -160,7 +160,7 @@ describe("dashboard", () => {
     await renderLoadedDashboard();
     await selectDashboardTab("Insights");
 
-    const region = screen.getByRole("region", {
+    let region = screen.getByRole("region", {
       name: "Communication timeline",
     });
     expect(
@@ -219,6 +219,9 @@ describe("dashboard", () => {
       11,
       undefined,
     );
+    region = await screen.findByRole("region", {
+      name: "Communication timeline",
+    });
     expect(
       await within(region).findByRole("img", {
         name: "Monthly ordinary message activity",

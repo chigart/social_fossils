@@ -58,9 +58,15 @@ export type ChatInsightSender = {
   sender_id: string | null;
   display_name: string;
   message_count: number;
+  average_activity_time: string | null;
   text_length: number;
   popular_words: WordFrequency[];
   popular_emojis: EmojiFrequency[];
+};
+
+export type ActivityPeriodCount = {
+  period: string;
+  count: number;
 };
 
 export type ReactionReactor = {
@@ -133,6 +139,9 @@ export type ChatInsightsStatistics = {
   title: string | null;
   chat_type: string;
   ordinary_message_count: number;
+  average_activity_time: string | null;
+  weekday_activity: ActivityPeriodCount[];
+  month_activity: ActivityPeriodCount[];
   text_length: number;
   popular_words: WordFrequency[];
   popular_emojis: EmojiFrequency[];

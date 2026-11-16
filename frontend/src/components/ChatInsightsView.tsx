@@ -20,7 +20,6 @@ import {
 import { ChatInsightsDetails } from "./ChatInsightsDetails";
 import { CommunicationTimelineView } from "./CommunicationTimelineView";
 import {
-  getSelectedChatInsights,
   sortChatInsightsChats,
 } from "../utils/chatInsights";
 import {
@@ -72,7 +71,14 @@ export function ChatInsightsView({
       (chat) => !platformFilter || chat.platform === platformFilter,
     ),
   );
-  const selectedChat = getSelectedChatInsights(sortedChats, selectedChatId);
+  const selectedChat =
+    selectedChatId === null
+      ? sortedChats[0]
+      : sortedChats.find((chat) => chat.chat_id === selectedChatId);
+  const waitingForSelectedChat =
+    selectedChatId !== null &&
+    selectedChat === undefined &&
+    insights.loading;
   const selectedSenderId =
     timelineUser.chatId === selectedChat?.chat_id
       ? timelineUser.senderId
@@ -133,7 +139,10 @@ export function ChatInsightsView({
         )}
       </div>
 
-      {insights.loading && insights.data === null && <LoadingMessage />}
+      {insights.loading &&
+        (insights.data === null || waitingForSelectedChat) && (
+          <LoadingMessage />
+        )}
       {insights.error && (
         <SectionError message={insights.error} onRetry={onRetryInsights} />
       )}
@@ -166,6 +175,7 @@ export function ChatInsightsView({
             showSenderSelector={isGroupChat}
           />
           <ChatInsightsDetails
+            key={selectedChat.chat_id}
             chat={selectedChat}
             timeline={selectedTimeline.data}
           />

@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from math import atan2, cos, hypot, pi, sin
 from statistics import mean, median
-from typing import Any
+from typing import Any, Callable
 
 from app.constants import (
     CONVERSATION_GAP,
@@ -16,6 +17,7 @@ from app.constants import (
 from app.schemas.analytics import (
     ChatInsightSender,
     ChatInsightsStatistics,
+    ActivityPeriodCount,
     ConversationActivityStatistics,
     ConversationHandoffCount,
     ConversationParticipantCount,
@@ -37,6 +39,7 @@ __all__ = [
     "_build_chat_statistics",
     "_build_conversation_activity",
     "_build_reply_tempo",
+    "_as_utc",
     "_clean_display_name",
     "_message_category",
     "_positive_count",
@@ -53,6 +56,7 @@ class _SenderCounts:
     name: str | None
     message_count: int = 0
     text_length: int = 0
+    activity_times: list[datetime] = field(default_factory=list)
     words: Counter[str] = field(default_factory=Counter)
     emojis: Counter[str] = field(default_factory=Counter)
 
@@ -308,6 +312,47 @@ def _as_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _average_activity_time(dates: list[datetime]) -> str | None:
+    if not dates:
+        return None
+
+    angles = [
+        2 * pi * (
+            (date.hour * 3600 + date.minute * 60 + date.second)
+            / 86400
+        )
+        for date in dates
+    ]
+    mean_sine = sum(sin(angle) for angle in angles) / len(angles)
+    mean_cosine = sum(cos(angle) for angle in angles) / len(angles)
+    if hypot(mean_sine, mean_cosine) < 1e-12:
+        return None
+
+    minutes = round(
+        (atan2(mean_sine, mean_cosine) % (2 * pi)) * 1440 / (2 * pi)
+    ) % 1440
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _build_activity_periods(
+    messages: list[_ConversationMessage],
+    *,
+    labels: tuple[str, ...],
+    get_period: Callable[[datetime], int],
+) -> list[ActivityPeriodCount]:
+    counts = [0] * len(labels)
+    for message in messages:
+        if (
+            message.message_type == ORDINARY_MESSAGE_TYPE
+            and message.message_date is not None
+        ):
+            counts[get_period(_as_utc(message.message_date))] += 1
+    return [
+        ActivityPeriodCount(period=label, count=count)
+        for label, count in zip(labels, counts)
+    ]
+
+
 def _build_reply_tempo(messages: list[_ConversationMessage]) -> ReplyTempoStatistics:
     ordinary_messages = [
         message
@@ -492,6 +537,7 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
                 sender.sender_id if sender.sender_id is not None else "Unknown sender"
             ),
             message_count=sender.message_count,
+            average_activity_time=_average_activity_time(sender.activity_times),
             text_length=sender.text_length,
             popular_words=_rank_words(sender.words),
             popular_emojis=_rank_emojis(sender.emojis),
@@ -549,6 +595,45 @@ def _build_chat_statistics(counts: _ChatCounts) -> ChatInsightsStatistics:
         title=counts.title,
         chat_type=counts.chat_type,
         ordinary_message_count=counts.message_count,
+        average_activity_time=_average_activity_time(
+            [
+                _as_utc(message.message_date)
+                for message in counts.messages
+                if message.message_type == ORDINARY_MESSAGE_TYPE
+                and message.message_date is not None
+            ]
+        ),
+        weekday_activity=_build_activity_periods(
+            counts.messages,
+            labels=(
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+            ),
+            get_period=lambda message_date: message_date.weekday(),
+        ),
+        month_activity=_build_activity_periods(
+            counts.messages,
+            labels=(
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December",
+            ),
+            get_period=lambda message_date: message_date.month - 1,
+        ),
         text_length=counts.text_length,
         popular_words=_rank_words(counts.words),
         popular_emojis=_rank_emojis(counts.emojis),

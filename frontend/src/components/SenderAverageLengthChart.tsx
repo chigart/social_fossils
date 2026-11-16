@@ -1,42 +1,11 @@
-import { useId } from "react";
 import type { ChatInsightsStatistics } from "../api";
 import { formatNumber } from "../utils/format";
 import {
   chatInsightsCardClassName,
   chatInsightsEmptyTextClassName,
 } from "../constants";
-import {
-  BAR_WIDTH,
-  CHART_HEIGHT,
-  CHART_RIGHT_PADDING,
-  MINIMUM_CHART_WIDTH,
-  PLOT_BOTTOM,
-  PLOT_HEIGHT,
-  SLOT_WIDTH,
-  Y_AXIS_WIDTH,
-} from "../constants";
 import { buildSenderAverageLengthChart } from "../utils/chatInsights";
-
-function splitSenderLabel(label: string) {
-  const midpoint = Math.ceil(label.length / 2);
-  const breakAt = [...label.matchAll(/\s+/g)].reduce(
-    (closestIndex, match) => {
-      const index = match.index;
-      return Math.abs(index - midpoint) <
-        Math.abs(closestIndex - midpoint)
-        ? index
-        : closestIndex;
-    },
-    -1,
-  );
-  if (breakAt < 0 && label.length <= 12) return [label];
-  const splitIndex = breakAt >= 0 ? breakAt : midpoint;
-
-  return [
-    label.slice(0, splitIndex).trim(),
-    label.slice(splitIndex).trim(),
-  ].filter(Boolean);
-}
+import { TimelineChart } from "./TimelineChart";
 
 function formatAverage(value: number) {
   return formatNumber(Math.round(value * 10) / 10);
@@ -47,120 +16,45 @@ export function SenderAverageLengthChart({
 }: {
   senders: ChatInsightsStatistics["senders"];
 }) {
-  const chartId = useId();
-  const { senders: rankedSenders, maximum } =
-    buildSenderAverageLengthChart(senders);
-  const chartWidth = Math.max(
-    MINIMUM_CHART_WIDTH,
-    Y_AXIS_WIDTH +
-      rankedSenders.length * SLOT_WIDTH +
-      CHART_RIGHT_PADDING,
-  );
-  const safeMaximum = maximum || 1;
-  const titleId = `${chartId}-title`;
-  const descriptionId = `${chartId}-description`;
+  const { senders: rankedSenders } = buildSenderAverageLengthChart(senders);
 
   return (
-    <section
-      className={chatInsightsCardClassName}
-      aria-label="Average message length by person"
-    >
-      <h3 className="mb-2 text-ui font-semibold text-ink">
-        Average message length by person (all senders)
-      </h3>
-      <p className="mb-4 text-small text-ink-muted">
-        Text volume divided by ordinary message count, ranked by characters per
-        message.
-      </p>
-      {rankedSenders.length === 0 ? (
-        <p className={chatInsightsEmptyTextClassName}>
-          No sender data with messages available.
+    <>
+      <section
+        className={chatInsightsCardClassName}
+        aria-label="Average message length by person"
+      >
+        <h3 className="mb-2 text-ui font-semibold text-ink">
+          Average message length by person (all senders)
+        </h3>
+        <p className="mb-4 text-small text-ink-muted">
+          Text volume divided by ordinary message count, ranked by characters
+          per message. Color intensity follows average message length, matching
+          the Overview heatmap.
         </p>
-      ) : (
-        <>
-          <div className="w-full overflow-x-auto rounded-lg border border-border-subtle bg-surface-subtle p-3">
-            <svg
-              className="block h-auto"
-              style={{ minWidth: `${chartWidth}px` }}
-              width="100%"
-              height={CHART_HEIGHT}
-              viewBox={`0 0 ${chartWidth} ${CHART_HEIGHT}`}
-              role="img"
-              aria-labelledby={titleId}
-              aria-describedby={descriptionId}
-            >
-              <title id={titleId}>Average message length by person</title>
-              <desc id={descriptionId}>
-                All senders ranked by average text characters per ordinary
-                message. Each sender has a vertical bar, and the chart can be
-                scrolled horizontally.
-              </desc>
-              {[0, 0.5, 1].map((fraction) => {
-                const y = PLOT_BOTTOM - PLOT_HEIGHT * fraction;
-                return (
-                  <g key={fraction}>
-                    <line
-                      x1={Y_AXIS_WIDTH}
-                      x2={chartWidth - CHART_RIGHT_PADDING}
-                      y1={y}
-                      y2={y}
-                      stroke="var(--color-border)"
-                      strokeWidth="1"
-                    />
-                    <text
-                      x={Y_AXIS_WIDTH - 7}
-                      y={y + 3}
-                      textAnchor="end"
-                      fill="var(--color-ink-muted)"
-                      fontSize="9"
-                    >
-                      {formatAverage(maximum * fraction)}
-                    </text>
-                  </g>
-                );
-              })}
-              {rankedSenders.map((sender, index) => {
-                const slotStart = Y_AXIS_WIDTH + index * SLOT_WIDTH;
-                const barHeight =
-                  (sender.averageLength / safeMaximum) * PLOT_HEIGHT;
-                return (
-                  <g
-                    key={sender.key}
-                    aria-label={`${sender.label}: ${formatAverage(sender.averageLength)} characters per message`}
-                  >
-                    <text
-                      x={slotStart + SLOT_WIDTH / 2}
-                      y={PLOT_BOTTOM + 17}
-                      textAnchor="middle"
-                      fill="var(--color-ink)"
-                      fontSize="10"
-                      data-sender-name={sender.label}
-                    >
-                      {splitSenderLabel(sender.label).map((line, lineIndex) => (
-                        <tspan
-                          key={`${sender.key}-${lineIndex}`}
-                          x={slotStart + SLOT_WIDTH / 2}
-                          dy={lineIndex === 0 ? 0 : 12}
-                        >
-                          {line}
-                        </tspan>
-                      ))}
-                    </text>
-                    <rect
-                      x={slotStart + (SLOT_WIDTH - BAR_WIDTH) / 2}
-                      y={PLOT_BOTTOM - barHeight}
-                      width={BAR_WIDTH}
-                      height={barHeight}
-                      rx="4"
-                      fill="var(--color-brand-strong)"
-                      data-sender={sender.label}
-                      data-average-length={sender.averageLength}
-                    />
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
+        {rankedSenders.length === 0 ? (
+          <p className={chatInsightsEmptyTextClassName}>
+            No sender data with messages available.
+          </p>
+        ) : (
+          <TimelineChart
+            points={rankedSenders.map((sender) => ({
+              label: sender.label,
+              count: sender.averageLength,
+            }))}
+            showDirection={false}
+            title="Average message length by person"
+            description="Average text characters per ordinary message by sender. The chart can be scrolled horizontally. Bar color intensity follows average message length, matching the Overview heatmap."
+            chartId="sender-average-length-chart"
+            heatmap
+            barWidthRatio={0.705}
+            maxBarWidth={62}
+            fixedSlotWidth={88}
+            labelFontSize={13.5}
+            formatTick={formatAverage}
+          />
+        )}
+        {rankedSenders.length > 0 && (
           <ul className="sr-only" aria-label="Average message length details">
             {rankedSenders.map((sender) => (
               <li key={sender.key}>
@@ -170,8 +64,8 @@ export function SenderAverageLengthChart({
               </li>
             ))}
           </ul>
-        </>
-      )}
-    </section>
+        )}
+      </section>
+    </>
   );
 }
