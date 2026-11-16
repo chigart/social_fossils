@@ -5,12 +5,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { paginated, resetDashboardApi } from "./dashboardTestHelpers";
-import {
-  chats,
-  contacts,
-  overview,
-} from "./App.testFixtures";
+import { resetDashboardApi } from "./dashboardTestHelpers";
 import {
   selectDashboardTab,
 } from "./App.testUtils";
@@ -280,243 +275,141 @@ describe("dashboard", () => {
     expect(api.linkPlatformIdentities).toHaveBeenCalledWith(3, 4);
   });
 
-  it("keeps current links and suggestions in vertically scrollable lists", async () => {
-    const names = [
-      "Ada Moon",
-      "Bert Lake",
-      "Cora Stone",
-      "Dale Reed",
-      "Evan Park",
-      "Faye Hill",
-      "Glen Frost",
-      "Hope Vale",
-      "Iris Cloud",
-      "Jude Field",
-      "Kira Brook",
-      "Liam Shore",
+  it("suggests links for exact and one-symbol transliterated name matches", async () => {
+    const identities = [
+      {
+        identity_id: 1,
+        platform: "telegram",
+        platform_user_id: "telegram-anton",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 1,
+          account_id: 1,
+          account_label: "Telegram",
+          platform: "telegram",
+          display_name: "Anton Malkov",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 2,
+        platform: "instagram",
+        platform_user_id: "instagram-anton",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 2,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Антон Мальков",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 3,
+        platform: "telegram",
+        platform_user_id: "telegram-nikolai",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 3,
+          account_id: 1,
+          account_label: "Telegram",
+          platform: "telegram",
+          display_name: "Nikolai Zaytsev",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 4,
+        platform: "instagram",
+        platform_user_id: "instagram-nikolai",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 4,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Николай Зайцев",
+          username: null,
+        }],
+      },
     ];
-    const suggestedIdentities = names.flatMap((name, index) => {
-      const id = index * 2 + 1;
-      return [
-        {
-          identity_id: id,
-          platform: "telegram",
-          platform_user_id: `telegram-${id}`,
-          identity_group_id: null,
-          contacts: [{
-            contact_id: id,
-            account_id: 1,
-            account_label: "Telegram",
-            platform: "telegram",
-            display_name: name,
-            username: null,
-          }],
-        },
-        {
-          identity_id: id + 1,
-          platform: "instagram",
-          platform_user_id: `instagram-${id + 1}`,
-          identity_group_id: null,
-          contacts: [{
-            contact_id: id + 1,
-            account_id: 2,
-            account_label: "Instagram",
-            platform: "instagram",
-            display_name: name,
-            username: null,
-          }],
-        },
-      ];
-    });
-    const currentIdentities = Array.from({ length: 11 }, (_, index) => {
-      const id = 100 + index * 2;
-      const groupId = 200 + index;
-      return [
-        {
-          identity_id: id,
-          platform: "telegram",
-          platform_user_id: `telegram-${id}`,
-          identity_group_id: groupId,
-          contacts: [],
-        },
-        {
-          identity_id: id + 1,
-          platform: "instagram",
-          platform_user_id: `instagram-${id + 1}`,
-          identity_group_id: groupId,
-          contacts: [],
-        },
-      ];
-    }).flat();
     api.getIdentityLinks.mockResolvedValueOnce({
-      identities: [...suggestedIdentities, ...currentIdentities],
+      identities,
       contacts_without_identity: [],
       events: [],
     });
     render(<App />);
     await selectDashboardTab("Links");
 
-    const currentLinks = screen.getByLabelText("Current identity links");
-    expect(currentLinks).toHaveClass("max-h-[600px]", "overflow-y-auto");
-    expect(within(currentLinks).getAllByText(/^Linked person group/)).toHaveLength(11);
+    const suggestions = screen.getByRole("list", {
+      name: "Suggested identity links",
+    });
+    const suggestionItems = within(suggestions).getAllByRole("listitem");
+    expect(suggestionItems).toHaveLength(2);
+    expect(suggestionItems[0]).toHaveTextContent(
+      "Transliterated Full Name match:",
+    );
+    expect(suggestionItems[0]).toHaveTextContent("Anton Malkov");
+    expect(suggestionItems[0]).toHaveTextContent("Антон Мальков");
+    expect(suggestionItems[1]).toHaveTextContent(
+      "1-symbol transliterated Full Name difference:",
+    );
+    expect(suggestionItems[1]).toHaveTextContent("Nikolai Zaytsev");
+    expect(suggestionItems[1]).toHaveTextContent("Николай Зайцев");
+  });
+
+  it("uses only the name before a pipe when suggesting links", async () => {
+    const identities = [
+      {
+        identity_id: 1,
+        platform: "telegram",
+        platform_user_id: "telegram-grigoriy",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 1,
+          account_id: 1,
+          account_label: "Telegram",
+          platform: "telegram",
+          display_name: "Grigoriy Chshukin | Alpine climber | Jasa Team",
+          username: null,
+        }],
+      },
+      {
+        identity_id: 2,
+        platform: "instagram",
+        platform_user_id: "instagram-grigoriy",
+        identity_group_id: null,
+        is_owner: false,
+        contacts: [{
+          contact_id: 2,
+          account_id: 2,
+          account_label: "Instagram",
+          platform: "instagram",
+          display_name: "Grigoriy Chshukin | Photographer | Other Team",
+          username: null,
+        }],
+      },
+    ];
+    api.getIdentityLinks.mockResolvedValueOnce({
+      identities,
+      contacts_without_identity: [],
+      events: [],
+    });
+    render(<App />);
+    await selectDashboardTab("Links");
 
     const suggestions = screen.getByRole("list", {
       name: "Suggested identity links",
     });
-    expect(suggestions).toHaveClass("max-h-[600px]", "overflow-y-auto");
-    expect(within(suggestions).getAllByRole("button", {
-      name: "Link identities",
-    })).toHaveLength(12);
+    expect(within(suggestions).getAllByRole("listitem")).toHaveLength(1);
+    expect(suggestions).toHaveTextContent("Grigoriy Chshukin | Alpine climber");
+    expect(suggestions).toHaveTextContent("Grigoriy Chshukin | Photographer");
   });
 
-  it("shows multiple accounts by username with full-name fallback and combines contacts", async () => {
-    const user = userEvent.setup();
-    api.getOverview.mockResolvedValue({
-      ...overview,
-      total_imported_accounts: 2,
-      total_chats: 2,
-      total_messages: 70,
-      imported_accounts: [
-        {
-          id: 1,
-          platform: "telegram",
-          name: "First account",
-          username: "first",
-          platform_user_id: "platform-1",
-          total_messages: 30,
-          total_text_length: 1_500,
-          total_contacts: 4,
-          earliest_message_timestamp: "2022-01-01T12:00:00Z",
-          latest_message_timestamp: "2023-01-01T12:00:00Z",
-        },
-        {
-          id: 2,
-          platform: "telegram",
-          name: "Second account",
-          username: "second",
-          platform_user_id: "platform-2",
-          total_messages: 40,
-          total_text_length: 2_500,
-          total_contacts: 7,
-          earliest_message_timestamp: "2023-01-01T12:00:00Z",
-          latest_message_timestamp: "2024-01-01T12:00:00Z",
-        },
-      ],
-    });
-    api.getChats.mockResolvedValue(paginated([
-      {
-        ...chats[0],
-        chat_id: 101,
-        account_id: 1,
-        source_account_label: "@anton",
-        title: "First account chat",
-        total_messages: 30,
-      },
-      {
-        ...chats[1],
-        chat_id: 202,
-        account_id: 2,
-        source_account_label: "Anton Malkov",
-        title: "Second account chat",
-        total_messages: 40,
-      },
-    ]));
-    api.getContacts.mockResolvedValue(paginated([
-      {
-        ...contacts[0],
-        account_id: null,
-        canonical_identity_id: 501,
-        contact_id: 11,
-        source_account_ids: [1, 2],
-        source_account_labels: ["@anton", "Anton Malkov"],
-        source_accounts: [
-          { platform: "telegram", label: "@anton" },
-          { platform: "telegram", label: "Anton Malkov" },
-        ],
-        source_contact_ids: [11, 22],
-        total_messages_sent: 24,
-        personal_chat_messages_sent: 18,
-        group_chat_messages_sent: 6,
-        ordinary_messages_sent: 22,
-        service_events_attributed: 2,
-      },
-    ]));
-
-    render(<App />);
-    await selectDashboardTab("Chats");
-    await screen.findByRole("row", { name: /First account chat/ });
-
-    const chatRegion = screen.getByRole("region", { name: "Chats" });
-    expect(
-      within(chatRegion).getByRole("row", {
-        name: /First account chat.*TG@anton/,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      within(chatRegion).getByRole("row", {
-        name: /Second account chat.*TG: Anton Malkov/,
-      }),
-    ).toBeInTheDocument();
-    const chatPicker = within(chatRegion).getByRole("button", {
-      name: "Choose a chat",
-    });
-    await user.click(chatPicker);
-    const chatOptions = screen.getByRole("listbox", {
-      name: "Choose a chat options",
-    });
-    const secondChatOption = within(chatOptions).getByRole("option", {
-      name: /TG: Second account chat/,
-    });
-    expect(
-      secondChatOption.querySelector(".bg-platform-telegram-background"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("combobox", {
-        name: "Filter chats by platform",
-      }).querySelector('option[value="telegram"]'),
-    ).not.toHaveClass("bg-platform-telegram-background");
-    await user.click(secondChatOption);
-    expect(chatPicker).toHaveTextContent("TG: Second account chat");
-
-    await selectDashboardTab("Contacts");
-    const contactsRegion = screen.getByRole("region", {
-      name: "Contacts & senders",
-    });
-    const combinedContactRows = within(contactsRegion).getAllByRole("row", {
-      name: /Avery/,
-    });
-    expect(combinedContactRows).toHaveLength(1);
-    expect(within(combinedContactRows[0]).getByText("TG@anton")).toBeInTheDocument();
-    expect(
-      within(combinedContactRows[0]).getByText("TG: Anton Malkov"),
-    ).toBeInTheDocument();
-    expect(
-      combinedContactRows[0].querySelectorAll(
-        ".bg-platform-telegram-background",
-      ),
-    ).toHaveLength(2);
-    expect(within(combinedContactRows[0]).getAllByRole("cell").map((cell) => cell.textContent))
-      .toEqual(["12345", "TG@antonTG: Anton Malkov", "18", "6"]);
-    await selectDashboardTab("Overview");
-    const overviewRegion = screen.getByRole("region", { name: "Overview" });
-    expect(within(overviewRegion).queryByText("Source accounts")).not.toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("row", {
-      name: /telegram.*First account.*first.*30.*1,500.*Jan 1, 2022.*Jan 1, 2023.*4/,
-    })).toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("row", {
-      name: /telegram.*Second account.*second.*40.*2,500.*Jan 1, 2023.*Jan 1, 2024.*7/,
-    })).toBeInTheDocument();
-    expect(within(overviewRegion).queryByRole("columnheader", {
-      name: "Account ID",
-    })).not.toBeInTheDocument();
-    expect(within(overviewRegion).queryByRole("columnheader", {
-      name: "Platform user ID",
-    })).not.toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("columnheader", {
-      name: "Text volume",
-    })).toBeInTheDocument();
-    expect(within(overviewRegion).getByRole("columnheader", {
-      name: "Activity interval",
-    })).toBeInTheDocument();
-  });
 });

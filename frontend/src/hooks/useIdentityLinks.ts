@@ -4,7 +4,7 @@ import type {
   PaginationMetadata,
   PlatformIdentity,
 } from "../api";
-import { DEFAULT_PAGE_SIZE } from "../constants";
+import { CYRILLIC_TO_LATIN, DEFAULT_PAGE_SIZE } from "../constants";
 import { formatDate } from "../utils/format";
 import { platformAccountPrefix } from "../utils/platforms";
 import type { Resource } from "../types";
@@ -36,6 +36,10 @@ function identityFullName(identity: PlatformIdentity): string | null {
     ?.display_name?.trim() ?? null;
 }
 
+function suggestionName(fullName: string): string {
+  return fullName.split("|", 1)[0].trim();
+}
+
 function normalizedName(name: string): string {
   return name
     .normalize("NFKD")
@@ -44,6 +48,14 @@ function normalizedName(name: string): string {
     .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function transliteratedName(name: string): string {
+  return normalizedName(
+    Array.from(name.toLocaleLowerCase())
+      .map((symbol) => CYRILLIC_TO_LATIN[symbol] ?? symbol)
+      .join(""),
+  );
 }
 
 function editDistanceWithinLimit(first: string, second: string): number | null {
@@ -158,17 +170,28 @@ export function useIdentityLinks(
   const suggestedLinks = useMemo(() => {
     const identitiesByName = new Map<
       string,
-      { identity: PlatformIdentity; label: string }[]
+      {
+        identity: PlatformIdentity;
+        label: string;
+        name: string;
+      }[]
     >();
     for (const identity of identities) {
       if (identity.is_owner) continue;
       const label = identityFullName(identity);
       if (!label) continue;
-      const name = normalizedName(label);
+      const name = normalizedName(suggestionName(label));
       if (!name) continue;
-      const matches = identitiesByName.get(name) ?? [];
-      matches.push({ identity, label });
-      identitiesByName.set(name, matches);
+      const aliases = [
+        ...new Set([name, transliteratedName(suggestionName(label))]),
+      ]
+        .filter(Boolean);
+      const namedIdentity = { identity, label, name };
+      for (const alias of aliases) {
+        const matches = identitiesByName.get(alias) ?? [];
+        matches.push(namedIdentity);
+        identitiesByName.set(alias, matches);
+      }
     }
 
     const namesBySignature = new Map<string, Set<string>>();
@@ -205,42 +228,74 @@ export function useIdentityLinks(
       }
     }
 
-    return [...candidateNamePairs].flatMap((pair) => {
+    const suggestionsByIdentityPair = new Map<string, {
+      first: PlatformIdentity;
+      firstLabel: string;
+      second: PlatformIdentity;
+      secondLabel: string;
+      reason: string;
+      rank: number;
+      sortLength: number;
+      sortName: string;
+    }>();
+    for (const pair of candidateNamePairs) {
       const [firstName, secondName] = pair.split("\u0000");
       const distance = editDistanceWithinLimit(firstName, secondName);
-      if (distance === null) return [];
-      const rank = distance;
-      const reason = distance === 0
-        ? "Full Name match"
-        : "1-symbol Full Name difference";
+      if (distance === null) continue;
       const firstIdentities = identitiesByName.get(firstName) ?? [];
       const secondIdentities = identitiesByName.get(secondName) ?? [];
-      return firstIdentities.flatMap((first, index) =>
-        secondIdentities
-          .slice(firstName === secondName ? index + 1 : 0)
-          .flatMap((second) => {
-            if (first.identity.platform === second.identity.platform) return [];
-            if (
-              first.identity.identity_group_id !== null &&
-              first.identity.identity_group_id ===
-                second.identity.identity_group_id
-            ) return [];
-            return [{
-              first: first.identity,
-              firstLabel: first.label,
-              second: second.identity,
-              secondLabel: second.label,
-              reason,
-              rank,
-              sortLength: Math.max(
-                Array.from(first.label).length,
-                Array.from(second.label).length,
-              ),
-              sortName: `${firstName} ${secondName}`,
-            }];
-          })
-      );
-    }).sort((first, second) =>
+      for (let firstIndex = 0; firstIndex < firstIdentities.length; firstIndex += 1) {
+        const first = firstIdentities[firstIndex];
+        const secondStart = firstName === secondName ? firstIndex + 1 : 0;
+        for (const second of secondIdentities.slice(secondStart)) {
+          if (first.identity.identity_id === second.identity.identity_id) continue;
+          if (first.identity.platform === second.identity.platform) continue;
+          if (
+            first.identity.identity_group_id !== null &&
+            first.identity.identity_group_id === second.identity.identity_group_id
+          ) continue;
+
+          const usesTransliteration =
+            firstName !== first.name || secondName !== second.name;
+          const reason = usesTransliteration
+            ? distance === 0
+              ? "Transliterated Full Name match"
+              : "1-symbol transliterated Full Name difference"
+            : distance === 0
+              ? "Full Name match"
+              : "1-symbol Full Name difference";
+          const suggestion = {
+            first: first.identity,
+            firstLabel: first.label,
+            second: second.identity,
+            secondLabel: second.label,
+            reason,
+            rank: distance,
+            sortLength: Math.max(
+              Array.from(first.label).length,
+              Array.from(second.label).length,
+            ),
+            sortName: [first.name, second.name].sort().join(" "),
+          };
+          const key = [
+            first.identity.identity_id,
+            second.identity.identity_id,
+          ].sort((a, b) => a - b).join(":");
+          const existing = suggestionsByIdentityPair.get(key);
+          if (
+            !existing ||
+            suggestion.rank < existing.rank ||
+            (suggestion.rank === existing.rank &&
+              existing.reason.startsWith("Transliterated") &&
+              !reason.startsWith("Transliterated"))
+          ) {
+            suggestionsByIdentityPair.set(key, suggestion);
+          }
+        }
+      }
+    }
+
+    return [...suggestionsByIdentityPair.values()].sort((first, second) =>
       first.rank - second.rank ||
       second.sortLength - first.sortLength ||
       first.sortName.localeCompare(second.sortName) ||
