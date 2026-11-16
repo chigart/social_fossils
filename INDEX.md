@@ -58,8 +58,9 @@ logic live in backend services so they remain separate from the DAG.
 
 The AI dashboard tab uses an in-process MCP client with read-only tools for
 account, contact, and chat names and analytics. Only local Ollama can search
-chats and access raw message text; OpenAI-compatible models cannot access
-message text. Neither provider can run arbitrary SQL or mutate the database. Ollama setup is documented in
+chats, access raw message text, and see user IDs; OpenAI-compatible models
+cannot access message text or user IDs. Neither provider can run arbitrary SQL
+or mutate the database. Ollama setup is documented in
 [README.md](README.md). OpenAI-compatible API keys are sent with chat requests
 and are not persisted. Dashboard selections and filters are not sent to the AI.
 

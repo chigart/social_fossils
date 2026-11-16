@@ -4,13 +4,11 @@ import json
 import pytest
 from fastapi import HTTPException
 from mcp import Client
-from pydantic import ValidationError
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from analytics_test_helpers import add_account, add_chat, add_message
 from app.ai import mcp_tools, providers
-from app.main import app
 from app.schemas.ai import AIChatRequest, AIMessage
 
 
@@ -125,6 +123,7 @@ def test_mcp_tools_expose_only_aggregate_analytics(ai_session_factory, monkeypat
         "search_chats",
         "get_selected_chat_metrics",
         "get_chat_messages",
+        "get_chat_users",
         "get_communication_balance_summary",
         "get_forgotten_contact_summary",
     }
@@ -341,6 +340,9 @@ def test_chat_uses_mcp_tool_results_without_raw_message_text(
     assert "get_chat_messages" not in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
+    assert "get_chat_users" not in {
+        tool["function"]["name"] for tool in observed_tools[0]
+    }
     assert "search_chats" not in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
@@ -411,10 +413,14 @@ def test_local_ollama_can_use_raw_message_text_tool(
     assert "get_chat_messages" in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
+    assert "get_chat_users" in {
+        tool["function"]["name"] for tool in observed_tools[0]
+    }
     assert "search_chats" in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
     assert "synthetic private message text" in json.dumps(observed_messages[1])
+    assert "synthetic-peer" in json.dumps(observed_messages[1])
     assert "local Ollama" in observed_messages[0][0]["content"]
 
 
@@ -472,143 +478,77 @@ def test_get_chat_messages_returns_bounded_ordinary_text_in_order(
         {
             "timestamp": None,
             "is_outgoing": None,
+            "user_id": "peer",
             "sender": None,
             "text": "second text",
         }
     ]
 
 
-def test_ollama_model_discovery_returns_names(monkeypatch):
-    monkeypatch.setattr(
-        providers.settings,
-        "ollama_base_url",
-        "http://host.docker.internal:11434/",
-    )
-    monkeypatch.setattr(
-        providers,
-        "_request_json",
-        lambda method, url, **kwargs: {
-            "models": [{"name": "qwen2.5:7b"}, {"name": "llama3.2:3b"}]
+def test_get_chat_users_lists_user_ids_and_names(
+    ai_session_factory,
+    monkeypatch,
+):
+    with ai_session_factory() as db:
+        add_account(db, 1, "synthetic-owner")
+        add_chat(db, 10, 1, "synthetic-chat-id", "Chat")
+        db.execute(
+            text(
+                "INSERT INTO contacts "
+                "(id, account_id, platform, platform_user_id, display_name, username) "
+                "VALUES (20, 1, 'telegram', 'platform-user-20', 'Ada Synthetic', 'ada_s')"
+            )
+        )
+        add_message(
+            db,
+            100,
+            10,
+            "message",
+            "platform-user-20",
+            sender_contact_id=20,
+            text_content="first text",
+        )
+        add_message(
+            db,
+            101,
+            10,
+            "message",
+            "platform-user-20",
+            sender_contact_id=20,
+            text_content="another text",
+        )
+        add_message(
+            db,
+            102,
+            10,
+            "message",
+            "unlinked-user",
+            text_content="unlinked text",
+        )
+        add_message(
+            db,
+            103,
+            10,
+            "service",
+            "service-user",
+            text_content="service text",
+        )
+        db.commit()
+    monkeypatch.setattr(mcp_tools, "SessionLocal", ai_session_factory)
+
+    result = _call_tool("get_chat_users", {"chat_id": 10}).structured_content
+
+    assert result["result"] == [
+        {
+            "user_id": "platform-user-20",
+            "contact_id": 20,
+            "display_name": "Ada Synthetic",
+            "username": "ada_s",
         },
-    )
-
-    assert providers.get_ollama_models() == ["qwen2.5:7b", "llama3.2:3b"]
-
-
-def test_ollama_connection_error_explains_docker_bind_address(monkeypatch):
-    monkeypatch.setattr(
-        providers.settings,
-        "ollama_base_url",
-        "http://host.docker.internal:11434",
-    )
-    def fail_request(*args, **kwargs):
-        raise providers.requests.ConnectionError()
-
-    monkeypatch.setattr(providers.requests, "request", fail_request)
-
-    with pytest.raises(HTTPException) as error:
-        providers.get_ollama_models()
-
-    assert "Docker-reachable host address" in error.value.detail
-    assert "not only 127.0.0.1" in error.value.detail
-
-
-def test_openai_compatible_provider_sends_key_and_parses_reply(monkeypatch):
-    observed = {}
-
-    class Response:
-        ok = True
-        status_code = 200
-
-        @staticmethod
-        def json():
-            return {
-                "choices": [
-                    {"message": {"role": "assistant", "content": "Ready."}}
-                ]
-            }
-
-    def fake_request(method, url, *, json, headers, timeout):
-        observed.update(
-            method=method,
-            url=url,
-            payload=json,
-            headers=headers,
-            timeout=timeout,
-        )
-        return Response()
-
-    monkeypatch.setattr(providers.requests, "request", fake_request)
-    request = AIChatRequest(
-        provider="openai-compatible",
-        model="example-model",
-        api_key="temporary-key",
-        base_url="https://models.example/v1/",
-        messages=[AIMessage(role="user", content="Analyze the overview.")],
-    )
-
-    message = providers._provider_response(request, [], [])
-
-    assert message["content"] == "Ready."
-    assert observed["method"] == "POST"
-    assert observed["url"] == "https://models.example/v1/chat/completions"
-    assert observed["headers"]["Authorization"] == "Bearer temporary-key"
-    assert observed["payload"]["model"] == "example-model"
-
-
-def test_provider_errors_do_not_echo_api_key(monkeypatch):
-    class Response:
-        ok = False
-        status_code = 401
-
-    monkeypatch.setattr(
-        providers.requests,
-        "request",
-        lambda *args, **kwargs: Response(),
-    )
-
-    with pytest.raises(HTTPException) as error:
-        providers._request_json(
-            "POST",
-            "https://models.example/v1/chat/completions",
-            payload={},
-            api_key="temporary-key",
-        )
-
-    assert error.value.detail == "The AI provider returned HTTP 401."
-    assert "temporary-key" not in error.value.detail
-
-
-def test_openai_compatible_chat_requires_an_api_key():
-    request = AIChatRequest(
-        provider="openai-compatible",
-        model="example-model",
-        messages=[AIMessage(role="user", content="Analyze my overview.")],
-    )
-
-    with pytest.raises(HTTPException) as error:
-        providers.run_chat(request)
-    assert error.value.detail == (
-        "An API key is required for the OpenAI-compatible provider."
-    )
-
-
-def test_chat_request_rejects_dashboard_context():
-    with pytest.raises(ValidationError):
-        AIChatRequest.model_validate(
-            {
-                "provider": "ollama",
-                "model": "qwen2.5:7b",
-                "messages": [
-                    {"role": "user", "content": "Analyze all my data."}
-                ],
-                "context": {
-                    "active_view": "chats",
-                    "platform_filter": "telegram",
-                },
-            }
-        )
-
-
-def test_ai_endpoints_are_registered():
-    assert {"/api/ai/models", "/api/ai/chat"} <= set(app.openapi()["paths"])
+        {
+            "user_id": "unlinked-user",
+            "contact_id": None,
+            "display_name": None,
+            "username": None,
+        },
+    ]

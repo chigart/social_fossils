@@ -339,7 +339,9 @@ def get_chat_messages(
                 Message.id,
                 Message.message_date,
                 Message.is_outgoing,
+                Message.sender_id,
                 Message.sender_name,
+                Contact.platform_user_id,
                 Contact.display_name,
                 Message.text_content,
             )
@@ -360,11 +362,63 @@ def get_chat_messages(
         {
             "timestamp": row.message_date.isoformat() if row.message_date else None,
             "is_outgoing": row.is_outgoing,
+            "user_id": row.sender_id or row.platform_user_id,
             "sender": row.display_name or row.sender_name,
             "text": row.text_content,
         }
         for row in reversed(rows)
     ]
+
+
+@mcp_server.tool()
+def get_chat_users(
+    chat_id: Annotated[int, Field(gt=0)],
+    limit: Annotated[int, Field(ge=1, le=100)] = 100,
+) -> list[dict[str, int | str | None]]:
+    """List users who sent ordinary messages in a chat, including their user IDs."""
+    user_id = func.coalesce(Message.sender_id, Contact.platform_user_id)
+    statement = (
+        select(
+            user_id.label("user_id"),
+            Contact.id.label("contact_id"),
+            Contact.display_name,
+            Contact.username,
+            Message.sender_name,
+        )
+        .join(Chat, Chat.id == Message.chat_id)
+        .outerjoin(Contact, Contact.id == Message.sender_contact_id)
+        .where(
+            Chat.id == chat_id,
+            Message.platform == Chat.platform,
+            Message.message_type == ORDINARY_MESSAGE_TYPE,
+            or_(
+                user_id.is_not(None),
+                Contact.display_name.is_not(None),
+                Contact.username.is_not(None),
+                Message.sender_name.is_not(None),
+            ),
+        )
+        .distinct()
+        .order_by(
+            user_id,
+            Contact.display_name,
+            Contact.username,
+            Message.sender_name,
+        )
+        .limit(limit)
+    )
+    with SessionLocal() as db:
+        rows = db.execute(statement)
+
+        return [
+            {
+                "user_id": row.user_id,
+                "contact_id": row.contact_id,
+                "display_name": row.display_name or row.sender_name,
+                "username": row.username,
+            }
+            for row in rows
+        ]
 
 
 @mcp_server.tool()
