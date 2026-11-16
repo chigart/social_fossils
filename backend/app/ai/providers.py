@@ -20,13 +20,14 @@ LOCAL_SYSTEM_PROMPT = (
     "You analyze Social Fossils communication analytics. Use the read-only "
     "analytics tools when database facts are needed. You may receive imported "
     "account names, contact display names and usernames, and aggregate "
-    "statistics. You may retrieve and analyze raw message text using the "
-    "get_chat_messages tool because this request is being handled by local "
-    "Ollama. Ground conclusions in tool results, say when data is insufficient, "
-    "and distinguish observed patterns from causation. If an analytics tool "
-    "fails, say so and do not infer its result. Choose analytics tools based on "
-    "the user's question. Do not assume or apply any current dashboard view, "
-    "selection, or filter."
+    "statistics. Use search_chats to find a chat by its name, then use the "
+    "returned chat_id with get_chat_messages to read its messages. You may "
+    "retrieve and analyze raw message text using get_chat_messages because this "
+    "request is being handled by local Ollama. Ground conclusions in tool "
+    "results, say when data is insufficient, and distinguish observed patterns "
+    "from causation. If an analytics tool fails, say so and do not infer its "
+    "result. Choose analytics tools based on the user's question. Do not assume "
+    "or apply any current dashboard view, selection, or filter."
 )
 
 CLOUD_SYSTEM_PROMPT = (
@@ -40,7 +41,7 @@ CLOUD_SYSTEM_PROMPT = (
     "tools based on the user's question. Do not assume or apply any current "
     "dashboard view, selection, or filter."
 )
-LOCAL_ONLY_TOOL_NAMES = {"get_chat_messages"}
+LOCAL_ONLY_TOOL_NAMES = {"get_chat_messages", "search_chats"}
 
 
 def _validate_base_url(value: str) -> str:

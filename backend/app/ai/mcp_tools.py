@@ -173,6 +173,55 @@ def get_top_chat_metrics(
 
 
 @mcp_server.tool()
+def search_chats(
+    query: Annotated[str, Field(min_length=1, max_length=100)] | None = None,
+    platform: Literal["facebook", "instagram", "telegram", "vk"] | None = None,
+    limit: Annotated[int, Field(ge=1, le=100)] = 50,
+) -> list[dict[str, int | str | None]]:
+    """List chats or search chat names; returns chat IDs for local message lookup."""
+    statement = (
+        select(
+            Chat.id.label("chat_id"),
+            Chat.title.label("chat_name"),
+            Chat.platform,
+            Chat.chat_type,
+            Account.name.label("account_name"),
+            Account.username.label("account_username"),
+        )
+        .join(Account, Account.id == Chat.account_id)
+        .order_by(Chat.title, Account.name, Chat.platform, Chat.id)
+        .limit(limit)
+    )
+    if query is not None:
+        search_term = query.strip().casefold()
+        if not search_term:
+            raise ValueError("Search query must contain at least one non-space character.")
+        statement = statement.where(
+            func.lower(Chat.title).contains(
+                search_term,
+                autoescape=True,
+                escape="\\",
+            )
+        )
+    if platform is not None:
+        statement = statement.where(Chat.platform == platform)
+
+    with SessionLocal() as db:
+        rows = db.execute(statement)
+        return [
+            {
+                "chat_id": row.chat_id,
+                "chat_name": row.chat_name,
+                "platform": row.platform,
+                "chat_type": row.chat_type,
+                "account_name": row.account_name,
+                "account_username": row.account_username,
+            }
+            for row in rows
+        ]
+
+
+@mcp_server.tool()
 def get_selected_chat_metrics(
     chat_id: Annotated[int, Field(gt=0)],
 ) -> dict[str, int | str | None | list[dict[str, int | str | None]]]:

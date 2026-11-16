@@ -122,6 +122,7 @@ def test_mcp_tools_expose_only_aggregate_analytics(ai_session_factory, monkeypat
         "search_users",
         "get_overview_summary",
         "get_top_chat_metrics",
+        "search_chats",
         "get_selected_chat_metrics",
         "get_chat_messages",
         "get_communication_balance_summary",
@@ -208,6 +209,71 @@ def test_search_users_filters_platform_and_limits_results(
     assert results["result"][0]["display_name"] == "Ada Synthetic"
 
 
+def test_search_chats_finds_name_and_returns_local_chat_id(
+    ai_session_factory,
+    monkeypatch,
+):
+    with ai_session_factory() as db:
+        add_account(
+            db,
+            1,
+            "synthetic-owner",
+            name="Synthetic account",
+            username="synthetic-owner",
+        )
+        add_chat(
+            db,
+            10,
+            1,
+            "synthetic-platform-chat-id",
+            "A Private Conversation",
+            chat_type="personal_chat",
+        )
+        add_chat(
+            db,
+            11,
+            1,
+            "another-platform-chat-id",
+            "Different Group",
+            chat_type="group",
+        )
+        db.commit()
+    monkeypatch.setattr(mcp_tools, "SessionLocal", ai_session_factory)
+
+    results = _call_tool(
+        "search_chats",
+        {"query": "PRIVATE", "platform": "telegram", "limit": 10},
+    ).structured_content
+
+    assert results["result"] == [
+        {
+            "chat_id": 10,
+            "chat_name": "A Private Conversation",
+            "platform": "telegram",
+            "chat_type": "personal_chat",
+            "account_name": "Synthetic account",
+            "account_username": "synthetic-owner",
+        }
+    ]
+
+
+def test_search_chats_without_query_lists_chats_with_limit(
+    ai_session_factory,
+    monkeypatch,
+):
+    with ai_session_factory() as db:
+        add_account(db, 1, "synthetic-owner")
+        add_chat(db, 10, 1, "platform-id-one", "Chat One")
+        add_chat(db, 11, 1, "platform-id-two", "Chat Two")
+        db.commit()
+    monkeypatch.setattr(mcp_tools, "SessionLocal", ai_session_factory)
+
+    results = _call_tool("search_chats", {"limit": 1}).structured_content
+
+    assert len(results["result"]) == 1
+    assert results["result"][0]["chat_name"] == "Chat One"
+
+
 def test_chat_uses_mcp_tool_results_without_raw_message_text(
     ai_session_factory,
     monkeypatch,
@@ -275,6 +341,9 @@ def test_chat_uses_mcp_tool_results_without_raw_message_text(
     assert "get_chat_messages" not in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
+    assert "search_chats" not in {
+        tool["function"]["name"] for tool in observed_tools[0]
+    }
     second_request = json.dumps(observed_messages[1])
     assert "total_messages" in second_request
     assert "synthetic private message text" not in second_request
@@ -340,6 +409,9 @@ def test_local_ollama_can_use_raw_message_text_tool(
 
     assert providers.run_chat(request) == "The message says hello."
     assert "get_chat_messages" in {
+        tool["function"]["name"] for tool in observed_tools[0]
+    }
+    assert "search_chats" in {
         tool["function"]["name"] for tool in observed_tools[0]
     }
     assert "synthetic private message text" in json.dumps(observed_messages[1])

@@ -45,10 +45,11 @@ export function AIView({
           Ask about your communication patterns
         </h2>
         <p className="mt-2 text-small text-ink-muted">
-          The assistant can search imported account names, contact names, and
-          usernames, and use aggregate analytics. With Local Ollama, it can
-          also read raw message text. OpenAI-compatible models cannot access
-          message text. Dashboard selections and filters are not used.
+          The assistant can search imported account names, contact names,
+          usernames, and chat names, and use aggregate analytics. With Local
+          Ollama, it can also read raw message text. OpenAI-compatible models
+          cannot access message text. Dashboard selections and filters are not
+          used.
         </p>
       </header>
 
