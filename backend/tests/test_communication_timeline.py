@@ -132,6 +132,38 @@ def test_owner_timeline_uses_utc_months_fills_gaps_and_reports_uncertainty(
     assert result.months[2].unknown_direction_active_days == 2
 
 
+def test_facebook_owner_name_classifies_message_with_unknown_direction(db_session):
+    db_session.execute(
+        text(
+            "INSERT INTO account "
+            "(id, platform, name, platform_user_id) "
+            "VALUES (1, 'facebook', 'Synthetic Owner', 'facebook-owner')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats "
+            "(id, account_id, platform, chat_id, chat_type) "
+            "VALUES (10, 1, 'facebook', 'facebook-chat', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_name, "
+            "message_type, message_date, is_outgoing, raw_payload) "
+            "VALUES (1, 10, 'facebook', '1', 'facebook-sender-alias', "
+            "'Synthetic Owner', 'message', '2025-01-01', NULL, '{}')"
+        )
+    )
+
+    result = get_communication_timeline(db_session, chat_id=10)
+
+    assert result.summary.owner_message_count == 1
+    assert result.summary.contact_message_count == 0
+    assert result.summary.unknown_direction_message_count == 0
+
+
 def test_contact_timeline_combines_canonical_sources_and_rejects_unknown_identity(
     db_session,
 ):

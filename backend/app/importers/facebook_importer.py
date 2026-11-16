@@ -252,12 +252,31 @@ def _message_values(
         if has_owner_identity
         else set()
     )
-    is_owner = payload.get("is_outgoing") is True or (
-        sender_id is not None and sender_id == account.platform_user_id
-    ) or (normalized_name is not None and normalized_name in owner_names)
     is_outgoing = payload.get("is_outgoing")
+    sender_name_is_owner = normalized_name is not None and normalized_name in owner_names
+    sender_name_identifies_contact = (
+        chat.chat_type == "personal_chat"
+        and normalized_name is not None
+        and not sender_name_is_owner
+    )
+    matches_chat_contact = (
+        chat_contact is not None
+        and chat_contact.display_name is not None
+        and normalized_name == chat_contact.display_name.strip().casefold()
+    )
+    is_owner = is_outgoing is True or (
+        is_outgoing is None
+        and (
+            (
+                sender_id is not None
+                and sender_id == account.platform_user_id
+                and not sender_name_identifies_contact
+            )
+            or sender_name_is_owner
+        )
+    )
     if is_owner:
-        sender_id = sender_id or account.platform_user_id
+        sender_id = account.platform_user_id
         is_outgoing = True
     elif (
         has_owner_identity
@@ -271,30 +290,37 @@ def _message_values(
     if is_owner:
         sender_contact_id = owner_contact.id
     elif is_outgoing is False:
-        if sender_id is None and isinstance(sender_name, str) and sender_name.strip():
-            if (
-                chat_contact is not None
-                and chat_contact.display_name is not None
-                and sender_name.strip().casefold()
-                == chat_contact.display_name.strip().casefold()
-            ):
-                sender_id = chat_contact.platform_user_id
-            else:
-                sender_id = _contact_identity(sender_name, chat.chat_id)
-        if sender_id is not None:
-            contact = contact_cache.get(sender_id)
-            if contact is None:
-                contact, contact_inserted = _get_or_create_contact(
-                    session,
-                    account.id,
-                    sender_id,
-                    sender_name,
+        use_chat_contact = (
+            chat_contact is not None
+            and chat.chat_type == "personal_chat"
+            and (
+                matches_chat_contact
+                or (
+                    is_outgoing is False
+                    and sender_id == account.platform_user_id
                 )
-                contact_cache[sender_id] = contact
-            sender_contact_id = contact.id
-        elif chat_contact is not None:
+            )
+        )
+        if chat_contact is not None and use_chat_contact:
             sender_id = chat_contact.platform_user_id
             sender_contact_id = chat_contact.id
+        else:
+            if sender_id is None and isinstance(sender_name, str) and sender_name.strip():
+                sender_id = _contact_identity(sender_name, chat.chat_id)
+            if sender_id is not None:
+                contact = contact_cache.get(sender_id)
+                if contact is None:
+                    contact, contact_inserted = _get_or_create_contact(
+                        session,
+                        account.id,
+                        sender_id,
+                        sender_name,
+                    )
+                    contact_cache[sender_id] = contact
+                sender_contact_id = contact.id
+            elif chat_contact is not None:
+                sender_id = chat_contact.platform_user_id
+                sender_contact_id = chat_contact.id
 
     return (
         {

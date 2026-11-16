@@ -110,6 +110,50 @@ def test_instagram_group_insights_separate_senders_without_platform_ids(db_sessi
     ]
 
 
+def test_facebook_personal_chat_separates_name_only_senders(db_session):
+    db_session.execute(
+        text(
+            "INSERT INTO account (id, platform, name, platform_user_id) "
+            "VALUES (1, 'facebook', 'Anton Malkov', 'owner-123')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats "
+            "(id, account_id, platform, chat_id, title, chat_type) "
+            "VALUES (10, 1, 'facebook', 'friend_456', 'Friend', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, sender_name, "
+            "message_type, text_content, raw_payload) "
+            "VALUES (:id, 10, 'facebook', :message_id, :sender_id, :sender_name, "
+            "'message', 'synthetic text', '{}')"
+        ),
+        [
+            {
+                "id": index,
+                "message_id": str(index),
+                "sender_id": "owner-123",
+                "sender_name": "Anton Malkov" if index == 1 else "Synthetic Friend",
+            }
+            for index in range(1, 4)
+        ],
+    )
+
+    result = get_chat_insights(db_session, chat_id=10)
+
+    assert [
+        (sender.sender_id, sender.display_name, sender.message_count)
+        for sender in result.chats[0].senders
+    ] == [
+        (None, "Synthetic Friend", 2),
+        (None, "Anton Malkov", 1),
+    ]
+
+
 def test_popular_words_exclude_common_english_and_russian_words(db_session):
     add_account(db_session, 1, "user-owner")
     add_chat(db_session, 10, 1, "chat-10", "Direct", chat_type="personal_chat")

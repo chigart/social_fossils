@@ -69,6 +69,7 @@ def classify_communication_balance(
         "combined across source accounts. "
         "group chats and ambiguous records are excluded. Any known owner alias "
         "counts as owner-sent regardless of source-local is_outgoing flags; "
+        "Facebook outgoing flags also identify owner messages when IDs differ; "
         "contact messages require a matching sender ID and is_outgoing=false. "
         "The optional platform filter limits result contacts and pagination to "
         "identities associated with that platform."
@@ -94,6 +95,13 @@ def get_communication_balance(
             owner_account.platform_user_id == Message.sender_id,
         )
         .exists()
+    )
+    owner_sender = or_(
+        owner_sender,
+        and_(
+            Message.platform == "facebook",
+            Message.is_outgoing.is_(True),
+        ),
     )
     peers = (
         select(
@@ -180,13 +188,17 @@ def get_communication_balance(
     )
 
     is_ordinary = Message.message_type == ORDINARY_MESSAGE_TYPE
-    owner_direction = (
+    owner_direction = or_(
         select(owner_account.id)
         .where(
             owner_account.platform == Message.platform,
             owner_account.platform_user_id == Message.sender_id,
         )
-        .exists()
+        .exists(),
+        and_(
+            Message.platform == "facebook",
+            Message.is_outgoing.is_(True),
+        ),
     )
     contact_direction = and_(
         Message.platform == eligible_pairs.c.platform,

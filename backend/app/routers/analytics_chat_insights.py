@@ -188,7 +188,15 @@ def get_chat_insights(
 
         sender_name = _clean_display_name(row.sender_name)
         sender_key: str | tuple[str, str] | None = row.sender_id
+        statistics_sender_id = row.sender_id
         if (
+            row.platform == "facebook"
+            and row.chat_type == "personal_chat"
+            and sender_name
+        ):
+            sender_key = ("facebook_personal_name", sender_name.casefold())
+            statistics_sender_id = None
+        elif (
             sender_key is None
             and row.platform == "instagram"
             and row.chat_type == "private_group"
@@ -209,7 +217,7 @@ def get_chat_insights(
             type_sender = type_senders.get(sender_key)
             if type_sender is None:
                 type_sender = _MessageTypeSenderCounts(
-                    sender_id=row.sender_id,
+                    sender_id=statistics_sender_id,
                     name=(
                         sender_name
                         or row.sender_id
@@ -240,7 +248,7 @@ def get_chat_insights(
         type_sender = type_senders.get(sender_key)
         if type_sender is None:
             type_sender = _MessageTypeSenderCounts(
-                sender_id=row.sender_id,
+                sender_id=statistics_sender_id,
                 name=(
                     sender_name
                     or row.sender_id
@@ -265,7 +273,7 @@ def get_chat_insights(
         sender = chat.senders.get(sender_key)
         if sender is None:
             sender = _SenderCounts(
-                sender_id=sender_id,
+                sender_id=statistics_sender_id,
                 name=sender_name,
             )
             chat.senders[sender_key] = sender

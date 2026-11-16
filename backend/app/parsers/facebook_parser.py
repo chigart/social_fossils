@@ -244,12 +244,17 @@ def _message_participant_identities(
         )
         sender_name = _profile_value(message.get("sender_name"))
         is_outgoing = message.get("is_outgoing", message.get("is_sent_by_you"))
+        sender_name_is_owner = (
+            sender_name is not None
+            and sender_name.casefold() in owner_names
+        )
         if (
             is_outgoing is True
-            or (sender_id is not None and sender_id in owner_ids)
+            or sender_name_is_owner
             or (
-                sender_name is not None
-                and sender_name.casefold() in owner_names
+                sender_id is not None
+                and sender_id in owner_ids
+                and sender_name is None
             )
         ):
             identities.add(("owner", ""))

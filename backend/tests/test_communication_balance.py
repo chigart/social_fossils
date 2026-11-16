@@ -57,6 +57,51 @@ def test_vk_balance_attributes_owner_messages_to_the_owner(db_session):
     assert contact.owner_share_percentage == 50
 
 
+def test_facebook_balance_uses_outgoing_flag_for_owner_messages(db_session):
+    db_session.execute(
+        text(
+            "INSERT INTO account "
+            "(id, platform, name, platform_user_id) "
+            "VALUES (1, 'facebook', 'Facebook owner', 'owner-id')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO chats "
+            "(id, account_id, platform, chat_id, chat_type) "
+            "VALUES (10, 1, 'facebook', 'friend-123', 'personal_chat')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO contacts "
+            "(id, account_id, platform, platform_user_id, display_name) "
+            "VALUES (20, 1, 'facebook', 'friend-123', 'Facebook contact')"
+        )
+    )
+    db_session.execute(
+        text(
+            "INSERT INTO messages "
+            "(id, chat_id, platform, message_id, sender_id, is_outgoing, "
+            "message_type, text_content) "
+            "VALUES "
+            "(1, 10, 'facebook', 'owner-1', 'sender-alias', TRUE, 'message', :owner), "
+            "(2, 10, 'facebook', 'contact-1', 'friend-123', FALSE, 'message', :contact)"
+        ),
+        {"owner": "o" * 250, "contact": "c" * 250},
+    )
+
+    result = get_communication_balance(db_session)
+
+    assert len(result.contacts) == 1
+    contact = result.contacts[0]
+    assert contact.owner_message_count == 1
+    assert contact.contact_message_count == 1
+    assert contact.owner_text_length == 250
+    assert contact.contact_text_length == 250
+    assert contact.owner_share_percentage == 50
+
+
 def test_communication_balance_uses_text_volume_and_excludes_ineligible_data(
     db_session,
 ):

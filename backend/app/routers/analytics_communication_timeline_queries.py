@@ -101,11 +101,13 @@ def build_communication_timeline_statistics(
             Message.id.label("message_id"),
             Message.sender_id.label("sender_telegram_id"),
             Message.sender_contact_id.label("sender_contact_id"),
+            Message.sender_name.label("sender_name"),
             Message.platform.label("platform"),
             Message.is_outgoing.label("is_outgoing"),
             Message.message_date.label("message_date"),
             Message.text_content.label("text_content"),
             Chat.account_id.label("account_id"),
+            Chat.chat_type.label("chat_type"),
         )
         .join(Chat, Chat.id == Message.chat_id)
         .where(
@@ -135,13 +137,40 @@ def build_communication_timeline_statistics(
 
     sender_telegram_id = scoped_messages.c.sender_telegram_id
     owner_account = aliased(Account)
-    owner_direction = (
+    owner_id_direction = (
         select(owner_account.id)
         .where(
             owner_account.platform == scoped_messages.c.platform,
             owner_account.platform_user_id == sender_telegram_id,
         )
         .exists()
+    )
+    owner_name_account = aliased(Account)
+    owner_name_direction = and_(
+        scoped_messages.c.platform == "facebook",
+        scoped_messages.c.chat_type == "personal_chat",
+        scoped_messages.c.is_outgoing.is_(None),
+        scoped_messages.c.sender_name.is_not(None),
+        select(owner_name_account.id)
+        .where(
+            owner_name_account.id == scoped_messages.c.account_id,
+            owner_name_account.platform == scoped_messages.c.platform,
+            or_(
+                func.lower(func.trim(owner_name_account.name))
+                == func.lower(func.trim(scoped_messages.c.sender_name)),
+                func.lower(func.trim(owner_name_account.username))
+                == func.lower(func.trim(scoped_messages.c.sender_name)),
+            ),
+        )
+        .exists(),
+    )
+    owner_direction = or_(
+        owner_id_direction,
+        and_(
+            scoped_messages.c.platform == "facebook",
+            scoped_messages.c.is_outgoing.is_(True),
+        ),
+        owner_name_direction,
     )
     if canonical_identity_id is None:
         contact_direction = and_(

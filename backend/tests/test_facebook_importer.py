@@ -166,6 +166,59 @@ def test_facebook_import_is_idempotent_and_classifies_outgoing_messages(tmp_path
         ] == [("completed", 2, 2, 0), ("completed", 2, 0, 2)]
 
 
+def test_facebook_import_uses_direction_and_chat_name_over_stale_sender_id(tmp_path):
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-direction.db'}")
+    _create_import_tables(engine)
+    archive_path = tmp_path / "facebook-direction.zip"
+    with ZipFile(archive_path, "w") as archive:
+        archive.writestr(
+            "profile_information/profile_information.json",
+            json.dumps(
+                {
+                    "profile_v2": {
+                        "name": {"full_name": "Synthetic Owner"},
+                        "user_id": {"value": "owner-123"},
+                    }
+                }
+            ),
+        )
+        archive.writestr(
+            "messages/inbox/friend_456/message_1.json",
+            json.dumps(
+                {
+                    "title": "Synthetic conversation",
+                    "messages": [
+                        {
+                            "sender_name": "Synthetic Owner",
+                            "sender_id": "owner-alias",
+                            "timestamp_ms": 1_700_000_000_000,
+                            "content": "synthetic outgoing",
+                        },
+                        {
+                            "sender_name": "Synthetic Friend",
+                            "sender_id": "owner-123",
+                            "timestamp_ms": 1_700_000_000_001,
+                            "content": "synthetic incoming",
+                        },
+                    ],
+                }
+            ),
+        )
+
+    with Session(engine) as session:
+        facebook_importer.import_facebook_export(archive_path, session=session)
+
+        messages = session.scalars(
+            select(Message).order_by(Message.message_date)
+        ).all()
+
+        assert [message.is_outgoing for message in messages] == [True, False]
+        assert [message.sender_id for message in messages] == ["owner-123", "456"]
+        assert messages[0].sender_contact_id != messages[1].sender_contact_id
+
+    engine.dispose()
+
+
 def test_facebook_name_only_contacts_use_six_digit_numeric_ids(tmp_path):
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'facebook-name-id.db'}")
     _create_import_tables(engine)
