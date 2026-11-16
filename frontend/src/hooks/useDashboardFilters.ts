@@ -7,6 +7,7 @@ import {
   type ContactStatistics,
   type ContactSortBy,
   type ForgottenContactsStatistics,
+  type FriendStatus,
   type PaginatedItems,
 } from "../api";
 import {
@@ -53,6 +54,8 @@ export function useDashboardFilters({
   const [chatPlatformFilter, setChatPlatformFilter] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [contactPlatformFilter, setContactPlatformFilter] = useState("");
+  const [contactFriendStatusFilter, setContactFriendStatusFilter] =
+    useState<FriendStatus | "">("");
   const [balanceSearch, setBalanceSearch] = useState("");
   const [balancePlatformFilter, setBalancePlatformFilter] = useState("");
   const [forgottenSearch, setForgottenSearch] = useState("");
@@ -174,6 +177,10 @@ export function useDashboardFilters({
           !contactPlatformFilter ||
           contact.platforms.includes(contactPlatformFilter),
         )
+        .filter(({ contact }) =>
+          !contactFriendStatusFilter ||
+          contact.friend_statuses.includes(contactFriendStatusFilter),
+        )
         .filter(({ index }) =>
           selectedIndex < 0 || index === selectedIndex,
         )
@@ -183,7 +190,13 @@ export function useDashboardFilters({
           return contactSort.direction === "asc" ? comparison : -comparison;
         });
     },
-    [contacts.data, contactSearch, contactPlatformFilter, contactSort],
+    [
+      contacts.data,
+      contactSearch,
+      contactPlatformFilter,
+      contactFriendStatusFilter,
+      contactSort,
+    ],
   );
 
   const visibleBalanceContacts = useMemo(
@@ -281,6 +294,8 @@ export function useDashboardFilters({
     setContactSearch,
     contactPlatformFilter,
     setContactPlatformFilter,
+    contactFriendStatusFilter,
+    setContactFriendStatusFilter,
     balanceSearch,
     setBalanceSearch,
     balancePlatformFilter,

@@ -23,6 +23,8 @@ from app.schemas.analytics_common import (
     SearchOption,
 )
 from app.schemas.analytics_engagement import (
+    CloseFriendsTimelineStatistics,
+    CloseFriendsTimelineYear,
     CommunicationBalanceClassification,
     CommunicationBalanceContact,
     CommunicationBalanceStatistics,
@@ -45,6 +47,8 @@ __all__ = [
     "ChatInsightsResponse",
     "ChatInsightsStatistics",
     "ChatStatistics",
+    "CloseFriendsTimelineStatistics",
+    "CloseFriendsTimelineYear",
     "CommunicationBalanceClassification",
     "CommunicationBalanceContact",
     "CommunicationBalanceStatistics",

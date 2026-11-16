@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -112,6 +112,13 @@ class ContactAccountSource(BaseModel):
 
 
 class ContactStatistics(BaseModel):
+    friend_statuses: list[Literal["Active", "Close", "exClose"]] = Field(
+        default_factory=list,
+        description=(
+            "Current relationship signals. Active is independent and can appear "
+            "alongside Close or exClose."
+        ),
+    )
     platforms: list[str] = Field(
         description="Platforms represented by this identity group."
     )

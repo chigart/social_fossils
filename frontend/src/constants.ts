@@ -1,4 +1,11 @@
 export const DEFAULT_PAGE_SIZE = 50;
+export const FRIEND_STATUS_BADGE_CLASS_NAMES = {
+  Active: "friend-status-badge--active",
+  Close: "friend-status-badge--close",
+  exClose: "friend-status-badge--exclose",
+} as const;
+export const FRIEND_STATUS_BADGE_BASE_CLASS_NAME =
+  "inline-block whitespace-nowrap rounded px-[7px] py-1 text-label font-semibold";
 
 export const CYRILLIC_TO_LATIN: Record<string, string> = {
   а: "a",
@@ -95,10 +102,10 @@ export const PLATFORM_ACCOUNT_BADGE_CLASS_NAMES: Record<string, string> = {
 
 export const dashboardTabs = [
   { id: "overview", label: "Overview" },
+  { id: "contacts", label: "Contacts" },
   { id: "dms", label: "DMs" },
   { id: "chats", label: "Chats" },
   { id: "conversation-insights", label: "Insights" },
-  { id: "contacts", label: "Contacts" },
   { id: "identity-links", label: "Links" },
   { id: "communication-balance", label: "Balance" },
   { id: "forgotten-contacts", label: "Forgotten" },

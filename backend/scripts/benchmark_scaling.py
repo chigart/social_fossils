@@ -209,11 +209,8 @@ def _run_workload(message_count: int, root: Path, *, profile: bool) -> list[dict
     from app.routers.analytics_forgotten_contacts import (
         build_forgotten_contacts_statistics,
     )
-    from app.routers.analytics_overview import (
-        get_chat_statistics,
-        get_contact_statistics,
-        get_overview,
-    )
+    from app.routers.analytics_overview import get_chat_statistics, get_overview
+    from app.routers.analytics_contacts import get_contact_statistics
     from app.importers.telegram_importer import import_telegram_export
 
     telegram_path = root / "synthetic-telegram.json"

@@ -84,6 +84,7 @@ export function DashboardContent({
   const {
     overview,
     communicationTimeline,
+    closeFriendsTimeline,
     chats,
     contacts,
     balance,
@@ -91,6 +92,7 @@ export function DashboardContent({
     identityLinks,
     loadOverview,
     loadCommunicationTimeline,
+    loadCloseFriendsTimeline,
     loadContacts,
     loadBalance,
     loadForgottenContacts,
@@ -103,6 +105,8 @@ export function DashboardContent({
     setContactSearch,
     contactPlatformFilter,
     setContactPlatformFilter,
+    contactFriendStatusFilter,
+    setContactFriendStatusFilter,
     balanceSearch,
     setBalanceSearch,
     balancePlatformFilter,
@@ -293,6 +297,7 @@ export function DashboardContent({
             <OverviewView
               overview={overview}
               timeline={communicationTimeline}
+              closeFriendsTimeline={closeFriendsTimeline}
               noImportedData={noImportedData}
               selectedTimelineAccountId={selectedTimelineAccountId}
               onRetry={() => void loadOverview(true)}
@@ -303,6 +308,9 @@ export function DashboardContent({
                   undefined,
                   accountId ?? undefined,
                 )
+              }
+              onRetryCloseFriendsTimeline={() =>
+                void loadCloseFriendsTimeline()
               }
               onTimelineAccountChange={onTimelineAccountChange}
             />
@@ -343,6 +351,7 @@ export function DashboardContent({
               visibleContacts={visibleContacts}
               search={contactSearch}
               platformFilter={contactPlatformFilter}
+              friendStatusFilter={contactFriendStatusFilter}
               searchOptions={contactOptions}
               onSearchChange={(value) => {
                 setContactSearch(value);
@@ -358,6 +367,7 @@ export function DashboardContent({
                   contactSort.key,
                   contactSort.direction,
                   contactPlatformFilter,
+                  contactFriendStatusFilter,
                 );
               }}
               onPlatformFilterChange={(platform) => {
@@ -369,6 +379,19 @@ export function DashboardContent({
                   contactSort.key,
                   contactSort.direction,
                   platform,
+                  contactFriendStatusFilter,
+                );
+              }}
+              onFriendStatusFilterChange={(friendStatus) => {
+                setContactFriendStatusFilter(friendStatus);
+                setContactSearch("");
+                void loadContacts(
+                  false,
+                  1,
+                  contactSort.key,
+                  contactSort.direction,
+                  contactPlatformFilter,
+                  friendStatus,
                 );
               }}
               sort={contactSort}
@@ -389,6 +412,7 @@ export function DashboardContent({
                   next.key,
                   next.direction,
                   contactPlatformFilter,
+                  contactFriendStatusFilter,
                 );
               }}
               hasMessages={(overview.data?.total_messages ?? 0) > 0}
@@ -399,6 +423,7 @@ export function DashboardContent({
                   contactSort.key,
                   contactSort.direction,
                   contactPlatformFilter,
+                  contactFriendStatusFilter,
                 )
               }
               onPageChange={(page) => {
@@ -409,6 +434,7 @@ export function DashboardContent({
                   contactSort.key,
                   contactSort.direction,
                   contactPlatformFilter,
+                  contactFriendStatusFilter,
                 );
               }}
             />

@@ -17,6 +17,7 @@ export function TimelineChart({
   chartId,
   compareOwnerCount = false,
   lineLegendLabel,
+  heatmap = false,
 }: {
   points: TimelinePoint[];
   showDirection: boolean;
@@ -25,6 +26,7 @@ export function TimelineChart({
   chartId: string;
   compareOwnerCount?: boolean;
   lineLegendLabel?: string;
+  heatmap?: boolean;
 }) {
   const width = Math.max(620, points.length * 50);
   const height = 240;
@@ -38,6 +40,22 @@ export function TimelineChart({
   const barWidth = Math.min(30, slotWidth * 0.66);
   const comparisonBarWidth = Math.min(20, slotWidth * 0.28);
   const maximum = Math.max(1, ...points.map((point) => point.count));
+  const heatmapColor = (count: number) => {
+    if (count === 0) return "var(--color-close-friends-heatmap-empty)";
+    const intensity = Math.sqrt(count / maximum);
+    const stopPosition = intensity;
+    const lowerStopIndex = Math.floor(stopPosition);
+    const colorStops = [
+      "--color-close-friends-heatmap-pink",
+      "--color-close-friends-heatmap-green",
+    ];
+    const upperStopIndex = Math.min(lowerStopIndex + 1, colorStops.length - 1);
+    const stopFraction = Math.round((stopPosition - lowerStopIndex) * 100);
+    if (stopFraction === 0 || lowerStopIndex === upperStopIndex) {
+      return `var(${colorStops[lowerStopIndex]})`;
+    }
+    return `color-mix(in srgb, var(${colorStops[lowerStopIndex]}) ${100 - stopFraction}%, var(${colorStops[upperStopIndex]}))`;
+  };
   const maximumLineValue = Math.max(
     0,
     ...points.map((point) => point.lineValue ?? 0),
@@ -97,7 +115,7 @@ export function TimelineChart({
           const x = centerX - barWidth / 2;
           const owner = showDirection ? (point.ownerCount ?? 0) : 0;
           const contact = showDirection ? (point.contactCount ?? 0) : 0;
-          const unknown = point.unknownCount ?? point.count;
+          const unknown = heatmap ? 0 : (point.unknownCount ?? point.count);
           const ownerHeight = (owner / maximum) * plotHeight;
           const contactHeight = (contact / maximum) * plotHeight;
           const unknownHeight = (unknown / maximum) * plotHeight;
@@ -112,9 +130,10 @@ export function TimelineChart({
                 y={plotBottom - totalHeight - zeroHeight}
                 width={barWidth}
                 height={totalHeight + zeroHeight}
-                fill="var(--color-clear)"
+                fill={heatmap ? heatmapColor(point.count) : "var(--color-clear)"}
                 data-month={point.label}
                 data-count={point.count}
+                data-heatmap={heatmap ? heatmapColor(point.count) : undefined}
                 aria-label={`${point.label}: ${formatNumber(point.count)}`}
               />
               {compareOwnerCount && point.ownerCount !== undefined ? (

@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
   getCommunicationBalance: vi.fn(),
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
+  getCloseFriendsTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -47,6 +48,24 @@ describe("dashboard", () => {
         name: "Yearly total and owner messages, with owner average message size",
       }),
     ).toBeInTheDocument();
+    const closeFriendsChart = await screen.findByRole("img", {
+      name: "Close friends per year",
+    });
+    expect(
+      closeFriendsChart.querySelector('[data-month="2020"][data-count="2"]'),
+    ).toHaveAttribute(
+      "data-heatmap",
+      "var(--color-close-friends-heatmap-green)",
+    );
+    expect(
+      closeFriendsChart.querySelector('[data-month="2021"][data-count="1"]'),
+    ).toHaveAttribute(
+      "data-heatmap",
+      "color-mix(in srgb, var(--color-close-friends-heatmap-pink) 29%, var(--color-close-friends-heatmap-green))",
+    );
+    expect(screen.queryByText("Fewer")).not.toBeInTheDocument();
+    expect(screen.queryByText("More close friends")).not.toBeInTheDocument();
+    expect(api.getCloseFriendsTimeline).toHaveBeenCalledOnce();
     expect(api.getCommunicationTimeline).toHaveBeenCalledWith(
       undefined,
       undefined,

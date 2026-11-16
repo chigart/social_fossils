@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from app.importers import instagram_importer
-from app.routers.analytics_overview import get_contact_statistics
+from app.routers.analytics_contacts import get_contact_statistics
 from app.importers.telegram_importer import import_source_export, import_telegram_export
 from app.models import (
     CanonicalIdentity,
