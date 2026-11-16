@@ -16,16 +16,31 @@ MAX_TOOL_CALLS = 8
 MAX_TOOL_ROUNDS = 6
 REQUEST_TIMEOUT_SECONDS = 120
 
-SYSTEM_PROMPT = (
+LOCAL_SYSTEM_PROMPT = (
     "You analyze Social Fossils communication analytics. Use the read-only "
-    "analytics tools when database facts are needed. You receive aggregate "
-    "statistics only; you cannot access or quote raw message text. Do not "
-    "claim to have read messages. Ground conclusions in tool results, say "
-    "when data is insufficient, and distinguish observed patterns from "
-    "causation. If an analytics tool fails, say so and do not infer its result. "
-    "Choose analytics tools based on the user's question. Do not assume or "
-    "apply any current dashboard view, selection, or filter."
+    "analytics tools when database facts are needed. You may receive imported "
+    "account names, contact display names and usernames, and aggregate "
+    "statistics. You may retrieve and analyze raw message text using the "
+    "get_chat_messages tool because this request is being handled by local "
+    "Ollama. Ground conclusions in tool results, say when data is insufficient, "
+    "and distinguish observed patterns from causation. If an analytics tool "
+    "fails, say so and do not infer its result. Choose analytics tools based on "
+    "the user's question. Do not assume or apply any current dashboard view, "
+    "selection, or filter."
 )
+
+CLOUD_SYSTEM_PROMPT = (
+    "You analyze Social Fossils communication analytics. Use the read-only "
+    "analytics tools when database facts are needed. You may receive imported "
+    "account names, contact display names and usernames, and aggregate "
+    "statistics. You cannot access or quote raw message text. Do not claim to "
+    "have read messages. Ground conclusions in tool results, say when data is "
+    "insufficient, and distinguish observed patterns from causation. If an "
+    "analytics tool fails, say so and do not infer its result. Choose analytics "
+    "tools based on the user's question. Do not assume or apply any current "
+    "dashboard view, selection, or filter."
+)
+LOCAL_ONLY_TOOL_NAMES = {"get_chat_messages"}
 
 
 def _validate_base_url(value: str) -> str:
@@ -232,7 +247,11 @@ async def _run_chat(request: AIChatRequest) -> str:
     messages: list[dict[str, Any]] = [
         {
             "role": "system",
-            "content": SYSTEM_PROMPT,
+            "content": (
+                LOCAL_SYSTEM_PROMPT
+                if request.provider == "ollama"
+                else CLOUD_SYSTEM_PROMPT
+            ),
         },
         *[message.model_dump() for message in request.messages],
     ]
@@ -240,9 +259,16 @@ async def _run_chat(request: AIChatRequest) -> str:
     async with Client(mcp_server) as client:
         tool_list = await client.list_tools()
         tool_definitions = _tool_definitions(tool_list.tools)
+        if request.provider == "openai-compatible":
+            tool_definitions = [
+                tool
+                for tool in tool_definitions
+                if tool["function"]["name"] not in LOCAL_ONLY_TOOL_NAMES
+            ]
         allowed_tool_names = {tool["function"]["name"] for tool in tool_definitions}
         tool_calls_used = 0
         tool_errors: list[str] = []
+        unavailable_tool_requested = False
 
         for _ in range(MAX_TOOL_ROUNDS):
             assistant_message = _provider_response(
@@ -290,11 +316,12 @@ async def _run_chat(request: AIChatRequest) -> str:
                         detail="The AI provider returned a malformed tool call.",
                     )
                 tool_name = function.get("name")
-                if not isinstance(tool_name, str) or tool_name not in allowed_tool_names:
-                    raise HTTPException(
-                        status_code=502,
-                        detail="The AI provider requested an unavailable analytics tool.",
-                    )
+                if (
+                    not isinstance(tool_name, str)
+                    or tool_name not in allowed_tool_names
+                ):
+                    unavailable_tool_requested = True
+                    break
                 arguments = _tool_arguments(function.get("arguments", {}))
                 try:
                     result = await client.call_tool(tool_name, arguments)
@@ -323,7 +350,14 @@ async def _run_chat(request: AIChatRequest) -> str:
                     result_text=tool_text,
                 )
                 tool_calls_used += 1
+            if unavailable_tool_requested:
+                break
 
+    if unavailable_tool_requested:
+        raise HTTPException(
+            status_code=502,
+            detail="The AI provider requested an unavailable analytics tool.",
+        )
     raise HTTPException(
         status_code=502,
         detail="The AI provider did not finish its answer after using analytics tools.",

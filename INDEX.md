@@ -56,11 +56,12 @@ logic live in backend services so they remain separate from the DAG.
 5. Analytics routers query that data; the frontend API client and dashboard
    hooks load it into the views under `frontend/src/components/`.
 
-The AI dashboard tab uses an in-process MCP client with read-only tools over
-aggregate analytics. Models cannot access raw message text, arbitrary SQL, or
-database mutations. Ollama setup is documented in [README.md](README.md).
-OpenAI-compatible API keys are sent with chat requests and are not persisted.
-Dashboard selections and filters are not sent to the AI.
+The AI dashboard tab uses an in-process MCP client with read-only tools for
+account and contact names/usernames and analytics. Only local Ollama can access
+raw message text; OpenAI-compatible models cannot. Neither provider can run
+arbitrary SQL or mutate the database. Ollama setup is documented in
+[README.md](README.md). OpenAI-compatible API keys are sent with chat requests
+and are not persisted. Dashboard selections and filters are not sent to the AI.
 
 The contacts analytics also classifies direct-message contacts as Active,
 Close, or exClose using exchanged text-bearing messages and owner contact
