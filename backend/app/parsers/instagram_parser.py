@@ -77,9 +77,24 @@ def normalize_instagram_text(value: str) -> str:
     ):
         return value
     try:
-        decoded = value.encode("latin-1").decode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
+        encoded = value.encode("latin-1")
+    except UnicodeEncodeError:
         return value
+    try:
+        decoded = encoded.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        if exc.reason == "unexpected end of data" and exc.end == len(encoded):
+            decoded = encoded[: exc.start].decode("utf-8")
+        elif exc.reason == "invalid continuation byte":
+            suffix_bytes = encoded[exc.end :]
+            if not suffix_bytes or any(
+                byte not in b" \t\n\r\v\f" for byte in suffix_bytes
+            ):
+                return value
+            suffix = suffix_bytes.decode("ascii")
+            decoded = encoded[: exc.start].decode("utf-8") + suffix
+        else:
+            return value
     return decoded if decoded != value else value
 
 
