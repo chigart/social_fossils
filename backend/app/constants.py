@@ -171,6 +171,7 @@ RUSSIAN_STOP_WORDS = frozenset(
 
 ENGLISH_STOP_WORDS = frozenset(
     """
+    1 2 3 4 5 6 7 8 9
     a about above after again against all am an and any are as at attachment be because
     been before being below between both but by can cannot com could did do does
     doing down during each few for from further had has have having he her
