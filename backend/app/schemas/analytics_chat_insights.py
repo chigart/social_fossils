@@ -55,20 +55,30 @@ class ReactionAuthorPair(BaseModel):
 
 
 class ReplyTempoStatistics(BaseModel):
-    reply_reference_count: int = Field(
-        description="Ordinary messages that reference another message in this chat."
+    owner_opened_session_count: int = Field(
+        description="Dated ordinary-message sessions opened by the owner."
     )
-    measured_reply_count: int = Field(
-        description="References resolved to a dated ordinary message by a different identified sender."
+    measured_contact_reply_session_count: int = Field(
+        description=(
+            "Owner-opened sessions with a dated contact response within "
+            "12 hours of the session's first message."
+        )
+    )
+    message_interval_count: int = Field(
+        description="Consecutive dated ordinary-message pairs within sessions."
     )
     average_response_seconds: float | None = Field(
-        description="Mean elapsed time from the referenced message to its reply, for measured replies."
+        description=(
+            "Mean time from the owner's first message to the contact's first "
+            "response in each measured session; omitted unless at least five "
+            "sessions are measured."
+        )
     )
     longest_response_seconds: float | None = Field(
-        description="Longest elapsed time from the referenced message to its reply, for measured replies."
+        description="Longest time from the owner's first message to the contact's first response in a measured session."
     )
-    median_response_seconds: float | None = Field(
-        description="Median elapsed time from the referenced message to its reply, for measured replies."
+    median_message_interval_seconds: float | None = Field(
+        description="Median time between consecutive dated ordinary messages within sessions."
     )
 
 

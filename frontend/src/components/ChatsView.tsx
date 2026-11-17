@@ -194,7 +194,7 @@ export function ChatsView({
                   {chatScope === "dm" && (
                     <th className={tableHeaderClassName} scope="col">
                       <SortButton
-                        label="Average time to reply"
+                        label="Average contact reply time"
                         active={sort.key === "average_response_seconds"}
                         direction={sort.direction}
                         onClick={() => onSort("average_response_seconds")}

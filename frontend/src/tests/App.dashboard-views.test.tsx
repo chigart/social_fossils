@@ -30,6 +30,7 @@ const api = vi.hoisted(() => ({
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   getCloseFriendsTimeline: vi.fn(),
+  getOwnerReplyTimeline: vi.fn(),
   getOllamaModels: vi.fn(),
   sendAIChat: vi.fn(),
   uploadFile: vi.fn(),
@@ -52,9 +53,11 @@ it("requests DM and group-chat lists separately", async () => {
   expect(within(dmsTable).queryByRole("columnheader", { name: "Type" }))
     .not.toBeInTheDocument();
   expect(within(dmsTable).getAllByRole("columnheader").map((header) => header.textContent?.trim()))
-    .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "First message", "Latest message", "Average time to reply"]);
+    .toEqual(["Chat title", "Account", "Text volume", "Messages ↓", "First message", "Latest message", "Average contact reply time"]);
   expect(within(dmsTable).getByRole("row", { name: /Zebra group/ }))
     .toHaveTextContent("15 min");
+  expect(within(dmsTable).getByRole("row", { name: /Aurora group/ }))
+    .toHaveTextContent("N/A");
   await waitFor(() =>
     expect(api.getChats).toHaveBeenLastCalledWith(
       1,
@@ -463,7 +466,7 @@ describe("dashboard", () => {
     );
     await user.click(
       within(dmsRegion).getByRole("button", {
-        name: "Sort by Average time to reply",
+        name: "Sort by Average contact reply time",
       }),
     );
     expect(api.getChats).toHaveBeenLastCalledWith(

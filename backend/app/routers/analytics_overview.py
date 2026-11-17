@@ -2,12 +2,20 @@
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy import and_, case, func, select
+from sqlalchemy.orm import Session
 
-from app.constants import DEFAULT_PAGE_SIZE, ORDINARY_MESSAGE_TYPE, SERVICE_MESSAGE_TYPE
+from app.constants import (
+    DEFAULT_PAGE_SIZE,
+    MINIMUM_REPLY_SAMPLES_FOR_AVERAGE,
+    ORDINARY_MESSAGE_TYPE,
+    SERVICE_MESSAGE_TYPE,
+)
 from app.db import get_db
 from app.models import Account, Chat, Contact, Message
+from app.routers.analytics_reply_timeline_queries import (
+    build_reply_turns_statement,
+)
 from app.schemas.analytics import (
     ChatStatistics,
     ImportedAccountStatistics,
@@ -140,7 +148,8 @@ def get_overview(db: Session = Depends(get_db)) -> OverviewStatistics:
         "results and pagination to that platform. The response "
         "also includes the total row count and lightweight options for searching "
         "the selected scope. DM rows include average response time for measured "
-        "in-chat replies. Counts include "
+        "first owner replies in contact-opened 12-hour Insights conversations. "
+        "Counts include "
         "all stored message types; ordinary and service counts use the exact "
         "'message' and 'service' values. Distinct senders count non-null "
         "platform-scoped sender IDs as normalized and stored by the importer."
@@ -194,49 +203,26 @@ def get_chat_statistics(
     )
     reply_average = None
     if chat_scope == "dm":
-        reply_message = aliased(Message)
-        original_message = aliased(Message)
-        reply_elapsed_seconds = (
-            (func.julianday(reply_message.message_date)
-             - func.julianday(original_message.message_date))
-            * 86400
-            if db.get_bind().dialect.name == "sqlite"
-            else func.extract(
-                "epoch",
-                reply_message.message_date - original_message.message_date,
-            )
+        contact_reply_turns = build_reply_turns_statement(
+            db,
+            response_is_outgoing=False,
+        ).subquery()
+        measured_reply_count = func.count(contact_reply_turns.c.elapsed_seconds)
+        average_response_seconds = case(
+            (
+                measured_reply_count >= MINIMUM_REPLY_SAMPLES_FOR_AVERAGE,
+                func.avg(contact_reply_turns.c.elapsed_seconds),
+            ),
+            else_=None,
         )
-        average_response_seconds = func.avg(reply_elapsed_seconds)
         if db.get_bind().dialect.name == "sqlite":
             average_response_seconds = func.round(average_response_seconds, 3)
         reply_average = (
             select(
-                reply_message.chat_id.label("chat_id"),
+                contact_reply_turns.c.chat_id.label("chat_id"),
                 average_response_seconds.label("average_response_seconds"),
             )
-            .join(
-                original_message,
-                and_(
-                    original_message.chat_id == reply_message.chat_id,
-                    original_message.platform == reply_message.platform,
-                    original_message.message_id
-                    == func.coalesce(
-                        reply_message.source_reply_id,
-                        reply_message.reply_to_telegram_message_id,
-                    ),
-                    original_message.message_type == ORDINARY_MESSAGE_TYPE,
-                ),
-            )
-            .where(
-                reply_message.message_type == ORDINARY_MESSAGE_TYPE,
-                reply_message.sender_id.is_not(None),
-                original_message.sender_id.is_not(None),
-                reply_message.sender_id != original_message.sender_id,
-                reply_message.message_date.is_not(None),
-                original_message.message_date.is_not(None),
-                reply_elapsed_seconds >= 0,
-            )
-            .group_by(reply_message.chat_id)
+            .group_by(contact_reply_turns.c.chat_id)
             .subquery()
         )
 

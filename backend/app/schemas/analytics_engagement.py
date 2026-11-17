@@ -41,6 +41,20 @@ class CloseFriendsTimelineStatistics(BaseModel):
     years: list[CloseFriendsTimelineYear]
 
 
+class OwnerReplyTimelineYear(BaseModel):
+    year: int = Field(description="UTC calendar year of the owner reply.")
+    average_response_seconds: float | None = Field(
+        description=(
+            "Mean elapsed seconds for measured owner replies in this year, or "
+            "null when the year has no measured replies."
+        )
+    )
+
+
+class OwnerReplyTimelineStatistics(BaseModel):
+    years: list[OwnerReplyTimelineYear]
+
+
 class ForgottenContactMonthlyActivity(BaseModel):
     month: str = Field(description="UTC calendar month in YYYY-MM format.")
     owner_message_count: int

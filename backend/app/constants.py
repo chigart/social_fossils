@@ -5,7 +5,7 @@ from datetime import timedelta
 
 DEFAULT_PAGE_SIZE = 50
 # Increment when analytics response semantics change without a database revision change.
-ANALYTICS_CACHE_VERSION = 13
+ANALYTICS_CACHE_VERSION = 22
 
 ACTIVE_WINDOW_MONTHS = 6
 ACTIVE_MINIMUM_TEXT_MESSAGES = 20
@@ -121,6 +121,7 @@ ORDINARY_MESSAGE_TYPE = "message"
 SERVICE_MESSAGE_TYPE = "service"
 RANKING_LIMIT = 10
 CONVERSATION_GAP = timedelta(hours=12)
+MINIMUM_REPLY_SAMPLES_FOR_AVERAGE = 3
 WORD_PATTERN = re.compile(r"[^\W_]+(?:['’][^\W_]+)*", re.UNICODE)
 EMOJI_START_PATTERN = re.compile(
     r"[#*0-9\u2300-\u23ff\u2600-\u27bf\U0001F000-\U0001FAFF]"

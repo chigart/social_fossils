@@ -118,11 +118,12 @@ export const chatInsights: ChatInsightsResponse = {
         },
       ],
       reply_tempo: {
-        reply_reference_count: 7,
-        measured_reply_count: 5,
+        owner_opened_session_count: 6,
+        measured_contact_reply_session_count: 5,
+        message_interval_count: 14,
         average_response_seconds: 1800,
         longest_response_seconds: 7200,
-        median_response_seconds: 1800,
+        median_message_interval_seconds: 1800,
       },
       conversation_activity: {
         session_gap_hours: 12,

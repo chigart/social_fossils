@@ -36,6 +36,8 @@ from app.schemas.analytics_engagement import (
     ForgottenContactMonthlyActivity,
     ForgottenContactsStatistics,
     ForgottenContactsSummary,
+    OwnerReplyTimelineStatistics,
+    OwnerReplyTimelineYear,
 )
 from app.schemas.analytics_timeline import (
     CommunicationTimelineMonth,
@@ -73,6 +75,8 @@ __all__ = [
     "ImportedAccountStatistics",
     "MessageTypeCount",
     "OverviewStatistics",
+    "OwnerReplyTimelineStatistics",
+    "OwnerReplyTimelineYear",
     "PaginatedItems",
     "PaginationMetadata",
     "ReactionAuthorPair",

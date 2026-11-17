@@ -51,12 +51,14 @@ export function ChatInsightsDetails({
         {chat.chat_type === "personal_chat" && (
           <>
             <MetricCard
-              label="Average time to reply"
+              label="Average contact reply time"
               value={formatResponseTime(chat.reply_tempo.average_response_seconds)}
+              detail={`${formatNumber(chat.reply_tempo.measured_contact_reply_session_count)} measured sessions; shown with at least 5`}
             />
             <MetricCard
-              label="Longest time to reply"
+              label="Longest contact reply time"
               value={formatResponseTime(chat.reply_tempo.longest_response_seconds)}
+              detail="First contact reply in an owner-opened session"
             />
           </>
         )}

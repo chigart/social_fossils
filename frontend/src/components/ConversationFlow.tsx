@@ -57,9 +57,8 @@ export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
       </div>
       <p className={chatInsightsDescriptionClassName}>
         A conversation starts after {activity.session_gap_hours} hours without
-        an ordinary message. Reply times include only matched, dated replies
-        between identified senders; unknown senders and missing timestamps are
-        excluded.
+        an ordinary message. Median message interval measures time between
+        consecutive messages within a conversation.
       </p>
       <div className="mb-4 grid grid-cols-4 gap-3 max-[820px]:grid-cols-2 max-sm:gap-2">
         <MetricCard
@@ -68,9 +67,9 @@ export function ConversationFlow({ chat }: { chat: ChatInsightsStatistics }) {
           detail={`${formatNumber(activity.messages_without_timestamp_count)} undated messages excluded`}
         />
         <MetricCard
-          label="Median reply time"
-          value={formatResponseTime(replyTempo.median_response_seconds)}
-          detail={`${formatNumber(replyTempo.measured_reply_count)} measured of ${formatNumber(replyTempo.reply_reference_count)} reply references`}
+          label="Median time between messages"
+          value={formatResponseTime(replyTempo.median_message_interval_seconds)}
+          detail={`${formatNumber(replyTempo.message_interval_count)} consecutive message intervals`}
         />
         <MetricCard
           label="Turn-taking"

@@ -29,6 +29,7 @@ const api = vi.hoisted(() => ({
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   getCloseFriendsTimeline: vi.fn(),
+  getOwnerReplyTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -51,6 +52,15 @@ describe("dashboard", () => {
     const closeFriendsChart = await screen.findByRole("img", {
       name: "Close friends per year",
     });
+    const replyTimeChart = await screen.findByRole("img", {
+      name: "Owner average reply time per year",
+    });
+    expect(
+      replyTimeChart.querySelector('[data-month="2020"][data-count="900"]'),
+    ).toHaveAttribute(
+      "aria-label",
+      "2020: 15 min",
+    );
     expect(
       closeFriendsChart.querySelector('[data-month="2020"][data-count="2"]'),
     ).toHaveAttribute(
@@ -66,6 +76,7 @@ describe("dashboard", () => {
     expect(screen.queryByText("Fewer")).not.toBeInTheDocument();
     expect(screen.queryByText("More close friends")).not.toBeInTheDocument();
     expect(api.getCloseFriendsTimeline).toHaveBeenCalledOnce();
+    expect(api.getOwnerReplyTimeline).toHaveBeenCalledOnce();
     expect(api.getCommunicationTimeline).toHaveBeenCalledWith(
       undefined,
       undefined,
@@ -237,10 +248,10 @@ describe("dashboard", () => {
       within(region).queryByText("Average message size (characters)"),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Average time to reply" }),
+      screen.getByRole("heading", { name: "Average contact reply time" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Longest time to reply" }),
+      screen.getByRole("heading", { name: "Longest contact reply time" }),
     ).toBeInTheDocument();
   });
 
@@ -255,8 +266,8 @@ describe("dashboard", () => {
     await within(region).findByRole("img", {
       name: "Monthly ordinary message activity",
     });
-    expect(screen.queryByText("Average time to reply")).not.toBeInTheDocument();
-    expect(screen.queryByText("Longest time to reply")).not.toBeInTheDocument();
+    expect(screen.queryByText("Average contact reply time")).not.toBeInTheDocument();
+    expect(screen.queryByText("Longest contact reply time")).not.toBeInTheDocument();
     expect(
       within(region).queryByText("Average message size (characters)"),
     ).not.toBeInTheDocument();

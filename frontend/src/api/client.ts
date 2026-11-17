@@ -19,6 +19,7 @@ import type {
   IdentityLinkActionResponse,
   IdentityLinksResponse,
   OverviewStatistics,
+  OwnerReplyTimelineStatistics,
   PaginatedItems,
   UploadJob,
   UploadJobStatus,
@@ -392,4 +393,9 @@ export const getCommunicationTimeline = (
 export const getCloseFriendsTimeline = () =>
   getJson<CloseFriendsTimelineStatistics>(
     "/api/analytics/close-friends-timeline",
+  );
+
+export const getOwnerReplyTimeline = () =>
+  getJson<OwnerReplyTimelineStatistics>(
+    "/api/analytics/owner-reply-timeline",
   );

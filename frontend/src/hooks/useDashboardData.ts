@@ -5,6 +5,7 @@ import {
   getCommunicationBalance,
   getCommunicationTimeline,
   getCloseFriendsTimeline,
+  getOwnerReplyTimeline,
   getContacts,
   getForgottenContacts,
   getIdentityLinks,
@@ -19,6 +20,7 @@ import {
   type CommunicationBalanceStatistics,
   type CommunicationTimelineStatistics,
   type CloseFriendsTimelineStatistics,
+  type OwnerReplyTimelineStatistics,
   type ContactStatistics,
   type ContactSortBy,
   type FriendStatus,
@@ -53,6 +55,8 @@ export function useDashboardData() {
     useState<Resource<CommunicationTimelineStatistics>>(emptyResource);
   const [closeFriendsTimeline, setCloseFriendsTimeline] =
     useState<Resource<CloseFriendsTimelineStatistics>>(emptyResource);
+  const [ownerReplyTimeline, setOwnerReplyTimeline] =
+    useState<Resource<OwnerReplyTimelineStatistics>>(emptyResource);
   const chatInsightsRequestId = useRef(0);
   const chatRequestId = useRef(0);
   const activeChatScope = useRef<ChatScope | null>(null);
@@ -62,6 +66,7 @@ export function useDashboardData() {
   const activeForgottenScope = useRef<"private" | "group" | null>(null);
   const timelineRequestId = useRef(0);
   const closeFriendsTimelineRequestId = useRef(0);
+  const ownerReplyTimelineRequestId = useRef(0);
 
   const loadOverview = useCallback(async (_force = false) => {
     setOverview((current) => ({ ...current, error: null, loading: true }));
@@ -421,6 +426,32 @@ export function useDashboardData() {
     }
   }, []);
 
+  const loadOwnerReplyTimeline = useCallback(async () => {
+    const requestId = ++ownerReplyTimelineRequestId.current;
+    setOwnerReplyTimeline((current) => ({
+      ...current,
+      error: null,
+      loading: true,
+    }));
+    try {
+      const data = await getOwnerReplyTimeline();
+      if (requestId === ownerReplyTimelineRequestId.current) {
+        setOwnerReplyTimeline({ data, error: null, loading: false });
+      }
+    } catch (error) {
+      if (requestId === ownerReplyTimelineRequestId.current) {
+        setOwnerReplyTimeline((current) => ({
+          ...current,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to load owner reply timeline.",
+          loading: false,
+        }));
+      }
+    }
+  }, []);
+
   return {
     overview,
     chats,
@@ -431,6 +462,7 @@ export function useDashboardData() {
     identityLinks,
     communicationTimeline,
     closeFriendsTimeline,
+    ownerReplyTimeline,
     loadOverview,
     loadChats,
     loadChatInsights,
@@ -440,6 +472,7 @@ export function useDashboardData() {
     loadIdentityLinks,
     loadCommunicationTimeline,
     loadCloseFriendsTimeline,
+    loadOwnerReplyTimeline,
     createIdentityLink,
     removeIdentityLink,
   };

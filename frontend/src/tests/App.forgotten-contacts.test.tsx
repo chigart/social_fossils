@@ -27,6 +27,7 @@ const api = vi.hoisted(() => ({
   getGroupInteraction: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   getCloseFriendsTimeline: vi.fn(),
+  getOwnerReplyTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 

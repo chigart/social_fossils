@@ -28,6 +28,7 @@ const api = vi.hoisted(() => ({
   getForgottenContacts: vi.fn(),
   getCommunicationTimeline: vi.fn(),
   getCloseFriendsTimeline: vi.fn(),
+  getOwnerReplyTimeline: vi.fn(),
   uploadFile: vi.fn(),
 }));
 
@@ -112,7 +113,7 @@ describe("dashboard", () => {
     expect(
       screen.getByRole("heading", { name: "Chat insights" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Average time to reply")).toBeInTheDocument();
+    expect(screen.getByText("Average contact reply time")).toBeInTheDocument();
     expect(
       screen.getAllByRole("heading", { name: "Average activity time" }),
     ).toHaveLength(1);
@@ -162,11 +163,11 @@ describe("dashboard", () => {
     expect(activityTimes.textContent?.indexOf("Lena")).toBeLessThan(
       activityTimes.textContent?.indexOf("Anton") ?? -1,
     );
-    expect(screen.getByText("Longest time to reply")).toBeInTheDocument();
+    expect(screen.getByText("Longest contact reply time")).toBeInTheDocument();
     expect(screen.getAllByText("30 min")).toHaveLength(2);
     expect(screen.getByText("2.0 hr")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Average time to reply" })
+      screen.getByRole("heading", { name: "Average contact reply time" })
         .parentElement?.parentElement,
     ).toHaveClass("grid-rows-2", "grid-flow-col");
     await user.click(screen.getByRole("button", { name: "Choose an insight chat" }));

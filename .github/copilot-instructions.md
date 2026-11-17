@@ -154,3 +154,4 @@ the conflict instead of silently redesigning the project.
 Never commit to git.
 Never edit README.md.
 Always properly fix Pylance errors.
+File size limit is 500 lines. If it gets bigger - refactor.

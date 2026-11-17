@@ -97,7 +97,11 @@ class ChatStatistics(BaseModel):
     )
     average_response_seconds: float | None = Field(
         default=None,
-        description="Mean elapsed time for measured, referenced replies in this chat."
+        description=(
+            "Mean time from the owner's first message to the contact's first "
+            "response within 12 hours in each measured 12-hour conversation "
+            "session; omitted unless at least five sessions are measured."
+        )
     )
     earliest_message_timestamp: datetime | None
     latest_message_timestamp: datetime | None

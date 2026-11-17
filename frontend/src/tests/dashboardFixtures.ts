@@ -2,6 +2,7 @@ import type {
   ChatStatistics,
   CommunicationTimelineStatistics,
   CloseFriendsTimelineStatistics,
+  OwnerReplyTimelineStatistics,
   OverviewStatistics,
 } from "../api";
 
@@ -109,6 +110,13 @@ export const closeFriendsTimeline: CloseFriendsTimelineStatistics = {
   years: [
     { year: 2020, close_friend_count: 2 },
     { year: 2021, close_friend_count: 1 },
+  ],
+};
+
+export const ownerReplyTimeline: OwnerReplyTimelineStatistics = {
+  years: [
+    { year: 2020, average_response_seconds: 900 },
+    { year: 2021, average_response_seconds: 1800 },
   ],
 };
 

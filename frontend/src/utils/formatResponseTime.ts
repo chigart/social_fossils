@@ -6,7 +6,7 @@ import {
 } from "../constants";
 
 export function formatResponseTime(seconds: number | null) {
-  if (seconds === null) return "Not available";
+  if (seconds === null) return "N/A";
   if (seconds < SECONDS_PER_MINUTE) return `${Math.round(seconds)} sec`;
   if (seconds < SECONDS_PER_HOUR) {
     return `${Math.round(seconds / SECONDS_PER_MINUTE)} min`;

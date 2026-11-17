@@ -23,6 +23,7 @@ export default function App() {
     loadOverview,
     loadCommunicationTimeline,
     loadCloseFriendsTimeline,
+    loadOwnerReplyTimeline,
     loadChats,
     loadChatInsights,
     loadContacts,
@@ -202,8 +203,9 @@ export default function App() {
   useEffect(() => {
     if (selectedTab === "overview") {
       void loadCloseFriendsTimeline();
+      void loadOwnerReplyTimeline();
     }
-  }, [selectedTab, loadCloseFriendsTimeline]);
+  }, [selectedTab, loadCloseFriendsTimeline, loadOwnerReplyTimeline]);
 
   useEffect(() => {
     if (selectedChat) {

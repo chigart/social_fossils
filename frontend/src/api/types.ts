@@ -95,11 +95,12 @@ export type MessageTypeCount = {
 };
 
 export type ReplyTempoStatistics = {
-  reply_reference_count: number;
-  measured_reply_count: number;
+  owner_opened_session_count: number;
+  measured_contact_reply_session_count: number;
+  message_interval_count: number;
   average_response_seconds: number | null;
   longest_response_seconds: number | null;
-  median_response_seconds: number | null;
+  median_message_interval_seconds: number | null;
 };
 
 export type ConversationParticipantCount = {
@@ -445,6 +446,15 @@ export type CloseFriendsTimelineYear = {
 
 export type CloseFriendsTimelineStatistics = {
   years: CloseFriendsTimelineYear[];
+};
+
+export type OwnerReplyTimelineYear = {
+  year: number;
+  average_response_seconds: number | null;
+};
+
+export type OwnerReplyTimelineStatistics = {
+  years: OwnerReplyTimelineYear[];
 };
 
 export type { UploadPlatform } from "../utils/platforms";

@@ -86,6 +86,7 @@ export function DashboardContent({
     overview,
     communicationTimeline,
     closeFriendsTimeline,
+    ownerReplyTimeline,
     chats,
     contacts,
     balance,
@@ -94,6 +95,7 @@ export function DashboardContent({
     loadOverview,
     loadCommunicationTimeline,
     loadCloseFriendsTimeline,
+    loadOwnerReplyTimeline,
     loadContacts,
     loadBalance,
     loadForgottenContacts,
@@ -307,6 +309,7 @@ export function DashboardContent({
               overview={overview}
               timeline={communicationTimeline}
               closeFriendsTimeline={closeFriendsTimeline}
+              ownerReplyTimeline={ownerReplyTimeline}
               noImportedData={noImportedData}
               selectedTimelineAccountId={selectedTimelineAccountId}
               onRetry={() => void loadOverview(true)}
@@ -320,6 +323,9 @@ export function DashboardContent({
               }
               onRetryCloseFriendsTimeline={() =>
                 void loadCloseFriendsTimeline()
+              }
+              onRetryOwnerReplyTimeline={() =>
+                void loadOwnerReplyTimeline()
               }
               onTimelineAccountChange={onTimelineAccountChange}
             />

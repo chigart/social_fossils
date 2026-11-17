@@ -4,6 +4,7 @@ import {
   getChatInsights,
   getCommunicationBalance,
   getCommunicationTimeline,
+  getOwnerReplyTimeline,
   getContacts,
   getForgottenContacts,
   getGroupInteraction,
@@ -127,6 +128,10 @@ describe("analytics API helpers", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ summary: {}, months: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ years: [] }),
       });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -140,6 +145,7 @@ describe("analytics API helpers", () => {
       summary: {},
       months: [],
     });
+    await expect(getOwnerReplyTimeline()).resolves.toEqual({ years: [] });
 
     expect(fetchMock.mock.calls).toEqual([
       ["/api/analytics/overview"],
@@ -149,6 +155,7 @@ describe("analytics API helpers", () => {
       [`/api/analytics/communication-balance?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=text_volume&sort_direction=desc`],
       [`/api/analytics/forgotten-contacts?page=1&page_size=${DEFAULT_PAGE_SIZE}&sort_by=ranking_score&sort_direction=desc&scope=private`],
       ["/api/analytics/communication-timeline"],
+      ["/api/analytics/owner-reply-timeline"],
     ]);
   });
 

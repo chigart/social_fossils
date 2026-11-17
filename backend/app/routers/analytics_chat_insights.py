@@ -13,20 +13,24 @@ from app.constants import (
 )
 from app.db import get_db
 from app.models import Account, Chat, Message
+from app.routers.analytics_chat_insights_content import (
+    _clean_display_name,
+    _positive_count,
+    _reaction_records,
+    extract_emojis,
+)
 from app.routers.analytics_chat_insights_helpers import (
     _ChatCounts,
+    _build_chat_statistics,
+    _as_utc,
+    _message_category,
+)
+from app.routers.analytics_chat_insights_models import (
     _ConversationMessage,
     _MessageTypeSenderCounts,
     _PairCounts,
     _ReactorCounts,
     _SenderCounts,
-    _build_chat_statistics,
-    _as_utc,
-    _clean_display_name,
-    _message_category,
-    _positive_count,
-    _reaction_records,
-    extract_emojis,
 )
 from app.schemas.analytics import ChatInsightsResponse, SearchOption
 from app.parsers.telegram_parser import normalize_user_id
@@ -46,11 +50,12 @@ router = APIRouter()
         "groups, and private supergroups. Reaction "
         "totals use each message's full reaction count. Per-reactor and "
         "reactor-to-author statistics use only reaction records present in the "
-        "source payload and may not represent complete totals. Reply tempo "
-        "requires an in-chat reply reference, two identified senders, and "
-        "reliable non-negative timestamps. Average activity times and weekday "
-        "and calendar-month counts use dated ordinary messages in UTC. "
-        "Conversation sessions use a 12-hour gap between dated ordinary messages."
+        "source payload and may not represent complete totals. Contact reply "
+        "time measures the first contact response within 12 hours of an "
+        "owner-opened session. Median message interval measures gaps between "
+        "consecutive dated ordinary messages within 12-hour sessions. Average "
+        "activity times and weekday and calendar-month counts use dated ordinary "
+        "messages in UTC."
     ),
 )
 def get_chat_insights(
@@ -142,16 +147,12 @@ def get_chat_insights(
             Account.username.label("account_username"),
             Account.name.label("account_name"),
             Message.id.label("message_id"),
-            Message.message_id.label("source_message_id"),
             Message.sender_id,
+            Message.is_outgoing,
             Message.sender_name,
             Message.message_type,
             Message.text_content,
             Message.message_date,
-            func.coalesce(
-                Message.source_reply_id,
-                Message.reply_to_telegram_message_id,
-            ).label("source_reply_id"),
             Message.raw_payload,
         )
         .select_from(Chat)
@@ -231,12 +232,11 @@ def get_chat_insights(
             chat.messages.append(
                 _ConversationMessage(
                     message_id=row.message_id,
-                    source_message_id=row.source_message_id,
                     sender_id=row.sender_id,
+                    is_outgoing=row.is_outgoing,
                     sender_name=sender_name,
                     message_type=message_type,
                     message_date=row.message_date,
-                    reply_to_message_id=row.source_reply_id,
                 )
             )
             continue
@@ -262,12 +262,11 @@ def get_chat_insights(
         chat.messages.append(
             _ConversationMessage(
                 message_id=row.message_id,
-                source_message_id=row.source_message_id,
                 sender_id=row.sender_id,
+                is_outgoing=row.is_outgoing,
                 sender_name=sender_name,
                 message_type=row.message_type,
                 message_date=row.message_date,
-                reply_to_message_id=row.source_reply_id,
             )
         )
 

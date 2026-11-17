@@ -1,6 +1,7 @@
 import type { OverviewStatistics } from "../api";
 import type { CommunicationTimelineStatistics } from "../api";
 import type { CloseFriendsTimelineStatistics } from "../api";
+import type { OwnerReplyTimelineStatistics } from "../api";
 import { formatDate, formatNumber } from "../utils/format";
 import {
   numericTableCellClassName,
@@ -20,26 +21,31 @@ import type { Resource } from "../types";
 import { LoadingMessage, MetricCard, SectionError } from "./Feedback";
 import { CommunicationTimelineView } from "./CommunicationTimelineView";
 import { CloseFriendsTimelineView } from "./CloseFriendsTimelineView";
+import { OwnerReplyTimelineView } from "./OwnerReplyTimelineView";
 
 export function OverviewView({
   overview,
   timeline,
   closeFriendsTimeline,
+  ownerReplyTimeline,
   noImportedData,
   selectedTimelineAccountId,
   onRetry,
   onRetryTimeline,
   onRetryCloseFriendsTimeline,
+  onRetryOwnerReplyTimeline,
   onTimelineAccountChange,
 }: {
   overview: Resource<OverviewStatistics>;
   timeline: Resource<CommunicationTimelineStatistics>;
   closeFriendsTimeline: Resource<CloseFriendsTimelineStatistics>;
+  ownerReplyTimeline: Resource<OwnerReplyTimelineStatistics>;
   noImportedData: boolean | undefined;
   selectedTimelineAccountId: number | null;
   onRetry: () => void;
   onRetryTimeline: (accountId: number | null) => void;
   onRetryCloseFriendsTimeline: () => void;
+  onRetryOwnerReplyTimeline: () => void;
   onTimelineAccountChange: (accountId: number | null) => void;
 }) {
   return (
@@ -116,6 +122,12 @@ export function OverviewView({
             <CloseFriendsTimelineView
               timeline={closeFriendsTimeline}
               onRetry={onRetryCloseFriendsTimeline}
+            />
+          </div>
+          <div className="mt-6">
+            <OwnerReplyTimelineView
+              timeline={ownerReplyTimeline}
+              onRetry={onRetryOwnerReplyTimeline}
             />
           </div>
           <div className="mt-6">

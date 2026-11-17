@@ -80,6 +80,7 @@ export function TimelineChart({
   fixedSlotWidth,
   labelFontSize = TIMELINE_LABEL_FONT_SIZE,
   formatTick = (value) => Math.round(value).toLocaleString(),
+  formatCount = formatNumber,
 }: {
   points: TimelinePoint[];
   showDirection: boolean;
@@ -95,6 +96,7 @@ export function TimelineChart({
   fixedSlotWidth?: number;
   labelFontSize?: number;
   formatTick?: (value: number) => string;
+  formatCount?: (value: number) => string;
 }) {
   const width = fitContainer
     ? MINIMUM_CHART_WIDTH
@@ -206,7 +208,7 @@ export function TimelineChart({
                 }
                 data-sender={point.label}
                 data-average-length={point.count}
-                aria-label={`${point.label}: ${formatNumber(point.count)}`}
+                aria-label={`${point.label}: ${formatCount(point.count)}`}
               />
               {compareOwnerCount && point.ownerCount !== undefined ? (
                 <>
