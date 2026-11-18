@@ -89,8 +89,8 @@ that depend on the current time remain unchanged until the data changes.
   services, and orchestration in the Airflow DAG.
 - Use synthetic export data in tests. Real messaging exports are private and
   should not be committed.
-- Production/default startup: `docker compose up`. This builds local runtime
-  images when missing and starts API, frontend, database, and Airflow without
-  source-code bind mounts or code-change reload.
+- Production/default startup: `docker compose up --build`. This rebuilds local
+  runtime images from the checked-out source and starts API, frontend,
+  database, and Airflow without source-code bind mounts or code-change reload.
 - Development startup (with bind mounts and reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`.
 - Backend tests: `cd backend && pytest`. Frontend tests: `cd frontend && npm test`.

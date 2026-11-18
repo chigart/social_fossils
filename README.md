@@ -48,11 +48,9 @@ conversations, and how relationships change over time.
 
 ### Run Project
 
-- Production/default startup: `docker compose up`. This builds local runtime
-  images when missing and starts API, frontend, database, and Airflow without
-  source-code bind mounts or code-change reload.
+`docker compose up --build`
 
-### Optional: Local Ollama
+### Optional: Local LLM
 
 - Install Ollama on the host and pull a model, for example `ollama pull qwen3:8b`.
 - The backend container must reach Ollama through the Docker network gateway. On Linux, get the gateway with `docker network inspect social_fossils_default --format '{{(index .IPAM.Config 0).Gateway}}'`.
