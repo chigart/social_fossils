@@ -4,9 +4,6 @@ services:
       context: ./frontend
     ports:
       - "127.0.0.1:3000:3000"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
     depends_on:
       backend:
         condition: service_healthy
@@ -23,13 +20,12 @@ services:
     command:
       - sh
       - -c
-      - alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "127.0.0.1:8000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./backend:/app
       - uploads:/uploads
     depends_on:
       db:
@@ -84,7 +80,9 @@ services:
     restart: unless-stopped
 
   airflow-init:
-    image: apache/airflow:3.3.2-python3.12
+    build:
+      context: .
+      dockerfile: ./airflow/Dockerfile
     entrypoint: /bin/bash
     user: "0:0"
     command:
@@ -109,7 +107,6 @@ services:
       AIRFLOW__CORE__ENABLE_XCOM_PICKLING: "True"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
     volumes:
-      - ./airflow:/airflow
       - airflow_logs:/airflow/logs
       - airflow_secrets_shared:/run/airflow-secrets
     depends_on:
@@ -117,7 +114,9 @@ services:
         condition: service_healthy
 
   airflow-scheduler:
-    image: apache/airflow:3.3.2-python3.12
+    build:
+      context: .
+      dockerfile: ./airflow/Dockerfile
     entrypoint: /airflow/entrypoint.sh
     command: scheduler
     environment:
@@ -134,8 +133,6 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
       UPLOAD_STAGING_DIR: /uploads
     volumes:
-      - ./airflow:/airflow
-      - ./backend:/app
       - airflow_logs:/airflow/logs
       - uploads:/uploads
       - airflow_secrets_shared:/run/airflow-secrets
@@ -149,7 +146,9 @@ services:
     restart: unless-stopped
 
   airflow-dag-processor:
-    image: apache/airflow:3.3.2-python3.12
+    build:
+      context: .
+      dockerfile: ./airflow/Dockerfile
     entrypoint: /airflow/entrypoint.sh
     command: dag-processor
     environment:
@@ -165,8 +164,6 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-social_fossils}:${POSTGRES_PASSWORD:-local-only}@db:5432/${POSTGRES_DB:-social_fossils}
       UPLOAD_STAGING_DIR: /uploads
     volumes:
-      - ./airflow:/airflow
-      - ./backend:/app
       - airflow_logs:/airflow/logs
       - uploads:/uploads
       - airflow_secrets_shared:/run/airflow-secrets
@@ -180,7 +177,9 @@ services:
     restart: unless-stopped
 
   airflow-api:
-    image: apache/airflow:3.3.2-python3.12
+    build:
+      context: .
+      dockerfile: ./airflow/Dockerfile
     entrypoint: /airflow/entrypoint.sh
     command: api-server
     environment:
@@ -198,8 +197,6 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./airflow:/airflow
-      - ./backend:/app
       - airflow_logs:/airflow/logs
       - uploads:/uploads
       - airflow_secrets_shared:/run/airflow-secrets
@@ -245,4 +242,3 @@ volumes:
       type: tmpfs
       device: tmpfs
       o: "size=1g,mode=1777"
-  frontend_node_modules:

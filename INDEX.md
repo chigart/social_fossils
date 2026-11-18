@@ -22,6 +22,7 @@ logic live in backend services so they remain separate from the DAG.
 | Path | Purpose |
 | --- | --- |
 | `docker-compose.yml` | Local app stack: frontend, API, PostgreSQL, Airflow, and Adminer. |
+| `docker-compose.dev.yml` | Development-only Compose overrides: bind mounts, backend reload, and Vite dev server. |
 | `backend/app/` | FastAPI application, database layer, SQLAlchemy models, parsers, importers, and analytics routes. |
 | `backend/app/main.py` | Creates the FastAPI app, middleware, and API routers. |
 | `backend/app/routers/` | HTTP endpoints for uploads, analytics, and cross-platform identity links. |
@@ -88,6 +89,8 @@ that depend on the current time remain unchanged until the data changes.
   services, and orchestration in the Airflow DAG.
 - Use synthetic export data in tests. Real messaging exports are private and
   should not be committed.
-- Run the local stack with `docker compose up --build -d`; Compose starts the
-  API, frontend, database, and Airflow services.
+- Production/default startup: `docker compose up --build`. This rebuilds local
+  runtime images from the checked-out source and starts API, frontend,
+  database, and Airflow without source-code bind mounts or code-change reload.
+- Development startup (with bind mounts and reload): `docker compose -f docker-compose.yml -f docker-compose.dev.yml up`.
 - Backend tests: `cd backend && pytest`. Frontend tests: `cd frontend && npm test`.
