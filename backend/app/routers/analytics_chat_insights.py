@@ -41,13 +41,13 @@ router = APIRouter()
 @router.get(
     "/chat-insights",
     response_model=ChatInsightsResponse,
-    summary="Get text and reaction analytics for private chats and groups",
+    summary="Get text and reaction analytics for chats and groups",
     description=(
         "Returns normalized message, text, word, emoji, and reaction statistics "
         "for one selected chat, or the most active eligible chat when no chat is "
         "selected. Lightweight options for all eligible chats are included for "
         "the picker. Statistics cover supported platforms, personal chats, private "
-        "groups, and private supergroups. Reaction "
+        "groups, and private or public supergroups. Reaction "
         "totals use each message's full reaction count. Per-reactor and "
         "reactor-to-author statistics use only reaction records present in the "
         "source payload and may not represent complete totals. Contact reply "

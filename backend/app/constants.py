@@ -5,7 +5,7 @@ from datetime import timedelta
 
 DEFAULT_PAGE_SIZE = 50
 # Increment when analytics response semantics change without a database revision change.
-ANALYTICS_CACHE_VERSION = 22
+ANALYTICS_CACHE_VERSION = 23
 
 ACTIVE_WINDOW_MONTHS = 6
 ACTIVE_MINIMUM_TEXT_MESSAGES = 20
@@ -116,7 +116,12 @@ VK_NUMERIC_DATE_PATTERN = re.compile(
     r"(?::(?P<second>\d{2}))?"
 )
 
-SUPPORTED_CHAT_TYPES = ("personal_chat", "private_group", "private_supergroup")
+SUPPORTED_CHAT_TYPES = (
+    "personal_chat",
+    "private_group",
+    "private_supergroup",
+    "public_supergroup",
+)
 ORDINARY_MESSAGE_TYPE = "message"
 SERVICE_MESSAGE_TYPE = "service"
 RANKING_LIMIT = 10

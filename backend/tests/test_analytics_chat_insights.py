@@ -67,6 +67,26 @@ def test_chat_insights_returns_one_chat_and_supports_searching_all_chat_options(
     assert parameter_names == ["chat_id"]
 
 
+def test_chat_insights_include_public_supergroups_in_picker_and_selected_results(
+    db_session,
+):
+    add_account(db_session, 1, "user-owner")
+    add_chat(
+        db_session,
+        733,
+        1,
+        "public-supergroup-733",
+        "Public supergroup",
+        chat_type="public_supergroup",
+    )
+    add_message(db_session, 1, 733, "message", "peer-733", text_content="hello")
+
+    result = get_chat_insights(db_session, chat_id=733)
+
+    assert [chat.chat_id for chat in result.chats] == [733]
+    assert any(option.value == "733" for option in result.options)
+
+
 def test_instagram_group_insights_separate_senders_without_platform_ids(db_session):
     db_session.execute(
         text(

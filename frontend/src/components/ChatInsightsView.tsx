@@ -156,7 +156,7 @@ export function ChatInsightsView({
           <h3 className={emptyStateTitleClassName}>No eligible chats available</h3>
           <p className={emptyStateTextClassName}>
             Insights include one-to-one personal chats, private groups, and private
-            supergroups.
+            or public supergroups.
           </p>
         </div>
       ) : selectedChat ? (
