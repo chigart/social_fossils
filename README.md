@@ -4,6 +4,24 @@ Social Fossils is a local-first tool for exploring personal messaging history.
 Import your messaging exports and use a dashboard to understand activity,
 conversations, and how relationships change over time.
 
+[![Telegram](https://img.shields.io/badge/Telegram-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.me/antonmalkovdev)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/antmalk/)
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](./LICENSE)
+
+## Run Project
+
+**Requirements:** Install [Docker Engine and Compose](https://docs.docker.com/engine/install/) on Linux, or [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) on Windows.
+
+Export messages as **Telegram JSON**, **Instagram/Facebook ZIP with JSON files**, or **VK ZIP with HTML files**.
+
+```sh
+docker compose up --build
+```
+
+Open the dashboard at <http://localhost:3000>. The first startup builds the
+images and applies database migrations automatically. Stop the services with
+`Ctrl+C`.
+
 ## Features
 
 - **Import messaging exports:** Upload exports from Telegram, Instagram,
@@ -35,7 +53,6 @@ conversations, and how relationships change over time.
 ### Chats analytics
 
 ![Chats analytics](./docs/images/4.png)
-![Chats analytics](./docs/images/5.png)
 
 ### Communication balance
 
@@ -46,55 +63,11 @@ conversations, and how relationships change over time.
 
 ![Forgotten friends](./docs/images/8.png)
 
-## Run Project
-
-Prerequisite: Docker Engine with Docker Compose v2. Start the app and its
-supporting services:
-
-```sh
-docker compose up --build
-```
-
-Open the dashboard at <http://localhost:3000>. The first startup builds the
-images and applies database migrations automatically. Stop the services with
-`Ctrl+C`.
-
-### Optional: Local LLM
-
-- Ollama is optional; the dashboard works without it. Install Ollama on the
-  host and pull a model, for example `ollama pull qwen3:8b`.
-- The Compose configuration defaults to
-  `OLLAMA_BASE_URL=http://host.docker.internal:11434`, as shown in
-  `.env.example`. Ollama setup varies by host OS; keep it restricted to trusted
-  local traffic.
-
-#### Linux with systemd
-
-- If the default URL is unreachable, get the Docker network gateway with
-  `docker network inspect social_fossils_default --format '{{(index .IPAM.Config 0).Gateway}}'`.
-- Run `sudo systemctl edit ollama`; add `[Service]` and
-  `Environment="OLLAMA_HOST=<gateway>:11434"` using that gateway.
-- Set `OLLAMA_BASE_URL=http://<gateway>:11434` in `.env`, then apply the
-  setting with
-  `sudo systemctl daemon-reload && sudo systemctl restart ollama`.
-- Recreate the backend with
-  `docker compose up -d --force-recreate backend`.
-
 ## Stack
 
 Python, FastAPI, SQLAlchemy 2, PostgreSQL, Alembic, React, TypeScript, Vite, Airflow, MCP.
 
-## Social media
-
-- [GitHub](https://github.com/chigart)
-- [Telegram](https://telegram.me/antonmalkovdev)
-- [LinkedIn](https://www.linkedin.com/in/antmalk/)
-
-## License
-
-This project is distributed under the [MIT License](./LICENSE).
-
-## Development
+### Development
 
 Start the development stack with bind mounts and code reload:
 
@@ -122,3 +95,59 @@ pip install -r backend/requirements.txt
 
 - Backend: `cd backend && pytest`
 - Frontend: `cd frontend && npm test`
+
+### Local LLM
+
+- Ollama is optional; the dashboard works without it. Install Ollama on the
+  host and pull a model, for example `ollama pull qwen3:8b`.
+- The Compose configuration defaults to
+  `OLLAMA_BASE_URL=http://host.docker.internal:11434`, as shown in
+  `.env.example`. Ollama setup varies by host OS; keep it restricted to trusted
+  local traffic.
+
+#### Linux with systemd
+
+- If the default URL is unreachable, get the Docker network gateway with
+  `docker network inspect social_fossils_default --format '{{(index .IPAM.Config 0).Gateway}}'`.
+- Run `sudo systemctl edit ollama`; add `[Service]` and
+  `Environment="OLLAMA_HOST=<gateway>:11434"` using that gateway.
+- Set `OLLAMA_BASE_URL=http://<gateway>:11434` in `.env`, then apply the
+  setting with
+  `sudo systemctl daemon-reload && sudo systemctl restart ollama`.
+- Recreate the backend with
+  `docker compose up -d --force-recreate backend`.
+
+## Architecture and logic charts
+
+These diagrams describe the application implemented in this repository. They
+use Mermaid in Markdown so the source remains editable and renderable in
+compatible viewers.
+
+### Diagrams
+
+- [System architecture](./docs/charts/architecture.md) — Compose services, storage, and
+  runtime boundaries.
+- [Data flow](./docs/charts/data-flow.md) — Upload/import, dashboard analytics, and AI
+  request paths.
+- [Upload and import logic](./docs/charts/upload-import.md) — Validation, job dispatch,
+  Airflow task outcomes, retries, and idempotent persistence.
+- [Analytics logic](./docs/charts/analytics.md) — Cache behavior, friendship status,
+  communication balance, forgotten contacts, and group interactions.
+- [Identity linking logic](./docs/charts/identity-links.md) — Identity grouping, merge,
+  unlink, and validation rules.
+- [AI chat logic](./docs/charts/ai-chat.md) — Provider selection, read-only tools, and
+  local-versus-cloud data access.
+
+### Implementation references
+
+The diagrams are based on [docker-compose.yml](docker-compose.yml),
+[the FastAPI application](backend/app/main.py),
+[the upload API](backend/app/routers/upload.py),
+[the Airflow import DAG](airflow/dags/import.py),
+[the analytics cache middleware](backend/app/analytics_cache_middleware.py),
+[identity-link APIs](backend/app/routers/identity_links.py), and
+[AI provider/tool logic](backend/app/ai/providers.py).
+
+Update the relevant chart when changing a depicted boundary, decision, or
+business rule. These diagrams summarize key workflows; they do not enumerate
+every API route or metric.
